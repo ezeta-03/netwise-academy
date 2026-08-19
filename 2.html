@@ -1,0 +1,1622 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Netwise Academy · Plataforma de Aprendizaje</title>
+<link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════
+   DESIGN TOKENS
+═══════════════════════════════════════════════════ */
+:root {
+  --bg:        #0A0A0F;
+  --bg2:       #0F0F1A;
+  --bg3:       #14141F;
+  --surface:   #1A1A2E;
+  --surface2:  #1F1F35;
+  --border:    rgba(255,255,255,.07);
+  --border2:   rgba(255,255,255,.12);
+  --text:      #F0EFE8;
+  --text2:     #8B8A9B;
+  --text3:     #5A5970;
+  --accent:    #7C6AF7;
+  --accent2:   #9B8BFF;
+  --accent-bg: rgba(124,106,247,.12);
+  --green:     #34D399;
+  --green-bg:  rgba(52,211,153,.1);
+  --amber:     #FBBF24;
+  --amber-bg:  rgba(251,191,36,.1);
+  --rose:      #FB7185;
+  --sky:       #38BDF8;
+  --ff-display: 'Clash Display', sans-serif;
+  --ff-body:    'Instrument Sans', sans-serif;
+  --ff-mono:    'JetBrains Mono', monospace;
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 24px;
+  --r-xl: 32px;
+  --shadow: 0 8px 32px rgba(0,0,0,.4);
+  --shadow-lg: 0 24px 64px rgba(0,0,0,.6);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--ff-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  cursor: default;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 99px; }
+
+.hidden { display: none !important; }
+
+/* ── VIEWS: todas ocultas por defecto, solo la .active se muestra ── */
+.view { display: none; min-height: 100vh; }
+.view.active { display: block; }
+
+/* Login es especial: usa grid internamente, pero el contenedor sigue siendo .view */
+#view-login.active {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 9999; opacity: .4;
+}
+
+/* ═══════════════════════════════════════════════════
+   ANIMATIONS
+═══════════════════════════════════════════════════ */
+@keyframes fadeUp   { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
+@keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+@keyframes pulse    { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+@keyframes spin     { to { transform: rotate(360deg); } }
+@keyframes float    { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+@keyframes progress { from { width:0; } }
+
+.anim-fade-up { animation: fadeUp .5s ease both; }
+.d1 { animation-delay:.05s; } .d2 { animation-delay:.15s; }
+.d3 { animation-delay:.25s; } .d4 { animation-delay:.35s; }
+.d5 { animation-delay:.45s; }
+
+/* ═══════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 24px;
+  border: none; border-radius: var(--r-sm);
+  font-family: var(--ff-body); font-size: .9rem; font-weight: 600;
+  cursor: pointer; transition: all .2s; text-decoration: none; white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent); color: #fff;
+  box-shadow: 0 4px 16px rgba(124,106,247,.4);
+}
+.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,106,247,.5); }
+.btn-ghost {
+  background: transparent; color: var(--text2);
+  border: 1.5px solid var(--border2);
+}
+.btn-ghost:hover { background: var(--surface); color: var(--text); border-color: var(--accent); }
+.btn-sm { padding: 8px 16px; font-size: .82rem; }
+.btn-lg { padding: 16px 36px; font-size: 1rem; }
+.btn-full { width: 100%; }
+.btn-icon { padding: 10px; border-radius: var(--r-sm); background: var(--surface); border: 1.5px solid var(--border); color: var(--text2); cursor: pointer; transition: all .2s; font-size: 1rem; }
+.btn-icon:hover { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+
+/* ═══════════════════════════════════════════════════
+   INPUTS
+═══════════════════════════════════════════════════ */
+.input-group { display: flex; flex-direction: column; gap: 6px; }
+.input-group label { font-size: .82rem; font-weight: 500; color: var(--text2); letter-spacing: .03em; }
+.input {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); padding: 12px 16px;
+  font-family: var(--ff-body); font-size: .95rem; color: var(--text);
+  transition: all .2s; outline: none; width: 100%;
+}
+.input:focus { border-color: var(--accent); background: var(--surface2); box-shadow: 0 0 0 3px rgba(124,106,247,.12); }
+.input::placeholder { color: var(--text3); }
+
+/* ═══════════════════════════════════════════════════
+   BADGES
+═══════════════════════════════════════════════════ */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 99px;
+  font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+}
+.badge-accent  { background: var(--accent-bg); color: var(--accent2); border: 1px solid rgba(124,106,247,.2); }
+.badge-green   { background: var(--green-bg);  color: var(--green);   border: 1px solid rgba(52,211,153,.2); }
+.badge-amber   { background: var(--amber-bg);  color: var(--amber);   border: 1px solid rgba(251,191,36,.2); }
+.badge-sky     { background: rgba(56,189,248,.1); color: var(--sky);  border: 1px solid rgba(56,189,248,.2); }
+.badge-rose    { background: rgba(251,113,133,.1); color: var(--rose); border: 1px solid rgba(251,113,133,.2); }
+
+/* ═══════════════════════════════════════════════════
+   PROGRESS BAR
+═══════════════════════════════════════════════════ */
+.progress-bar { height: 4px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--sky)); border-radius: 99px; animation: progress .8s ease; }
+
+/* ═══════════════════════════════════════════════════
+   NAVBAR
+═══════════════════════════════════════════════════ */
+.navbar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px; height: 64px;
+  background: rgba(10,10,15,.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: var(--ff-display); font-size: 1.25rem; font-weight: 700;
+  color: var(--text); text-decoration: none; letter-spacing: -.02em;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.nav-logo .logo-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 2s infinite; }
+.nav-links { display: flex; align-items: center; gap: 4px; }
+.nav-link {
+  padding: 7px 14px; border-radius: var(--r-sm);
+  font-size: .88rem; font-weight: 500; color: var(--text2);
+  text-decoration: none; cursor: pointer; transition: all .2s; border: none; background: none;
+}
+.nav-link:hover, .nav-link.active { background: var(--surface); color: var(--text); }
+.nav-link.active { color: var(--accent2); }
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.nav-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--sky));
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .85rem; color: #fff; cursor: pointer;
+  border: 2px solid var(--border2); transition: all .2s;
+}
+.nav-avatar:hover { border-color: var(--accent); }
+.search-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); padding: 8px 14px; min-width: 220px;
+  transition: all .2s;
+}
+.search-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,247,.1); }
+.search-bar input { background: none; border: none; outline: none; color: var(--text); font-family: var(--ff-body); font-size: .88rem; width: 100%; }
+.search-bar input::placeholder { color: var(--text3); }
+.search-icon { color: var(--text3); font-size: .9rem; flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════
+   VIEW: LOGIN
+═══════════════════════════════════════════════════ */
+.login-left {
+  position: relative; overflow: hidden;
+  background: linear-gradient(145deg, #0D0B1E 0%, #1A1035 50%, #0A1628 100%);
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 48px;
+}
+.login-left::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle 500px at 30% 40%, rgba(124,106,247,.15) 0%, transparent 70%),
+    radial-gradient(circle 300px at 80% 80%, rgba(56,189,248,.1) 0%, transparent 60%);
+}
+.login-left-content { position: relative; z-index: 1; }
+.login-brand {
+  font-family: var(--ff-display); font-size: 1.4rem; font-weight: 700;
+  color: #fff; display: flex; align-items: center; gap: 10px;
+}
+.login-brand .dot { width: 10px; height: 10px; background: var(--accent); border-radius: 50%; }
+.login-hero-text { position: relative; z-index: 1; margin-top: auto; padding-top: 40px; }
+.login-hero-text h2 {
+  font-family: var(--ff-display); font-size: clamp(2rem, 3.5vw, 3rem);
+  font-weight: 700; color: #fff; line-height: 1.1; letter-spacing: -.03em;
+  margin-bottom: 16px;
+}
+.login-hero-text h2 em { color: var(--accent2); font-style: normal; }
+.login-hero-text p { color: rgba(255,255,255,.45); font-size: .95rem; line-height: 1.7; max-width: 360px; }
+.login-stats { position: relative; z-index: 1; display: flex; gap: 32px; margin-top: 48px; }
+.login-stat-num { font-family: var(--ff-display); font-size: 1.8rem; font-weight: 700; color: #fff; }
+.login-stat-label { font-size: .78rem; color: rgba(255,255,255,.4); margin-top: 2px; }
+.floating-cards {
+  position: absolute; right: -20px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 12px; z-index: 1;
+}
+.float-card {
+  background: rgba(255,255,255,.06); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.1); border-radius: var(--r-md);
+  padding: 14px 18px; width: 200px;
+  animation: float 4s ease-in-out infinite;
+}
+.float-card:nth-child(2) { animation-delay: -2s; }
+.float-card-label { font-size: .72rem; color: rgba(255,255,255,.4); margin-bottom: 4px; }
+.float-card-val { font-family: var(--ff-display); font-size: 1.1rem; font-weight: 600; color: #fff; }
+
+.login-right {
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px; background: var(--bg2);
+}
+.login-form-wrap { width: 100%; max-width: 400px; }
+.login-tabs {
+  display: flex; background: var(--surface); border-radius: var(--r-sm);
+  padding: 4px; margin-bottom: 36px;
+}
+.login-tab {
+  flex: 1; padding: 10px; border: none; border-radius: 7px;
+  font-family: var(--ff-body); font-size: .88rem; font-weight: 500;
+  cursor: pointer; transition: all .2s; background: none; color: var(--text2);
+}
+.login-tab.active { background: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(124,106,247,.3); }
+.login-form-title { font-family: var(--ff-display); font-size: 1.7rem; font-weight: 700; margin-bottom: 6px; }
+.login-form-sub { color: var(--text2); font-size: .9rem; margin-bottom: 28px; }
+.form-fields { display: flex; flex-direction: column; gap: 18px; }
+.divider-text {
+  display: flex; align-items: center; gap: 12px;
+  color: var(--text3); font-size: .8rem; margin: 20px 0;
+}
+.divider-text::before, .divider-text::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.social-btns { display: flex; gap: 10px; }
+.social-btn {
+  flex: 1; padding: 11px; background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); cursor: pointer; font-size: 1rem; transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-family: var(--ff-body); font-size: .85rem; font-weight: 500; color: var(--text2);
+}
+.social-btn:hover { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+.form-footer { margin-top: 24px; text-align: center; font-size: .83rem; color: var(--text3); }
+.form-footer a { color: var(--accent2); text-decoration: none; cursor: pointer; }
+.form-footer a:hover { text-decoration: underline; }
+.forgot-link { text-align: right; font-size: .8rem; color: var(--accent2); text-decoration: none; margin-top: -8px; cursor: pointer; }
+.forgot-link:hover { text-decoration: underline; }
+.error-msg { background: rgba(251,113,133,.1); border: 1px solid rgba(251,113,133,.2); color: var(--rose); border-radius: var(--r-sm); padding: 10px 14px; font-size: .85rem; display: none; }
+
+/* ═══════════════════════════════════════════════════
+   VIEW: HOME / DASHBOARD
+═══════════════════════════════════════════════════ */
+.home-hero {
+  position: relative; overflow: hidden;
+  background: linear-gradient(135deg, #0D0B1E 0%, #0F1628 100%);
+  padding: 64px 40px; margin: 24px; border-radius: var(--r-xl);
+}
+.home-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle 600px at 70% 50%, rgba(124,106,247,.12) 0%, transparent 70%),
+    radial-gradient(circle 400px at 20% 80%, rgba(56,189,248,.08) 0%, transparent 60%);
+}
+.home-hero-inner { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr auto; gap: 40px; align-items: center; }
+.home-hero h1 { font-family: var(--ff-display); font-size: clamp(1.8rem, 3vw, 2.8rem); font-weight: 700; line-height: 1.15; letter-spacing: -.03em; margin-bottom: 12px; }
+.home-hero h1 span { color: var(--accent2); }
+.home-hero p { color: var(--text2); font-size: .95rem; line-height: 1.7; max-width: 480px; margin-bottom: 28px; }
+.hero-cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero-continue-card {
+  background: rgba(255,255,255,.06); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.1); border-radius: var(--r-lg);
+  padding: 24px; min-width: 260px; cursor: pointer; transition: all .2s;
+}
+.hero-continue-card:hover { background: rgba(255,255,255,.09); transform: translateY(-2px); }
+.hcc-label { font-size: .72rem; color: rgba(255,255,255,.4); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 10px; }
+.hcc-title { font-family: var(--ff-display); font-weight: 600; font-size: 1rem; color: #fff; margin-bottom: 4px; }
+.hcc-sub { font-size: .8rem; color: rgba(255,255,255,.45); margin-bottom: 16px; }
+.hcc-progress { background: rgba(255,255,255,.1); border-radius: 99px; height: 3px; margin-bottom: 8px; overflow: hidden; }
+.hcc-fill { height: 100%; background: var(--accent); border-radius: 99px; width: 65%; }
+.hcc-pct { font-size: .75rem; color: var(--accent2); font-family: var(--ff-mono); }
+
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.section-title-text { font-family: var(--ff-display); font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; }
+.section-title-text span { color: var(--text3); font-size: .85rem; font-family: var(--ff-body); font-weight: 400; margin-left: 8px; }
+.view-all { font-size: .82rem; color: var(--accent2); text-decoration: none; font-weight: 500; cursor: pointer; background: none; border: none; }
+.view-all:hover { text-decoration: underline; }
+
+.home-section { padding: 0 40px 40px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 0 40px; margin-bottom: 8px; }
+.stat-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 20px 24px; transition: all .2s;
+}
+.stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.stat-card .s-label { font-size: .78rem; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.stat-card .s-num { font-family: var(--ff-display); font-size: 1.8rem; font-weight: 700; color: var(--text); }
+.stat-card .s-sub { font-size: .78rem; color: var(--text3); margin-top: 4px; }
+.stat-card .s-icon { font-size: 1.4rem; margin-bottom: 8px; }
+
+.courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+.course-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); overflow: hidden; cursor: pointer;
+  transition: all .25s; position: relative;
+}
+.course-card:hover { border-color: var(--border2); transform: translateY(-4px); box-shadow: var(--shadow); }
+.course-thumb {
+  position: relative; height: 160px; overflow: hidden;
+  background: linear-gradient(135deg, #1a1035 0%, #0d1628 100%);
+}
+.course-thumb-bg {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 4rem; opacity: .15;
+}
+.play-overlay {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .2s; background: rgba(0,0,0,.3);
+}
+.course-card:hover .play-overlay { opacity: 1; }
+.play-btn-sm {
+  width: 48px; height: 48px; background: rgba(255,255,255,.9);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: var(--bg); transform: scale(.8); transition: transform .2s;
+}
+.course-card:hover .play-btn-sm { transform: scale(1); }
+.course-duration {
+  position: absolute; bottom: 10px; right: 10px;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+  color: #fff; font-size: .72rem; font-family: var(--ff-mono);
+  padding: 3px 8px; border-radius: 5px;
+}
+.course-body { padding: 18px; }
+.course-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.course-title { font-family: var(--ff-display); font-size: 1rem; font-weight: 600; line-height: 1.3; margin-bottom: 8px; letter-spacing: -.01em; }
+.course-instructor { font-size: .8rem; color: var(--text3); margin-bottom: 14px; }
+.course-stats-row { display: flex; align-items: center; justify-content: space-between; }
+.course-rating { display: flex; align-items: center; gap: 4px; font-size: .8rem; color: var(--amber); }
+.course-rating span { color: var(--text3); }
+.course-price { font-family: var(--ff-display); font-size: 1rem; font-weight: 700; color: var(--text); }
+.course-price.free { color: var(--green); }
+.course-progress-wrap { padding: 0 18px 18px; }
+.enrolled-badge { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: var(--green); margin-bottom: 6px; }
+
+.cat-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 28px; }
+.cat-chip {
+  padding: 8px 18px; border-radius: 99px;
+  font-size: .85rem; font-weight: 500; cursor: pointer;
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--text2); transition: all .2s;
+}
+.cat-chip:hover, .cat-chip.active { background: var(--accent-bg); color: var(--accent2); border-color: rgba(124,106,247,.3); }
+
+.reco-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 20px; display: flex; gap: 16px;
+  cursor: pointer; transition: all .2s; align-items: flex-start;
+}
+.reco-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+.reco-thumb {
+  width: 80px; height: 60px; border-radius: var(--r-sm); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; overflow: hidden;
+}
+.reco-body { flex: 1; min-width: 0; }
+.reco-title { font-weight: 600; font-size: .9rem; margin-bottom: 4px; line-height: 1.3; }
+.reco-meta { font-size: .78rem; color: var(--text3); display: flex; gap: 10px; }
+.reco-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* ═══════════════════════════════════════════════════
+   VIEW: CATALOG
+═══════════════════════════════════════════════════ */
+#view-catalog.active { display: block; }
+.catalog-layout { display: grid; grid-template-columns: 260px 1fr; gap: 32px; padding: 32px 40px; }
+.filters-sidebar { position: sticky; top: 80px; height: fit-content; }
+.filter-section { margin-bottom: 28px; }
+.filter-section-title { font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 12px; }
+.filter-option { display: flex; align-items: center; gap: 10px; padding: 8px 0; cursor: pointer; }
+.filter-checkbox {
+  width: 18px; height: 18px; border: 1.5px solid var(--border2);
+  border-radius: 4px; background: var(--surface); flex-shrink: 0;
+  transition: all .15s; display: flex; align-items: center; justify-content: center;
+}
+.filter-option.checked .filter-checkbox { background: var(--accent); border-color: var(--accent); }
+.filter-option.checked .filter-checkbox::after { content: '✓'; color: #fff; font-size: .7rem; font-weight: 700; }
+.filter-label { font-size: .88rem; color: var(--text2); flex: 1; }
+.filter-count { font-size: .75rem; color: var(--text3); font-family: var(--ff-mono); }
+.level-btn {
+  display: block; width: 100%; text-align: left; padding: 9px 14px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); margin-bottom: 6px; font-family: var(--ff-body);
+  font-size: .85rem; color: var(--text2); cursor: pointer; transition: all .2s;
+}
+.level-btn:hover, .level-btn.active { background: var(--accent-bg); border-color: rgba(124,106,247,.3); color: var(--accent2); }
+.catalog-header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+.catalog-count { font-size: .88rem; color: var(--text3); flex: 1; }
+.sort-select {
+  background: var(--surface); border: 1.5px solid var(--border);
+  color: var(--text); border-radius: var(--r-sm); padding: 9px 14px;
+  font-family: var(--ff-body); font-size: .85rem; cursor: pointer; outline: none;
+}
+.sort-select:focus { border-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   VIEW: COURSE DETAIL
+═══════════════════════════════════════════════════ */
+.course-detail-layout { display: grid; grid-template-columns: 1fr 360px; gap: 40px; padding: 32px 40px; }
+.cd-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--text3); margin-bottom: 24px; }
+.cd-breadcrumb a { color: var(--accent2); text-decoration: none; cursor: pointer; }
+.cd-breadcrumb a:hover { text-decoration: underline; }
+.cd-title { font-family: var(--ff-display); font-size: clamp(1.6rem, 2.5vw, 2.2rem); font-weight: 700; letter-spacing: -.03em; line-height: 1.15; margin-bottom: 16px; }
+.cd-description { color: var(--text2); line-height: 1.75; font-size: .95rem; margin-bottom: 28px; }
+.cd-meta-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; }
+.cd-meta-item { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--text2); }
+.cd-meta-item strong { color: var(--text); }
+
+.instructor-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); padding: 24px; margin-bottom: 28px;
+  display: flex; gap: 20px; align-items: flex-start;
+}
+.instructor-avatar {
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--sky));
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--ff-display); font-size: 1.2rem; font-weight: 700; color: #fff;
+}
+.instructor-name { font-family: var(--ff-display); font-weight: 600; font-size: 1rem; margin-bottom: 2px; }
+.instructor-role { font-size: .82rem; color: var(--text3); margin-bottom: 8px; }
+.instructor-bio { font-size: .85rem; color: var(--text2); line-height: 1.65; }
+
+.curriculum { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r-lg); overflow: hidden; margin-bottom: 28px; }
+.curriculum-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.curriculum-header h3 { font-family: var(--ff-display); font-weight: 600; }
+.curriculum-stats { font-size: .82rem; color: var(--text3); }
+.module { border-bottom: 1px solid var(--border); }
+.module:last-child { border-bottom: none; }
+.module-header {
+  padding: 16px 24px; display: flex; align-items: center; gap: 12px;
+  cursor: pointer; transition: background .15s; user-select: none;
+}
+.module-header:hover { background: rgba(255,255,255,.02); }
+.module-num { font-family: var(--ff-mono); font-size: .78rem; color: var(--text3); width: 24px; }
+.module-title { flex: 1; font-weight: 600; font-size: .9rem; }
+.module-meta { font-size: .78rem; color: var(--text3); display: flex; gap: 8px; }
+.module-toggle { color: var(--text3); font-size: .75rem; transition: transform .2s; }
+.module.open .module-toggle { transform: rotate(180deg); }
+.lessons-list { display: none; }
+.module.open .lessons-list { display: block; }
+.lesson-item {
+  padding: 12px 24px 12px 60px; display: flex; align-items: center; gap: 12px;
+  border-top: 1px solid var(--border); cursor: pointer; transition: background .15s;
+}
+.lesson-item:hover { background: rgba(255,255,255,.02); }
+.lesson-icon { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: .8rem; }
+.lesson-icon.video { background: var(--accent-bg); color: var(--accent2); }
+.lesson-icon.quiz  { background: var(--amber-bg); color: var(--amber); }
+.lesson-icon.doc   { background: var(--green-bg); color: var(--green); }
+.lesson-icon.done  { background: var(--green-bg); color: var(--green); }
+.lesson-title { flex: 1; font-size: .87rem; }
+.lesson-duration { font-family: var(--ff-mono); font-size: .75rem; color: var(--text3); }
+.lesson-locked { font-size: .8rem; color: var(--text3); }
+
+.course-sidebar { position: sticky; top: 80px; height: fit-content; }
+.preview-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-xl); overflow: hidden; margin-bottom: 16px;
+}
+.preview-thumb {
+  height: 200px; background: linear-gradient(135deg, #1a1035, #0d1628);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 5rem; position: relative; cursor: pointer; overflow: hidden;
+}
+.preview-thumb::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.3); }
+.preview-play {
+  position: absolute; z-index: 1;
+  width: 64px; height: 64px; background: rgba(255,255,255,.9);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; color: var(--bg); transition: all .2s;
+}
+.preview-thumb:hover .preview-play { background: #fff; transform: scale(1.08); }
+.preview-body { padding: 24px; }
+.preview-price { font-family: var(--ff-display); font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
+.preview-price .old-price { font-size: 1rem; color: var(--text3); text-decoration: line-through; margin-left: 8px; font-weight: 400; }
+.preview-discount { font-size: .8rem; color: var(--green); font-weight: 500; margin-bottom: 20px; }
+.preview-includes { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+.preview-includes h4 { font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-bottom: 12px; }
+.include-item { display: flex; gap: 10px; align-items: flex-start; font-size: .85rem; color: var(--text2); margin-bottom: 8px; }
+.include-item span:first-child { flex-shrink: 0; color: var(--accent2); }
+
+/* ═══════════════════════════════════════════════════
+   VIEW: VIDEO PLAYER
+═══════════════════════════════════════════════════ */
+#view-player.active { display: block; min-height: calc(100vh - 64px); }
+.player-layout { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 64px); }
+.player-main { display: flex; flex-direction: column; overflow: hidden; }
+.video-container { background: #000; position: relative; flex-shrink: 0; }
+.video-wrapper { position: relative; padding-top: 56.25%; }
+.video-wrapper iframe, .video-wrapper video {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: none;
+}
+.video-placeholder {
+  position: absolute; inset: 0; background: #050508;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; cursor: pointer;
+}
+.video-placeholder .vp-icon { font-size: 4rem; opacity: .3; }
+.video-placeholder p { color: var(--text3); font-size: .9rem; }
+.player-info { padding: 24px 32px; overflow-y: auto; flex: 1; }
+.player-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--text3); margin-bottom: 16px; cursor: pointer; }
+.player-breadcrumb:hover { color: var(--accent2); }
+.player-lesson-title { font-family: var(--ff-display); font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; margin-bottom: 8px; }
+.player-nav { display: flex; gap: 10px; margin: 20px 0; }
+.player-tabs { display: flex; gap: 2px; background: var(--surface); border-radius: var(--r-sm); padding: 4px; margin-bottom: 24px; }
+.player-tab {
+  flex: 1; padding: 9px 16px; border: none; border-radius: 7px;
+  font-family: var(--ff-body); font-size: .85rem; font-weight: 500;
+  cursor: pointer; transition: all .2s; background: none; color: var(--text2);
+}
+.player-tab.active { background: var(--surface2); color: var(--text); }
+.player-content-tab { display: none; }
+.player-content-tab.active { display: block; }
+.notes-input {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-md); padding: 16px; width: 100%;
+  font-family: var(--ff-body); font-size: .9rem; color: var(--text);
+  resize: vertical; min-height: 120px; outline: none; transition: border-color .2s;
+}
+.notes-input:focus { border-color: var(--accent); }
+.resource-item {
+  display: flex; align-items: center; gap: 12px; padding: 14px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); margin-bottom: 8px; cursor: pointer; transition: all .2s;
+}
+.resource-item:hover { border-color: var(--border2); background: var(--surface2); }
+.resource-icon { font-size: 1.2rem; }
+.resource-name { flex: 1; font-size: .87rem; font-weight: 500; }
+.resource-size { font-size: .75rem; color: var(--text3); font-family: var(--ff-mono); }
+
+.player-sidebar { background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+.sidebar-header { padding: 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.sidebar-header h3 { font-family: var(--ff-display); font-weight: 600; font-size: .95rem; margin-bottom: 8px; }
+.sidebar-progress-text { display: flex; justify-content: space-between; font-size: .78rem; color: var(--text3); margin-bottom: 6px; }
+.sidebar-lessons { flex: 1; overflow-y: auto; }
+.sidebar-module { border-bottom: 1px solid var(--border); }
+.sidebar-module-header { padding: 14px 20px; font-size: .82rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; background: rgba(255,255,255,.02); }
+.sidebar-lesson {
+  padding: 12px 20px; display: flex; align-items: center; gap: 10px;
+  cursor: pointer; transition: background .15s; border-left: 3px solid transparent;
+}
+.sidebar-lesson:hover { background: rgba(255,255,255,.03); }
+.sidebar-lesson.active { background: var(--accent-bg); border-left-color: var(--accent); }
+.sl-icon { width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: .72rem; }
+.sl-done   { background: var(--green-bg); color: var(--green); }
+.sl-current{ background: var(--accent-bg); color: var(--accent2); }
+.sl-locked { background: var(--surface2); color: var(--text3); }
+.sl-title  { font-size: .83rem; flex: 1; line-height: 1.3; }
+.sl-dur    { font-size: .72rem; color: var(--text3); font-family: var(--ff-mono); flex-shrink: 0; }
+
+/* ═══════════════════════════════════════════════════
+   VIEW: MY LEARNING
+═══════════════════════════════════════════════════ */
+.my-learning-header { padding: 40px 40px 0; }
+.my-learning-header h1 { font-family: var(--ff-display); font-size: 2rem; font-weight: 700; letter-spacing: -.03em; margin-bottom: 8px; }
+.my-learning-header p { color: var(--text2); }
+.my-learning-tabs { display: flex; gap: 0; padding: 28px 40px 0; border-bottom: 1px solid var(--border); }
+.ml-tab {
+  padding: 12px 20px; font-size: .88rem; font-weight: 500;
+  cursor: pointer; border: none; background: none; color: var(--text2);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .2s;
+}
+.ml-tab:hover { color: var(--text); }
+.ml-tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+.enrolled-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 32px 40px; }
+.enrolled-card {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-lg); overflow: hidden; cursor: pointer; transition: all .25s;
+}
+.enrolled-card:hover { border-color: var(--border2); transform: translateY(-3px); box-shadow: var(--shadow); }
+.enrolled-card .ec-thumb { height: 140px; position: relative; display: flex; align-items: center; justify-content: center; font-size: 3.5rem; }
+.enrolled-card .ec-body { padding: 18px; }
+.enrolled-card .ec-title { font-family: var(--ff-display); font-weight: 600; font-size: .95rem; margin-bottom: 4px; }
+.enrolled-card .ec-instructor { font-size: .78rem; color: var(--text3); margin-bottom: 14px; }
+.enrolled-card .ec-progress { display: flex; justify-content: space-between; font-size: .78rem; color: var(--text3); margin-bottom: 6px; }
+.enrolled-card .ec-pct { color: var(--accent2); font-weight: 600; }
+
+/* ═══════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════ */
+.toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
+.toast {
+  background: var(--surface); border: 1.5px solid var(--border2);
+  border-radius: var(--r-md); padding: 14px 18px;
+  display: flex; align-items: center; gap: 12px; min-width: 280px; max-width: 360px;
+  animation: fadeUp .3s ease both; box-shadow: var(--shadow);
+}
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--rose); }
+.toast.info    { border-left: 3px solid var(--accent); }
+.toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+.toast-msg { font-size: .87rem; flex: 1; }
+
+/* ═══════════════════════════════════════════════════
+   MISC
+═══════════════════════════════════════════════════ */
+.page-loader {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 9998; animation: fadeIn .3s ease;
+}
+.loader-ring { width: 40px; height: 40px; border: 3px solid var(--surface2); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+
+.empty-state { text-align: center; padding: 64px 24px; color: var(--text3); }
+.empty-state .es-icon { font-size: 3rem; margin-bottom: 16px; }
+.empty-state p { font-size: .95rem; }
+.stars { color: var(--amber); letter-spacing: 2px; font-size: .9rem; }
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  #view-login.active { grid-template-columns: 1fr; }
+  .login-left { display: none; }
+  .catalog-layout { grid-template-columns: 1fr; }
+  .filters-sidebar { position: static; }
+  .course-detail-layout { grid-template-columns: 1fr; }
+  .player-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; }
+  .player-sidebar { height: 400px; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .navbar { padding: 0 16px; }
+  .home-section, .my-learning-header, .my-learning-tabs, .enrolled-grid { padding-left: 16px; padding-right: 16px; }
+  .home-hero { margin: 12px; padding: 32px 24px; }
+  .home-hero-inner { grid-template-columns: 1fr; }
+  .catalog-layout, .course-detail-layout { padding: 24px 16px; }
+  .reco-grid { grid-template-columns: 1fr; }
+  .search-bar { min-width: 140px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── PAGE LOADER ─────────────────────── -->
+<div class="page-loader" id="pageLoader">
+  <div class="loader-ring"></div>
+</div>
+
+<!-- ── TOAST CONTAINER ────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ══════════════════════════════════════
+     NAVBAR
+══════════════════════════════════════ -->
+<nav class="navbar hidden" id="navbar">
+  <a class="nav-logo" onclick="navigate('home')">
+    <span class="logo-dot"></span> Netwise Academy
+  </a>
+  <div class="nav-links">
+    <button class="nav-link active" id="nl-home"     onclick="navigate('home')">Inicio</button>
+    <button class="nav-link"        id="nl-catalog"  onclick="navigate('catalog')">Explorar</button>
+    <button class="nav-link"        id="nl-learning" onclick="navigate('my-learning')">Mi Aprendizaje</button>
+  </div>
+  <div class="nav-right">
+    <div class="search-bar">
+      <span class="search-icon">🔍</span>
+      <input type="text" placeholder="Buscar cursos..." id="globalSearch" oninput="handleSearch(this.value)">
+    </div>
+    <button class="btn-icon" title="Notificaciones" onclick="showToast('info','📬 Tienes 3 notificaciones nuevas')">🔔</button>
+    <div class="nav-avatar" onclick="toggleUserMenu()">AC</div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════
+     VIEW: LOGIN
+══════════════════════════════════════ -->
+<div id="view-login" class="view active">
+  <div class="login-left">
+    <div class="login-left-content">
+      <div class="login-brand"><span class="dot"></span> Netwise Academy</div>
+    </div>
+    <div class="floating-cards">
+      <div class="float-card">
+        <div class="float-card-label">Completado hoy</div>
+        <div class="float-card-val">3 lecciones ✓</div>
+      </div>
+      <div class="float-card" style="animation-delay:-1s">
+        <div class="float-card-label">Racha actual</div>
+        <div class="float-card-val">🔥 12 días</div>
+      </div>
+    </div>
+    <div class="login-hero-text">
+      <h2>Aprende.<br><em>Practica.</em><br>Domina.</h2>
+      <p>Más de 500 cursos en tecnología, diseño y negocios. Aprende a tu ritmo con instructores expertos.</p>
+      <div class="login-stats">
+        <div>
+          <div class="login-stat-num">500+</div>
+          <div class="login-stat-label">Cursos activos</div>
+        </div>
+        <div>
+          <div class="login-stat-num">48K</div>
+          <div class="login-stat-label">Estudiantes</div>
+        </div>
+        <div>
+          <div class="login-stat-num">98%</div>
+          <div class="login-stat-label">Satisfacción</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="login-right">
+    <div class="login-form-wrap anim-fade-up">
+      <div class="login-tabs">
+        <button class="login-tab active" id="tab-login" onclick="switchAuthTab('login')">Iniciar Sesión</button>
+        <button class="login-tab" id="tab-register" onclick="switchAuthTab('register')">Registrarse</button>
+      </div>
+
+      <!-- Login Form -->
+      <div id="form-login">
+        <h2 class="login-form-title">Bienvenido 👋</h2>
+        <p class="login-form-sub">Ingresa tus datos para continuar aprendiendo</p>
+        <div id="login-error" class="error-msg">Credenciales incorrectas. Usa: demo@Netwise Academy.com / 12345</div>
+        <div class="form-fields">
+          <div class="input-group">
+            <label>Correo electrónico</label>
+            <input class="input" type="email" id="login-email" placeholder="tu@email.com" value="demo@Netwise Academy.com">
+          </div>
+          <div class="input-group">
+            <label>Contraseña</label>
+            <input class="input" type="password" id="login-pwd" placeholder="••••••••" value="12345">
+            <a class="forgot-link">¿Olvidaste tu contraseña?</a>
+          </div>
+          <button class="btn btn-primary btn-full btn-lg" onclick="doLogin()">Entrar a Netwise Academy →</button>
+        </div>
+        <div class="divider-text">o continúa con</div>
+        <div class="social-btns">
+          <button class="social-btn" onclick="socialLogin('Google')">🌐 Google</button>
+          <button class="social-btn" onclick="socialLogin('GitHub')">🐙 GitHub</button>
+        </div>
+        <p class="form-footer">¿No tienes cuenta? <a onclick="switchAuthTab('register')">Regístrate gratis</a></p>
+      </div>
+
+      <!-- Register Form -->
+      <div id="form-register" class="hidden">
+        <h2 class="login-form-title">Únete gratis ✨</h2>
+        <p class="login-form-sub">Crea tu cuenta y empieza a aprender hoy</p>
+        <div class="form-fields">
+          <div class="input-group">
+            <label>Nombre completo</label>
+            <input class="input" type="text" placeholder="Tu nombre">
+          </div>
+          <div class="input-group">
+            <label>Correo electrónico</label>
+            <input class="input" type="email" placeholder="tu@email.com">
+          </div>
+          <div class="input-group">
+            <label>Contraseña</label>
+            <input class="input" type="password" placeholder="Mínimo 8 caracteres">
+          </div>
+          <div class="input-group">
+            <label>¿Qué quieres aprender?</label>
+            <select class="input">
+              <option>Desarrollo Web</option>
+              <option>Diseño UX/UI</option>
+              <option>Data Science</option>
+              <option>Marketing Digital</option>
+              <option>Negocios</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-full btn-lg" onclick="doRegister()">Crear cuenta gratuita →</button>
+        </div>
+        <p class="form-footer">Al registrarte aceptas los <a href="#">Términos de Servicio</a></p>
+        <p class="form-footer">¿Ya tienes cuenta? <a onclick="switchAuthTab('login')">Inicia sesión</a></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: HOME
+══════════════════════════════════════ -->
+<div id="view-home" class="view">
+
+  <div class="home-hero anim-fade-up d1">
+    <div class="home-hero-inner">
+      <div>
+        <div class="badge badge-accent" style="margin-bottom:16px">✨ Nueva ruta: Full-Stack 2025</div>
+        <h1>Hola, <span>Ana</span>.<br>¿Seguimos aprendiendo?</h1>
+        <p>Tienes 3 cursos en progreso y una racha de 12 días. ¡Sigue así para completar tu certificación!</p>
+        <div class="hero-cta">
+          <button class="btn btn-primary btn-lg" onclick="navigate('catalog')">Explorar cursos</button>
+          <button class="btn btn-ghost btn-lg" onclick="navigate('my-learning')">Ver mi progreso</button>
+        </div>
+      </div>
+      <div class="hero-continue-card" onclick="navigate('player')">
+        <div class="hcc-label">▶ Continuar donde dejaste</div>
+        <div class="hcc-title">React Avanzado: Hooks & Patrones</div>
+        <div class="hcc-sub">Módulo 3 · Lección 8 de 24</div>
+        <div class="hcc-progress"><div class="hcc-fill"></div></div>
+        <div class="hcc-pct">65% completado</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-row anim-fade-up d2">
+    <div class="stat-card">
+      <div class="s-icon">📚</div>
+      <div class="s-num">4</div>
+      <div class="s-label">Cursos Inscritos</div>
+      <div class="s-sub">2 en progreso</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-icon">⏱️</div>
+      <div class="s-num">38h</div>
+      <div class="s-label">Tiempo aprendido</div>
+      <div class="s-sub">+2.5h esta semana</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-icon">🔥</div>
+      <div class="s-num">12</div>
+      <div class="s-label">Días de racha</div>
+      <div class="s-sub">Récord: 28 días</div>
+    </div>
+    <div class="stat-card">
+      <div class="s-icon">🏆</div>
+      <div class="s-num">3</div>
+      <div class="s-label">Certificados</div>
+      <div class="s-sub">1 en curso</div>
+    </div>
+  </div>
+
+  <div class="home-section" style="padding-top:40px">
+    <div class="section-header anim-fade-up d2">
+      <div class="section-title-text">Continuar aprendiendo <span>(2)</span></div>
+      <button class="view-all" onclick="navigate('my-learning')">Ver todos →</button>
+    </div>
+    <div class="courses-grid" id="continuing-grid"></div>
+  </div>
+
+  <div class="home-section">
+    <div class="section-header anim-fade-up d3">
+      <div class="section-title-text">Explorar por categoría</div>
+    </div>
+    <div class="cat-chips" id="home-cats"></div>
+  </div>
+
+  <div class="home-section">
+    <div class="section-header anim-fade-up d3">
+      <div class="section-title-text">Recomendados para ti <span>(basado en tu historial)</span></div>
+      <button class="view-all" onclick="navigate('catalog')">Ver catálogo →</button>
+    </div>
+    <div class="reco-grid" id="reco-grid"></div>
+  </div>
+
+  <div class="home-section">
+    <div class="section-header anim-fade-up d4">
+      <div class="section-title-text">🔥 Trending esta semana</div>
+    </div>
+    <div class="courses-grid" id="trending-grid"></div>
+  </div>
+
+  <div style="height:48px"></div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: CATALOG
+══════════════════════════════════════ -->
+<div id="view-catalog" class="view">
+  <div class="catalog-layout">
+    <aside class="filters-sidebar anim-fade-up d1">
+      <div class="filter-section">
+        <div class="filter-section-title">Categorías</div>
+        <div id="filter-cats"></div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-title">Nivel</div>
+        <button class="level-btn active" onclick="filterLevel(this,'todos')">Todos los niveles</button>
+        <button class="level-btn" onclick="filterLevel(this,'principiante')">🌱 Principiante</button>
+        <button class="level-btn" onclick="filterLevel(this,'intermedio')">🚀 Intermedio</button>
+        <button class="level-btn" onclick="filterLevel(this,'avanzado')">⚡ Avanzado</button>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-title">Precio</div>
+        <div class="filter-option checked" onclick="toggleFilter(this)">
+          <div class="filter-checkbox"></div>
+          <span class="filter-label">Gratuitos</span>
+          <span class="filter-count">12</span>
+        </div>
+        <div class="filter-option checked" onclick="toggleFilter(this)">
+          <div class="filter-checkbox"></div>
+          <span class="filter-label">De pago</span>
+          <span class="filter-count">48</span>
+        </div>
+      </div>
+      <div class="filter-section">
+        <div class="filter-section-title">Duración</div>
+        <div class="filter-option" onclick="toggleFilter(this)">
+          <div class="filter-checkbox"></div>
+          <span class="filter-label">Menos de 3h</span>
+        </div>
+        <div class="filter-option checked" onclick="toggleFilter(this)">
+          <div class="filter-checkbox"></div>
+          <span class="filter-label">3 – 10 horas</span>
+        </div>
+        <div class="filter-option" onclick="toggleFilter(this)">
+          <div class="filter-checkbox"></div>
+          <span class="filter-label">Más de 10 horas</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-full btn-sm" onclick="showToast('info','🔄 Filtros restablecidos')">Limpiar filtros</button>
+    </aside>
+
+    <div class="catalog-main">
+      <div class="catalog-header anim-fade-up d1">
+        <div class="catalog-count" id="catalog-count">60 cursos encontrados</div>
+        <div class="cat-chips" id="catalog-cat-chips" style="margin-bottom:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none"></div>
+        <select class="sort-select" onchange="showToast('info','🔃 Ordenado por '+this.options[this.selectedIndex].text)">
+          <option>Más populares</option>
+          <option>Mejor valorados</option>
+          <option>Más recientes</option>
+          <option>Precio: menor a mayor</option>
+        </select>
+      </div>
+      <div class="courses-grid" id="catalog-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: COURSE DETAIL
+══════════════════════════════════════ -->
+<div id="view-course-detail" class="view">
+  <div class="course-detail-layout">
+    <div class="course-detail-main anim-fade-up d1">
+      <div class="cd-breadcrumb">
+        <a onclick="navigate('catalog')">Explorar</a> › <a onclick="navigate('catalog')">Desarrollo Web</a> › <span id="cd-cat-label">React</span>
+      </div>
+      <div class="badge badge-accent" id="cd-badge" style="margin-bottom:14px">⚡ Más vendido</div>
+      <h1 class="cd-title" id="cd-title">React Avanzado: Hooks, Context y Patrones de Diseño</h1>
+      <p class="cd-description" id="cd-desc">Lleva tus habilidades de React al siguiente nivel. Aprende los hooks más poderosos, patrones de arquitectura de componentes y optimización de rendimiento con técnicas utilizadas en aplicaciones reales de producción.</p>
+      <div class="cd-meta-row">
+        <div class="cd-meta-item">⭐ <strong>4.9</strong> <span style="color:var(--amber)">(2.4k reseñas)</span></div>
+        <div class="cd-meta-item">👥 <strong>12,540</strong> estudiantes</div>
+        <div class="cd-meta-item">🕐 <strong>24 horas</strong> de video</div>
+        <div class="cd-meta-item">📅 Actualizado <strong>Nov 2024</strong></div>
+        <span class="badge badge-sky">⚡ Intermedio</span>
+      </div>
+
+      <div class="instructor-card">
+        <div class="instructor-avatar">CM</div>
+        <div>
+          <div class="instructor-name">Carlos Mendoza</div>
+          <div class="instructor-role">Senior Frontend Engineer · Ex-Google · 8 años de experiencia</div>
+          <div class="instructor-bio">Ingeniero de software especializado en arquitecturas React. Ha trabajado en equipos de más de 100 desarrolladores y construido aplicaciones con millones de usuarios activos. Apasionado por la enseñanza y el código limpio.</div>
+        </div>
+      </div>
+
+      <div class="curriculum" id="curriculum"></div>
+
+      <div style="margin-top:28px">
+        <h3 style="font-family:var(--ff-display);font-weight:700;margin-bottom:20px">Reseñas del curso</h3>
+        <div id="reviews-list"></div>
+      </div>
+    </div>
+
+    <div class="course-sidebar anim-fade-up d2">
+      <div class="preview-card">
+        <div class="preview-thumb" onclick="navigate('player')">
+          <span style="font-size:5rem;position:relative;z-index:1">⚛️</span>
+          <div class="preview-play">▶</div>
+        </div>
+        <div class="preview-body">
+          <div class="preview-price">$29.99 <span class="old-price">$89.99</span></div>
+          <div class="preview-discount">67% de descuento · Oferta termina en 2 días</div>
+          <button class="btn btn-primary btn-full btn-lg" style="margin-bottom:10px" onclick="enrollCourse()">Inscribirse ahora</button>
+          <button class="btn btn-ghost btn-full" onclick="showToast('info','❤️ Guardado en tu lista')">Guardar para después</button>
+          <div class="preview-includes">
+            <h4>Este curso incluye:</h4>
+            <div class="include-item"><span>🎬</span><span>24 horas de video bajo demanda</span></div>
+            <div class="include-item"><span>📁</span><span>15 proyectos descargables</span></div>
+            <div class="include-item"><span>📝</span><span>6 ejercicios prácticos</span></div>
+            <div class="include-item"><span>🏆</span><span>Certificado de finalización</span></div>
+            <div class="include-item"><span>♾️</span><span>Acceso ilimitado de por vida</span></div>
+            <div class="include-item"><span>📱</span><span>Acceso en móvil y desktop</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-header" style="margin-bottom:14px">
+          <div class="section-title-text" style="font-size:1rem">Cursos relacionados</div>
+        </div>
+        <div id="related-courses"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: PLAYER
+══════════════════════════════════════ -->
+<div id="view-player" class="view">
+  <div class="player-layout">
+    <div class="player-main">
+      <div class="video-container">
+        <div class="video-wrapper" id="video-wrapper">
+          <div class="video-placeholder" onclick="loadVideo()">
+            <div class="vp-icon">▶</div>
+            <p>Haz clic para reproducir la lección</p>
+          </div>
+        </div>
+      </div>
+      <div class="player-info">
+        <div class="player-breadcrumb" onclick="navigate('course-detail')">← React Avanzado: Hooks, Context y Patrones</div>
+        <div class="player-lesson-title" id="player-lesson-title">Lección 8: useCallback y useMemo en profundidad</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+          <span class="badge badge-sky">📺 Video · 18 min</span>
+          <span class="badge badge-accent">Módulo 3</span>
+        </div>
+        <div class="player-nav">
+          <button class="btn btn-ghost btn-sm" onclick="prevLesson()">← Anterior</button>
+          <button class="btn btn-primary btn-sm" onclick="markDone()">✓ Marcar completada</button>
+          <button class="btn btn-ghost btn-sm" onclick="nextLesson()">Siguiente →</button>
+        </div>
+        <div class="player-tabs">
+          <button class="player-tab active" onclick="switchPlayerTab('overview',this)">Descripción</button>
+          <button class="player-tab" onclick="switchPlayerTab('resources',this)">Recursos</button>
+          <button class="player-tab" onclick="switchPlayerTab('notes',this)">Mis notas</button>
+          <button class="player-tab" onclick="switchPlayerTab('qa',this)">Q&A</button>
+        </div>
+        <div class="player-content-tab active" id="tab-overview">
+          <p style="color:var(--text2);line-height:1.8;font-size:.92rem">En esta lección profundizamos en dos de los hooks de optimización más importantes de React. Aprenderás cuándo y cómo usar <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-family:var(--ff-mono);color:var(--accent2)">useCallback</code> y <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-family:var(--ff-mono);color:var(--accent2)">useMemo</code> para evitar re-renderizados innecesarios y escribir código más eficiente en producción.</p>
+          <div style="margin-top:20px;padding:16px;background:var(--surface);border-radius:var(--r-md);border:1px solid var(--border)">
+            <div style="font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px">Lo que aprenderás</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.87rem;color:var(--text2)">
+              <div>✓ Diferencias entre useCallback y useMemo</div>
+              <div>✓ Casos de uso reales con ejemplos</div>
+              <div>✓ Memoización con React.memo</div>
+              <div>✓ Profiling con React DevTools</div>
+            </div>
+          </div>
+        </div>
+        <div class="player-content-tab" id="tab-resources">
+          <div class="resource-item"><span class="resource-icon">📄</span><span class="resource-name">Slides de la lección</span><span class="resource-size">PDF · 2.4MB</span></div>
+          <div class="resource-item"><span class="resource-icon">💻</span><span class="resource-name">Código fuente del ejercicio</span><span class="resource-size">ZIP · 845KB</span></div>
+          <div class="resource-item"><span class="resource-icon">🔗</span><span class="resource-name">Documentación oficial de React</span><span class="resource-size">Enlace externo</span></div>
+          <div class="resource-item"><span class="resource-icon">📝</span><span class="resource-name">Cheat sheet: Hooks de optimización</span><span class="resource-size">PDF · 320KB</span></div>
+        </div>
+        <div class="player-content-tab" id="tab-notes">
+          <textarea class="notes-input" placeholder="Escribe tus notas sobre esta lección...&#10;&#10;Tip: Las notas se guardan automáticamente."></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px">
+            <button class="btn btn-primary btn-sm" onclick="showToast('success','📝 Nota guardada')">Guardar nota</button>
+          </div>
+        </div>
+        <div class="player-content-tab" id="tab-qa">
+          <div style="padding:24px;text-align:center;color:var(--text3)">
+            <div style="font-size:2rem;margin-bottom:12px">💬</div>
+            <p style="margin-bottom:16px">¿Tienes dudas sobre esta lección?</p>
+            <button class="btn btn-primary btn-sm" onclick="showToast('info','✨ Próximamente disponible')">Hacer una pregunta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="player-sidebar">
+      <div class="sidebar-header">
+        <h3>React Avanzado: Hooks & Patrones</h3>
+        <div class="sidebar-progress">
+          <div class="sidebar-progress-text">
+            <span>Progreso del curso</span>
+            <span style="color:var(--accent2);font-weight:600">65%</span>
+          </div>
+          <div class="progress-bar" style="height:6px">
+            <div class="progress-fill" style="width:65%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-lessons" id="player-curriculum"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     VIEW: MY LEARNING
+══════════════════════════════════════ -->
+<div id="view-my-learning" class="view">
+  <div class="my-learning-header anim-fade-up d1">
+    <h1>Mi Aprendizaje</h1>
+    <p>Aquí están todos tus cursos y tu progreso</p>
+  </div>
+  <div class="my-learning-tabs">
+    <button class="ml-tab active" onclick="mlTab(this,'enrolled')">En progreso (4)</button>
+    <button class="ml-tab" onclick="mlTab(this,'completed')">Completados (3)</button>
+    <button class="ml-tab" onclick="mlTab(this,'wishlist')">Lista de deseos (7)</button>
+    <button class="ml-tab" onclick="mlTab(this,'certs')">Certificados (3)</button>
+  </div>
+  <div class="enrolled-grid" id="enrolled-grid"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════
+const CATEGORIES = [
+  { id:'web',    label:'🌐 Desarrollo Web',       count:140 },
+  { id:'data',   label:'📊 Data Science',          count:85  },
+  { id:'design', label:'🎨 Diseño UX/UI',          count:72  },
+  { id:'mobile', label:'📱 Mobile Dev',            count:60  },
+  { id:'cloud',  label:'☁️ Cloud & DevOps',        count:54  },
+  { id:'ai',     label:'🤖 IA & Machine Learning', count:98  },
+  { id:'biz',    label:'💼 Negocios',              count:66  },
+  { id:'cyber',  label:'🔐 Ciberseguridad',        count:41  },
+];
+
+const COURSES = [
+  { id:1,  title:'React Avanzado: Hooks, Context y Patrones',  cat:'web',    emoji:'⚛️', color:'#1a1035,#0d1628', instructor:'Carlos Mendoza',  rating:4.9, students:12540, price:29.99, oldPrice:89.99,  duration:'24h', level:'intermedio',   enrolled:true,  progress:65, badge:'Más vendido',  video:'https://www.youtube.com/embed/TNhaISOUy6Q?autoplay=1' },
+  { id:2,  title:'Python para Data Science & Machine Learning', cat:'data',   emoji:'🐍', color:'#1a2810,#0d1a0d', instructor:'Laura Jiménez',   rating:4.8, students:9820,  price:24.99, oldPrice:79.99,  duration:'36h', level:'principiante', enrolled:true,  progress:32, badge:'Nuevo',        video:'https://www.youtube.com/embed/LHBE0uHiMZo?autoplay=1' },
+  { id:3,  title:'UI/UX Design con Figma: De cero a experto',  cat:'design', emoji:'🎨', color:'#1a0d28,#28103a', instructor:'Sofía Torres',    rating:4.7, students:7340,  price:0,     oldPrice:0,      duration:'18h', level:'principiante', enrolled:false, progress:0,  badge:'Gratis',       video:'https://www.youtube.com/embed/FTFaQWZBqQ8?autoplay=1' },
+  { id:4,  title:'Node.js & Express: APIs REST Profesionales', cat:'web',    emoji:'🟩', color:'#0d1a10,#102015', instructor:'Miguel Santos',   rating:4.9, students:15200, price:34.99, oldPrice:99.99,  duration:'28h', level:'intermedio',   enrolled:true,  progress:18, badge:'Bestseller',   video:'https://www.youtube.com/embed/Oe421EPjeBE?autoplay=1' },
+  { id:5,  title:'Flutter: Apps Móviles iOS & Android',        cat:'mobile', emoji:'💙', color:'#0d1428,#0d1a35', instructor:'Ana Gómez',       rating:4.6, students:5680,  price:19.99, oldPrice:59.99,  duration:'22h', level:'intermedio',   enrolled:false, progress:0,  badge:'',             video:'https://www.youtube.com/embed/VPvVD8t02U8?autoplay=1' },
+  { id:6,  title:'Machine Learning con TensorFlow & PyTorch',  cat:'ai',     emoji:'🧠', color:'#28100d,#3a1a10', instructor:'Roberto Kim',     rating:4.8, students:8900,  price:39.99, oldPrice:119.99, duration:'40h', level:'avanzado',     enrolled:false, progress:0,  badge:'Premium',      video:'https://www.youtube.com/embed/tPYj3fFJGjk?autoplay=1' },
+  { id:7,  title:'AWS Cloud Practitioner: Certificación',      cat:'cloud',  emoji:'☁️', color:'#1a1010,#281510', instructor:'Diana Ruiz',      rating:4.7, students:11200, price:29.99, oldPrice:89.99,  duration:'32h', level:'principiante', enrolled:true,  progress:75, badge:'Certificación', video:'https://www.youtube.com/embed/3hLmDS179YE?autoplay=1' },
+  { id:8,  title:'TypeScript Completo: De JS a TS Profesional',cat:'web',    emoji:'🔷', color:'#0d1428,#102040', instructor:'Andrés Vargas',   rating:4.8, students:6700,  price:0,     oldPrice:0,      duration:'15h', level:'intermedio',   enrolled:false, progress:0,  badge:'Gratis',       video:'https://www.youtube.com/embed/BwuLxPH8IDs?autoplay=1' },
+  { id:9,  title:'SQL & PostgreSQL: Bases de Datos Pro',       cat:'data',   emoji:'🐘', color:'#0d1828,#102030', instructor:'Marta León',      rating:4.6, students:4520,  price:22.99, oldPrice:69.99,  duration:'20h', level:'principiante', enrolled:false, progress:0,  badge:'',             video:'https://www.youtube.com/embed/qw--VYLpxG4?autoplay=1' },
+  { id:10, title:'Ciberseguridad: Ethical Hacking',            cat:'cyber',  emoji:'🔐', color:'#0d1a10,#0f200f', instructor:'Pedro Castillo',  rating:4.9, students:3200,  price:49.99, oldPrice:149.99, duration:'45h', level:'avanzado',     enrolled:false, progress:0,  badge:'Hot 🔥',       video:'https://www.youtube.com/embed/3Kq1MIfTWCE?autoplay=1' },
+  { id:11, title:'Marketing Digital & Growth Hacking',         cat:'biz',    emoji:'📈', color:'#1a1420,#201528', instructor:'Valeria Moreno',  rating:4.5, students:8900,  price:0,     oldPrice:0,      duration:'14h', level:'principiante', enrolled:false, progress:0,  badge:'Gratis',       video:'https://www.youtube.com/embed/bixR-KIJKYM?autoplay=1' },
+  { id:12, title:'Docker & Kubernetes: DevOps Moderno',        cat:'cloud',  emoji:'🐳', color:'#0d1a28,#102035', instructor:'Luis Chen',       rating:4.8, students:7100,  price:34.99, oldPrice:109.99, duration:'30h', level:'avanzado',     enrolled:false, progress:0,  badge:'',             video:'https://www.youtube.com/embed/3c-iBn73dDE?autoplay=1' },
+];
+
+const CURRICULUM_DATA = [
+  { module:'Módulo 1: Fundamentos de React', lessons:[
+    {title:'Configuración del entorno',      dur:'12m', type:'video', done:true},
+    {title:'JSX y componentes funcionales',  dur:'18m', type:'video', done:true},
+    {title:'Props y desestructuración',      dur:'22m', type:'video', done:true},
+    {title:'Quiz: Fundamentos',              dur:'10m', type:'quiz',  done:true},
+  ]},
+  { module:'Módulo 2: Hooks Básicos', lessons:[
+    {title:'useState en profundidad',        dur:'25m', type:'video', done:true},
+    {title:'useEffect y su ciclo de vida',   dur:'30m', type:'video', done:true},
+    {title:'useRef y DOM manipulation',      dur:'20m', type:'video', done:true},
+    {title:'Proyecto: Todo App con Hooks',   dur:'45m', type:'doc',   done:true},
+  ]},
+  { module:'Módulo 3: Optimización', lessons:[
+    {title:'useCallback: cuándo y cómo',     dur:'22m', type:'video', done:true},
+    {title:'useMemo y React.memo',           dur:'18m', type:'video', done:false, current:true},
+    {title:'Profiling con React DevTools',   dur:'20m', type:'video', done:false},
+    {title:'Code splitting y lazy loading',  dur:'25m', type:'video', done:false},
+  ]},
+  { module:'Módulo 4: Context y Estado Global', lessons:[
+    {title:'useContext: el patrón Provider', dur:'28m', type:'video', done:false, locked:true},
+    {title:'useReducer + Context',           dur:'35m', type:'video', done:false, locked:true},
+    {title:'Zustand como alternativa ligera',dur:'22m', type:'video', done:false, locked:true},
+  ]},
+  { module:'Módulo 5: Patrones Avanzados', lessons:[
+    {title:'Compound Components',            dur:'30m', type:'video', done:false, locked:true},
+    {title:'Render Props pattern',           dur:'25m', type:'video', done:false, locked:true},
+    {title:'Custom Hooks: patrones reales',  dur:'40m', type:'video', done:false, locked:true},
+    {title:'Proyecto Final: Dashboard React',dur:'90m', type:'doc',   done:false, locked:true},
+  ]},
+];
+
+const REVIEWS = [
+  { name:'María G.', stars:5, date:'hace 2 días',    text:'El mejor curso de React que he tomado. Carlos explica con una claridad increíble y los proyectos son muy prácticos.' },
+  { name:'Juan P.',  stars:5, date:'hace 1 semana',  text:'Increíble. Después de este curso conseguí trabajo como Frontend Developer. Vale cada centavo.' },
+  { name:'Sara M.',  stars:4, date:'hace 2 semanas', text:'Muy completo. Algunos videos podrían ser más cortos, pero el contenido es excelente y está muy actualizado.' },
+];
+
+// ═══════════════════════════════════════════════════
+// NAVIGATION — único punto de verdad para cambiar vista
+// ═══════════════════════════════════════════════════
+function navigate(view) {
+  // Ocultar todas las vistas
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+  // Mostrar la vista destino
+  const target = document.getElementById('view-' + view);
+  if (!target) return;
+  target.classList.add('active');
+
+  window.scrollTo(0, 0);
+
+  // Navbar: ocultar en login, mostrar en el resto
+  const navbar = document.getElementById('navbar');
+  if (view === 'login') {
+    navbar.classList.add('hidden');
+  } else {
+    navbar.classList.remove('hidden');
+  }
+
+  // Actualizar nav activo
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  const navMap = { home:'nl-home', catalog:'nl-catalog', 'my-learning':'nl-learning' };
+  if (navMap[view]) document.getElementById(navMap[view])?.classList.add('active');
+
+  // Renderizar contenido según vista
+  if (view === 'home')          renderHome();
+  if (view === 'catalog')       renderCatalog();
+  if (view === 'course-detail') renderCourseDetail();
+  if (view === 'my-learning')   renderMyLearning();
+  if (view === 'player')        renderPlayerCurriculum();
+}
+
+// ═══════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════
+function doLogin() {
+  const email = document.getElementById('login-email').value;
+  const pwd   = document.getElementById('login-pwd').value;
+  const err   = document.getElementById('login-error');
+  if (email === 'demo@Netwise Academy.com' && pwd === '12345') {
+    err.style.display = 'none';
+    showToast('success', '✅ ¡Bienvenida de vuelta, Ana!');
+    setTimeout(() => navigate('home'), 600);
+  } else {
+    err.style.display = 'block';
+  }
+}
+function doRegister() {
+  showToast('success', '🎉 ¡Cuenta creada! Redirigiendo...');
+  setTimeout(() => navigate('home'), 1000);
+}
+function socialLogin(p) {
+  showToast('info', '🔗 Conectando con ' + p + '...');
+  setTimeout(() => navigate('home'), 1000);
+}
+function switchAuthTab(t) {
+  document.getElementById('form-login').classList.toggle('hidden', t !== 'login');
+  document.getElementById('form-register').classList.toggle('hidden', t !== 'register');
+  document.getElementById('tab-login').classList.toggle('active', t === 'login');
+  document.getElementById('tab-register').classList.toggle('active', t === 'register');
+}
+
+// ═══════════════════════════════════════════════════
+// RENDER HOME
+// ═══════════════════════════════════════════════════
+function renderHome() {
+  const cont = COURSES.filter(c => c.enrolled && c.progress < 100).slice(0, 4);
+  document.getElementById('continuing-grid').innerHTML = cont.map(renderCourseCard).join('');
+
+  document.getElementById('home-cats').innerHTML = CATEGORIES.map(c =>
+    `<div class="cat-chip" onclick="catFilter('${c.id}')">${c.label} <span style="color:var(--text3);font-size:.75rem">${c.count}</span></div>`
+  ).join('');
+
+  const recos = COURSES.filter(c => !c.enrolled).slice(0, 6);
+  document.getElementById('reco-grid').innerHTML = recos.map(c => `
+    <div class="reco-card" onclick="openCourse(${c.id})">
+      <div class="reco-thumb" style="background:linear-gradient(135deg,${c.color})">${c.emoji}</div>
+      <div class="reco-body">
+        <div class="reco-title">${c.title}</div>
+        <div class="reco-meta">
+          <span>⭐ ${c.rating}</span>
+          <span>${c.duration}</span>
+          <span>${c.price === 0 ? '<span style="color:var(--green)">Gratis</span>' : '$' + c.price}</span>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const trend = [...COURSES].sort((a, b) => b.students - a.students).slice(0, 4);
+  document.getElementById('trending-grid').innerHTML = trend.map(renderCourseCard).join('');
+}
+
+function renderCourseCard(c) {
+  return `
+  <div class="course-card" onclick="openCourse(${c.id})">
+    <div class="course-thumb" style="background:linear-gradient(135deg,${c.color})">
+      <div class="course-thumb-bg">${c.emoji}</div>
+      <div class="play-overlay"><div class="play-btn-sm">▶</div></div>
+      <div class="course-duration">${c.duration}</div>
+    </div>
+    <div class="course-body">
+      <div class="course-meta">
+        ${c.badge ? `<span class="badge badge-accent">${c.badge}</span>` : ''}
+        <span class="badge badge-sky" style="font-size:.65rem">${c.level}</span>
+      </div>
+      <div class="course-title">${c.title}</div>
+      <div class="course-instructor">por ${c.instructor}</div>
+      <div class="course-stats-row">
+        <div class="course-rating">⭐ ${c.rating} <span>(${(c.students/1000).toFixed(1)}k)</span></div>
+        <div class="course-price ${c.price===0?'free':''}">
+          ${c.price===0 ? 'Gratis' : (c.enrolled ? '✓ Inscrito' : '$'+c.price)}
+        </div>
+      </div>
+    </div>
+    ${c.enrolled && c.progress > 0 ? `
+    <div class="course-progress-wrap">
+      <div class="enrolled-badge">✓ Inscrito · ${c.progress}%</div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${c.progress}%"></div></div>
+    </div>` : ''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// CATALOG
+// ═══════════════════════════════════════════════════
+function renderCatalog(filterCat) {
+  const chips = [{ id:'', label:'Todos' }, ...CATEGORIES];
+  document.getElementById('catalog-cat-chips').innerHTML = chips.map(c =>
+    `<div class="cat-chip ${(!filterCat && c.id==='') || filterCat===c.id ? 'active':''}" onclick="renderCatalog('${c.id}')">${c.label}</div>`
+  ).join('');
+
+  const courses = filterCat ? COURSES.filter(c => c.cat === filterCat) : COURSES;
+  document.getElementById('catalog-count').textContent = courses.length + ' cursos encontrados';
+  document.getElementById('catalog-grid').innerHTML = courses.map(renderCourseCard).join('');
+
+  document.getElementById('filter-cats').innerHTML = CATEGORIES.map(c => `
+    <div class="filter-option checked" onclick="toggleFilter(this)">
+      <div class="filter-checkbox"></div>
+      <span class="filter-label">${c.label}</span>
+      <span class="filter-count">${c.count}</span>
+    </div>`).join('');
+}
+
+function catFilter(id) {
+  navigate('catalog');
+  setTimeout(() => renderCatalog(id), 50);
+}
+function filterLevel(btn, level) {
+  document.querySelectorAll('.level-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  showToast('info', '🔎 Filtrando: ' + btn.textContent);
+}
+function toggleFilter(el) { el.classList.toggle('checked'); }
+
+// ═══════════════════════════════════════════════════
+// COURSE DETAIL
+// ═══════════════════════════════════════════════════
+function openCourse(id) {
+  const c = COURSES.find(x => x.id === id);
+  if (!c) return;
+  window._openCourse = c;
+  navigate('course-detail');
+}
+
+function renderCourseDetail() {
+  const c = window._openCourse || COURSES[0];
+
+  let html = `<div class="curriculum-header"><h3>Contenido del Curso</h3><div class="curriculum-stats">${CURRICULUM_DATA.length} módulos · 24 lecciones · 24h de video</div></div>`;
+  CURRICULUM_DATA.forEach((mod, mi) => {
+    const open = mi < 2 ? 'open' : '';
+    html += `<div class="module ${open}">
+      <div class="module-header" onclick="toggleModule(this.parentElement)">
+        <span class="module-num">${String(mi+1).padStart(2,'0')}</span>
+        <span class="module-title">${mod.module}</span>
+        <span class="module-meta">${mod.lessons.length} clases</span>
+        <span class="module-toggle">▼</span>
+      </div>
+      <div class="lessons-list">`;
+    mod.lessons.forEach(l => {
+      const iconMap = {video:'▶', quiz:'?', doc:'📄'};
+      const typeClass = l.done ? 'done' : l.type;
+      html += `<div class="lesson-item" onclick="openLesson('${l.title}')">
+        <div class="lesson-icon ${typeClass}">${l.done ? '✓' : iconMap[l.type]||'▶'}</div>
+        <span class="lesson-title">${l.title}${l.current?' <span class="badge badge-accent" style="font-size:.65rem;padding:2px 7px">Actual</span>':''}</span>
+        <span class="lesson-duration">${l.dur}</span>
+        ${l.locked ? '<span class="lesson-locked">🔒</span>' : ''}
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  document.getElementById('curriculum').innerHTML = html;
+
+  document.getElementById('reviews-list').innerHTML = REVIEWS.map(r => `
+    <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-md);padding:20px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--sky));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.82rem;color:#fff">${r.name[0]}</div>
+        <div>
+          <div style="font-weight:600;font-size:.9rem">${r.name}</div>
+          <div style="font-size:.75rem;color:var(--text3)">${r.date}</div>
+        </div>
+        <div class="stars" style="margin-left:auto">${'⭐'.repeat(r.stars)}</div>
+      </div>
+      <p style="font-size:.88rem;color:var(--text2);line-height:1.65">${r.text}</p>
+    </div>`).join('');
+
+  const related = COURSES.filter(x => x.id !== c.id).slice(0, 3);
+  document.getElementById('related-courses').innerHTML = related.map(r => `
+    <div class="reco-card" onclick="openCourse(${r.id})" style="margin-bottom:10px">
+      <div class="reco-thumb" style="background:linear-gradient(135deg,${r.color});width:64px;height:48px;border-radius:8px">${r.emoji}</div>
+      <div class="reco-body">
+        <div class="reco-title" style="font-size:.83rem">${r.title}</div>
+        <div class="reco-meta"><span>⭐${r.rating}</span><span>${r.price===0?'Gratis':'$'+r.price}</span></div>
+      </div>
+    </div>`).join('');
+}
+
+function toggleModule(el) { el.classList.toggle('open'); }
+function openLesson(title) {
+  document.getElementById('player-lesson-title').textContent = title;
+  navigate('player');
+}
+
+function enrollCourse() {
+  const c = window._openCourse;
+  if (c) { c.enrolled = true; c.progress = 1; }
+  showToast('success', '🎉 ¡Te has inscrito! Redirigiendo al curso...');
+  setTimeout(() => navigate('player'), 1000);
+}
+
+// ═══════════════════════════════════════════════════
+// PLAYER
+// ═══════════════════════════════════════════════════
+function renderPlayerCurriculum() {
+  let html = '';
+  CURRICULUM_DATA.forEach(mod => {
+    html += `<div class="sidebar-module"><div class="sidebar-module-header">${mod.module}</div>`;
+    mod.lessons.forEach(l => {
+      const cls  = l.done ? 'sl-done' : (l.current ? 'sl-current' : 'sl-locked');
+      const icon = l.done ? '✓' : (l.current ? '▶' : '○');
+      html += `<div class="sidebar-lesson ${l.current ? 'active' : ''}" onclick="playLesson('${l.title}')">
+        <div class="sl-icon ${cls}">${icon}</div>
+        <span class="sl-title">${l.title}</span>
+        <span class="sl-dur">${l.dur}</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  document.getElementById('player-curriculum').innerHTML = html;
+}
+
+function playLesson(title) {
+  document.getElementById('player-lesson-title').textContent = title;
+  document.querySelectorAll('.sidebar-lesson').forEach(el => {
+    el.classList.remove('active');
+    if (el.querySelector('.sl-title').textContent.trim() === title) el.classList.add('active');
+  });
+  document.getElementById('video-wrapper').innerHTML = `
+    <div class="video-placeholder" onclick="loadVideo()">
+      <div class="vp-icon">▶</div>
+      <p>Haz clic para reproducir la lección</p>
+    </div>`;
+  showToast('info', '📺 Cargando: ' + title);
+}
+
+function loadVideo() {
+  const c = window._openCourse || COURSES[0];
+  document.getElementById('video-wrapper').innerHTML =
+    `<iframe src="${c.video}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen title="Video de la lección"></iframe>`;
+}
+
+function markDone() {
+  showToast('success', '✅ ¡Lección completada! +10 XP');
+  const active = document.querySelector('.sidebar-lesson.active');
+  if (active) {
+    const icon = active.querySelector('.sl-icon');
+    icon.textContent = '✓';
+    icon.className = 'sl-icon sl-done';
+  }
+}
+function prevLesson() { showToast('info', '⬅️ Lección anterior'); }
+function nextLesson() { showToast('info', '➡️ Siguiente lección'); markDone(); }
+
+function switchPlayerTab(id, btn) {
+  document.querySelectorAll('.player-content-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.player-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════
+// MY LEARNING
+// ═══════════════════════════════════════════════════
+function renderMyLearning() {
+  const enrolled = COURSES.filter(c => c.enrolled);
+  document.getElementById('enrolled-grid').innerHTML = enrolled.map(c => `
+    <div class="enrolled-card" onclick="${c.progress>0 ? "navigate('player')" : `openCourse(${c.id})`}">
+      <div class="ec-thumb" style="background:linear-gradient(135deg,${c.color})">
+        <span>${c.emoji}</span>
+      </div>
+      <div class="ec-body">
+        ${c.badge ? `<span class="badge badge-accent" style="margin-bottom:8px">${c.badge}</span>` : ''}
+        <div class="ec-title">${c.title}</div>
+        <div class="ec-instructor">por ${c.instructor}</div>
+        <div class="ec-progress">
+          <span>Progreso</span>
+          <span class="ec-pct">${c.progress}%</span>
+        </div>
+        <div class="progress-bar" style="height:6px">
+          <div class="progress-fill" style="width:${c.progress}%"></div>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn btn-primary btn-sm btn-full" onclick="event.stopPropagation();navigate('player')">
+            ${c.progress===0?'Comenzar':'Continuar'} →
+          </button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function mlTab(btn, tab) {
+  document.querySelectorAll('.ml-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'enrolled') {
+    renderMyLearning();
+  } else if (tab === 'completed') {
+    document.getElementById('enrolled-grid').innerHTML = `
+      <div class="enrolled-card">
+        <div class="ec-thumb" style="background:linear-gradient(135deg,#1a2810,#0d1a0d)">🐍</div>
+        <div class="ec-body">
+          <span class="badge badge-green" style="margin-bottom:8px">✓ Completado</span>
+          <div class="ec-title">Python Básico: Fundamentos</div>
+          <div class="ec-instructor">por Laura Jiménez</div>
+          <div style="margin-top:14px"><button class="btn btn-ghost btn-sm btn-full" onclick="showToast('success','🏆 Certificado descargado!')">Descargar certificado 🏆</button></div>
+        </div>
+      </div>
+      <div class="enrolled-card">
+        <div class="ec-thumb" style="background:linear-gradient(135deg,#1a1420,#201528)">📈</div>
+        <div class="ec-body">
+          <span class="badge badge-green" style="margin-bottom:8px">✓ Completado</span>
+          <div class="ec-title">Marketing Digital Básico</div>
+          <div class="ec-instructor">por Valeria Moreno</div>
+          <div style="margin-top:14px"><button class="btn btn-ghost btn-sm btn-full" onclick="showToast('success','🏆 Certificado descargado!')">Descargar certificado 🏆</button></div>
+        </div>
+      </div>`;
+  } else if (tab === 'certs') {
+    document.getElementById('enrolled-grid').innerHTML = `
+      <div style="grid-column:1/-1;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-xl);padding:40px;text-align:center">
+        <div style="font-size:3rem;margin-bottom:16px">🏆</div>
+        <div style="font-family:var(--ff-display);font-size:1.2rem;font-weight:700;margin-bottom:8px">3 Certificados ganados</div>
+        <p style="color:var(--text2);margin-bottom:24px">Tus logros están verificados en blockchain</p>
+        <button class="btn btn-primary" onclick="showToast('info','📤 Compartiendo en LinkedIn...')">Compartir en LinkedIn</button>
+      </div>`;
+  } else {
+    document.getElementById('enrolled-grid').innerHTML = COURSES.filter(c => !c.enrolled).slice(0,4).map(c => `
+      <div class="enrolled-card" onclick="openCourse(${c.id})">
+        <div class="ec-thumb" style="background:linear-gradient(135deg,${c.color})">${c.emoji}</div>
+        <div class="ec-body">
+          <div class="ec-title">${c.title}</div>
+          <div class="ec-instructor">por ${c.instructor}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+            <span class="course-price ${c.price===0?'free':''}">${c.price===0?'Gratis':'$'+c.price}</span>
+            <button class="btn btn-primary btn-sm" onclick="event.stopPropagation();openCourse(${c.id})">Ver curso</button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════════════════
+function handleSearch(q) {
+  if (!q || q.length <= 2) return;
+  const results = COURSES.filter(c => c.title.toLowerCase().includes(q.toLowerCase()));
+  navigate('catalog');
+  setTimeout(() => {
+    document.getElementById('catalog-grid').innerHTML = results.length
+      ? results.map(renderCourseCard).join('')
+      : `<div class="empty-state"><div class="es-icon">🔍</div><p>No se encontraron cursos para "${q}"</p></div>`;
+    document.getElementById('catalog-count').textContent = results.length + ' resultados para "' + q + '"';
+  }, 50);
+}
+
+// ═══════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════
+function showToast(type, msg) {
+  const c = document.getElementById('toastContainer');
+  const icons = { success:'✅', error:'❌', info:'ℹ️' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span class="toast-msg">${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(20px)';
+    t.style.transition = 'all .3s';
+    setTimeout(() => t.remove(), 300);
+  }, 3000);
+}
+
+function toggleUserMenu() {
+  showToast('info', '👤 Ana Castillo · ana@Netwise Academy.com');
+}
+
+// ── INIT ──
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const loader = document.getElementById('pageLoader');
+    loader.style.opacity = '0';
+    loader.style.transition = 'opacity .3s';
+    setTimeout(() => loader.remove(), 300);
+  }, 800);
+});
+</script>
+</body>
+</html>

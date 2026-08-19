@@ -1,0 +1,72 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Navbar from './components/Navbar';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { UIProvider } from './context/UIContext';
+
+// Pages
+import Home from './pages/Home';
+import Login from './pages/Login';
+import Catalog from './pages/Catalog';
+import CourseDetail from './pages/CourseDetail';
+import Player from './pages/Player';
+import MyLearning from './pages/MyLearning';
+
+// Phase 3 Dashboards
+import AdminDashboard from './pages/AdminDashboard';
+import TeacherDashboard from './pages/TeacherDashboard';
+import StudentProfile from './pages/StudentProfile';
+
+// Protected Route using real AuthContext
+const ProtectedRoute = ({ children }) => {
+  const { currentUser } = useAuth();
+  
+  if (!currentUser) return <Navigate to="/login" replace />;
+  return children;
+};
+
+// Role-based Route protection
+const RoleRoute = ({ children, allowedRoles }) => {
+  const { currentUser } = useAuth();
+  
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (!allowedRoles.includes(currentUser.role)) return <Navigate to="/" replace />;
+  
+  return children;
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <UIProvider>
+        <BrowserRouter>
+          {/* Navbar hides itself on login/player routes internally via useLocation */}
+          <Navbar />
+        <div className="main-content">
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/catalog" element={<Catalog />} />
+          <Route path="/course/:id" element={<CourseDetail />} />
+
+          {/* Protected Routes */}
+          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
+          <Route path="/my-learning" element={<ProtectedRoute><MyLearning /></ProtectedRoute>} />
+
+          {/* Role-Specific Dashboards */}
+          <Route path="/admin" element={<RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute>} />
+          <Route path="/teacher" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherDashboard /></RoleRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><StudentProfile /></ProtectedRoute>} />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        </div>
+        </BrowserRouter>
+      </UIProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;
