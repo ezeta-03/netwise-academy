@@ -89,15 +89,17 @@ const LiveClassRoom = () => {
   }
 
   return (
-    <div className="view active" style={{ minHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+    <div className="view active live-room">
+      <div className="live-room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
         <div>
           <div style={{ fontWeight: 600 }}>{session.title}</div>
           <div style={{ fontSize: '.8rem', color: 'var(--text3)' }}>{session.courseTitle} · {session.instructor}</div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/live')}><X size={14} /> Salir</button>
       </div>
-      <div ref={containerRef} style={{ flex: 1, background: '#000', minHeight: 'calc(100vh - 130px)' }}></div>
+      <div className="live-room-stage">
+        <div ref={containerRef}></div>
+      </div>
     </div>
   );
 };
