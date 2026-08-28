@@ -1,26 +1,38 @@
-import React, { useState } from 'react';
-import { UploadCloud, Plus, Video, FileText, Trash2, Edit2, Play, CheckCircle, Radio } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { UploadCloud, Plus, Video, FileText, Trash2, Edit2, Play, CheckCircle, Radio, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { COURSES } from '../lib/data';
-import { scheduleLiveSession } from '../lib/db';
+import { scheduleLiveSession, fetchLiveSessions } from '../lib/db';
 
 const LiveClassScheduler = () => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
+  const navigate = useNavigate();
   const [courseId, setCourseId] = useState(COURSES[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [startsAt, setStartsAt] = useState('');
   const [durationMin, setDurationMin] = useState(60);
-  const [scheduled, setScheduled] = useState([]);
+  const [mySessions, setMySessions] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  // Todas las clases en vivo que este docente ya programó (no solo las de
+  // esta sesión del navegador), para poder entrar a la sala desde aquí.
+  const loadMySessions = useCallback(() => {
+    fetchLiveSessions().then((all) => {
+      setMySessions(all.filter(s => s.instructor === currentUser?.displayName));
+    });
+  }, [currentUser]);
+
+  useEffect(() => { loadMySessions(); }, [loadMySessions]);
 
   const handleSchedule = async () => {
     if (!title || !startsAt) return addToast('Completa el título y la fecha/hora de la clase.', 'error');
     const course = COURSES.find(c => c.id.toString() === courseId.toString());
     setSaving(true);
     try {
-      const session = await scheduleLiveSession({
+      await scheduleLiveSession({
         courseId: course.id,
         courseTitle: course.title,
         title,
@@ -28,10 +40,10 @@ const LiveClassScheduler = () => {
         startsAt,
         durationMin: Number(durationMin),
       });
-      setScheduled(prev => [session, ...prev]);
       setTitle('');
       setStartsAt('');
       addToast('Clase en vivo programada. Aparecerá en "En Vivo" para los estudiantes.', 'success');
+      loadMySessions();
     } catch {
       addToast('No se pudo programar la clase.', 'error');
     } finally {
@@ -72,13 +84,22 @@ const LiveClassScheduler = () => {
         </button>
       </div>
 
-      {scheduled.length > 0 && (
+      {mySessions.length > 0 && (
         <div>
-          <h3 style={{ marginBottom: '12px', fontSize: '.95rem' }}>Programadas en esta sesión</h3>
-          {scheduled.map(s => (
-            <div key={s.id} style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', marginBottom: '10px' }}>
-              <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{s.title}</div>
-              <div style={{ fontSize: '.8rem', color: 'var(--text3)' }}>{s.courseTitle} · {new Date(s.startsAt).toLocaleString('es-PE')}</div>
+          <h3 style={{ marginBottom: '12px', fontSize: '.95rem' }}>Tus clases en vivo</h3>
+          {mySessions.map(s => (
+            <div key={s.id} style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{s.title}</div>
+                <div style={{ fontSize: '.8rem', color: 'var(--text3)' }}>{s.courseTitle} · {new Date(s.startsAt).toLocaleString('es-PE')}</div>
+              </div>
+              <button
+                className={`btn ${s.status === 'live' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+                disabled={s.status === 'ended'}
+                onClick={() => navigate(`/live/${s.id}`)}
+              >
+                <LogIn size={14} /> Entrar
+              </button>
             </div>
           ))}
         </div>
