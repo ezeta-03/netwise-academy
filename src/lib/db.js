@@ -1,6 +1,6 @@
 import { db } from './firebase';
-import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
-import { COURSES, CATEGORIES } from './data';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, query, orderBy } from 'firebase/firestore';
+import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 
 // Determine env (Firebase valid vs Mock)
 const isConfigValid = !db.app.options.apiKey.includes('DummyKey');
@@ -56,6 +56,71 @@ export const fetchCategories = async () => {
     cats.push({ id: doc.id, ...doc.data() });
   });
   return cats;
+};
+
+// --- Clases en vivo (colección Firestore `liveSessions`) ---
+
+export const fetchLiveSessions = async () => {
+  if (!isConfigValid) {
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(LIVE_SESSIONS), 300);
+    });
+  }
+
+  const q = query(collection(db, 'liveSessions'), orderBy('startsAt', 'asc'));
+  const querySnapshot = await getDocs(q);
+  const sessions = [];
+  querySnapshot.forEach((doc) => {
+    sessions.push({ id: doc.id, ...doc.data() });
+  });
+  return sessions;
+};
+
+export const fetchLiveSessionById = async (sessionId) => {
+  if (!isConfigValid) {
+    return new Promise((resolve) => {
+      const session = LIVE_SESSIONS.find(s => s.id === sessionId);
+      setTimeout(() => resolve(session || null), 200);
+    });
+  }
+
+  const docRef = doc(db, 'liveSessions', sessionId);
+  const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+};
+
+export const scheduleLiveSession = async ({ courseId, courseTitle, title, instructor, startsAt, durationMin }) => {
+  const roomName = `netwise-academy-${courseId}-${Date.now()}`;
+  const payload = { courseId, courseTitle, title, instructor, startsAt, durationMin, roomName, status: 'upcoming' };
+
+  if (!isConfigValid) {
+    return new Promise((resolve) => {
+      const newSession = { id: `mock-${Date.now()}`, ...payload };
+      LIVE_SESSIONS.push(newSession);
+      setTimeout(() => resolve(newSession), 300);
+    });
+  }
+
+  const docRef = await addDoc(collection(db, 'liveSessions'), payload);
+  return { id: docRef.id, ...payload };
+};
+
+// --- Usuarios y roles (colección Firestore `users`, creada por AuthContext) ---
+
+export const fetchAllUsers = async () => {
+  if (!isConfigValid) return null; // AdminDashboard conserva su lista de demo local
+
+  const querySnapshot = await getDocs(collection(db, 'users'));
+  const users = [];
+  querySnapshot.forEach((doc) => {
+    users.push({ uid: doc.id, ...doc.data() });
+  });
+  return users;
+};
+
+export const updateUserRole = async (uid, role) => {
+  if (!isConfigValid) return; // no-op en modo demo/mock
+  await setDoc(doc(db, 'users', uid), { role }, { merge: true });
 };
 
 // Functions to implement later:

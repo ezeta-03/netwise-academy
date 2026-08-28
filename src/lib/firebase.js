@@ -3,14 +3,15 @@ import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, GithubAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// TODO: Replace with your actual Firebase project configuration
+// Config real via variables de entorno (ver .env.example). Sin un .env.local,
+// cae en el proyecto dummy y toda la app opera en modo mock/simulado.
 const firebaseConfig = {
-  apiKey: "AIzaSyDummyKey-xxxxxxxxxxxxxxxxx",
-  authDomain: "netwise-academy-dummy.firebaseapp.com",
-  projectId: "netwise-academy-dummy",
-  storageBucket: "netwise-academy-dummy.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:xxxxxxxxxxxxxxxxx"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKey-xxxxxxxxxxxxxxxxx",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "netwise-academy-dummy.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "netwise-academy-dummy",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "netwise-academy-dummy.appspot.com",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1234567890:web:xxxxxxxxxxxxxxxxx"
 };
 
 // Initialize Firebase

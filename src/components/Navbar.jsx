@@ -9,8 +9,8 @@ const Navbar = () => {
   const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
 
-  // Hide Navbar on Login and Player pages (similar to original design behavior)
-  if (location.pathname === '/login' || location.pathname.startsWith('/player')) {
+  // Hide Navbar on Login, Player and active live-class room pages (similar to original design behavior)
+  if (location.pathname === '/login' || location.pathname.startsWith('/player') || location.pathname.startsWith('/live/')) {
     return null;
   }
 
@@ -31,6 +31,7 @@ const Navbar = () => {
         <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>Inicio</Link>
         <Link to="/catalog" className={`nav-link ${location.pathname === '/catalog' ? 'active' : ''}`}>Explorar</Link>
         <Link to="/my-learning" className={`nav-link ${location.pathname === '/my-learning' ? 'active' : ''}`}>Mi Aprendizaje</Link>
+        <Link to="/live" className={`nav-link ${location.pathname === '/live' ? 'active' : ''}`}>En Vivo</Link>
       </div>
 
       <div className="nav-right">

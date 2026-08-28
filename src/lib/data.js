@@ -56,6 +56,13 @@ export const CURRICULUM_DATA = [
   ]},
 ];
 
+// Clases en vivo (mock). En producción cada doc vive en la colección Firestore `liveSessions`.
+export const LIVE_SESSIONS = [
+  { id:'ls1', courseId:1, courseTitle:'React Avanzado: Hooks, Context y Patrones', title:'Sesión en vivo: Q&A de Hooks avanzados', instructor:'Carlos Mendoza', startsAt:'2026-08-28T18:00:00', durationMin:60, roomName:'netwise-academy-react-avanzado-q1', status:'upcoming' },
+  { id:'ls2', courseId:2, courseTitle:'Python para Data Science & Machine Learning', title:'Taller en vivo: Limpieza de datos con Pandas', instructor:'Laura Jiménez', startsAt:'2026-08-27T20:00:00', durationMin:90, roomName:'netwise-academy-python-ds-w1', status:'live' },
+  { id:'ls3', courseId:7, courseTitle:'AWS Cloud Practitioner: Certificación', title:'Repaso en vivo antes del examen de certificación', instructor:'Diana Ruiz', startsAt:'2026-08-20T17:00:00', durationMin:45, roomName:'netwise-academy-aws-repaso', status:'ended', recordingUrl:'' },
+];
+
 export const REVIEWS = [
   { name:'María G.', stars:5, date:'hace 2 días',    text:'El mejor curso de React que he tomado. Carlos explica con una claridad increíble y los proyectos son muy prácticos.' },
   { name:'Juan P.',  stars:5, date:'hace 1 semana',  text:'Increíble. Después de este curso conseguí trabajo como Frontend Developer. Vale cada centavo.' },

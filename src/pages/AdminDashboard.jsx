@@ -1,20 +1,54 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useUI } from '../context/UIContext';
 import { Search, CheckCircle, XCircle } from 'lucide-react';
+import { fetchAllUsers, updateUserRole } from '../lib/db';
+
+// Lista de demo: se reemplaza automáticamente por los docs reales de
+// Firestore (`users`) en cuanto hay un proyecto Firebase conectado.
+const MOCK_USER_ROWS = [
+  { id: 1, uid: 'mock-1', name: 'Ana Estudiante', email: 'demo@netwise.com', role: 'student', joined: '12 Ene 2024' },
+  { id: 2, uid: 'mock-2', name: 'Carlos Profesor', email: 'profe@netwise.com', role: 'teacher', joined: '03 Mar 2023' },
+  { id: 3, uid: 'mock-3', name: 'System Admin', email: 'admin@netwise.com', role: 'admin', joined: '01 Ene 2023' },
+  { id: 4, uid: 'mock-4', name: 'Luis García', email: 'luis@netwise.com', role: 'student', joined: '28 Feb 2024' },
+];
+
+const formatJoined = (iso) => {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return '—';
+  }
+};
 
 const AdminDashboard = () => {
   const { addToast } = useUI();
   const [activeTab, setActiveTab] = useState('users');
 
   // User State & Filters
-  const [users, setUsers] = useState([
-    { id: 1, name: 'Ana Estudiante', email: 'demo@netwise.com', role: 'student', joined: '12 Ene 2024' },
-    { id: 2, name: 'Carlos Profesor', email: 'profe@netwise.com', role: 'teacher', joined: '03 Mar 2023' },
-    { id: 3, name: 'System Admin', email: 'admin@netwise.com', role: 'admin', joined: '01 Ene 2023' },
-    { id: 4, name: 'Luis García', email: 'luis@netwise.com', role: 'student', joined: '28 Feb 2024' },
-  ]);
+  const [users, setUsers] = useState(MOCK_USER_ROWS);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
+
+  useEffect(() => {
+    fetchAllUsers().then((realUsers) => {
+      if (!realUsers) return; // modo mock: se queda con MOCK_USER_ROWS
+      setUsers(realUsers.map((u) => ({
+        id: u.uid,
+        uid: u.uid,
+        name: u.displayName || u.email,
+        email: u.email,
+        role: u.role || 'student',
+        joined: formatJoined(u.createdAt),
+      })));
+    });
+  }, []);
+
+  const handleRoleChange = async (targetUser, newRole) => {
+    setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, role: newRole } : u));
+    await updateUserRole(targetUser.uid, newRole);
+    addToast(`Rol de ${targetUser.name} actualizado a "${newRole}".`, 'success');
+  };
 
   // Course Audit State
   const [pendingCourses, setPendingCourses] = useState([
@@ -92,9 +126,16 @@ const AdminDashboard = () => {
                     <td style={{ padding: '16px', fontWeight: 500 }}>{u.name}</td>
                     <td style={{ padding: '16px', color: 'var(--text2)' }}>{u.email}</td>
                     <td style={{ padding: '16px' }}>
-                      <span className={`badge ${u.role === 'admin' ? 'badge-accent' : u.role === 'teacher' ? 'badge-sky' : 'badge-amber'}`}>
-                        {u.role}
-                      </span>
+                      <select
+                        className="input"
+                        style={{ padding: '6px 10px', fontSize: '.85rem', width: 'auto' }}
+                        value={u.role}
+                        onChange={(e) => handleRoleChange(u, e.target.value)}
+                      >
+                        <option value="student">student</option>
+                        <option value="teacher">teacher</option>
+                        <option value="admin">admin</option>
+                      </select>
                     </td>
                     <td style={{ padding: '16px', color: 'var(--text2)' }}>{u.joined}</td>
                   </tr>

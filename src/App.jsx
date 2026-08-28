@@ -11,6 +11,8 @@ import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Player from './pages/Player';
 import MyLearning from './pages/MyLearning';
+import LiveClasses from './pages/LiveClasses';
+import LiveClassRoom from './pages/LiveClassRoom';
 
 // Phase 3 Dashboards
 import AdminDashboard from './pages/AdminDashboard';
@@ -53,6 +55,8 @@ function App() {
           <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
           <Route path="/my-learning" element={<ProtectedRoute><MyLearning /></ProtectedRoute>} />
+          <Route path="/live" element={<ProtectedRoute><LiveClasses /></ProtectedRoute>} />
+          <Route path="/live/:sessionId" element={<ProtectedRoute><LiveClassRoom /></ProtectedRoute>} />
 
           {/* Role-Specific Dashboards */}
           <Route path="/admin" element={<RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute>} />

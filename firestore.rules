@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Catálogo público: cualquiera puede leer, solo un admin escribe
+    // (la app hoy no tiene un flujo de escritura desde el cliente para
+    // estas colecciones; se editan vía consola o el script scripts/seed.mjs).
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Clases en vivo: cualquier usuario autenticado puede verlas y
+    // programarlas (docentes/estudiantes según la UI de la app).
+    match /liveSessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Perfiles con rol. Un usuario puede crear/leer su propio doc, pero solo
+    // como 'student' (evita que alguien se auto-asigne admin/teacher tocando
+    // Firestore directamente). Cambiar de rol requiere ser admin.
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId
+                    && request.resource.data.role == 'student';
+      allow update: if isAdmin() ||
+                    (isSignedIn() && request.auth.uid == userId
+                     && request.resource.data.role == resource.data.role);
+      allow delete: if false;
+    }
+  }
+}

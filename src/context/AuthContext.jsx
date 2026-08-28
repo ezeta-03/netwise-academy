@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth, googleProvider, githubProvider } from '../lib/firebase';
-import { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut as firebaseSignOut, 
+import { auth, googleProvider, githubProvider, db } from '../lib/firebase';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
   onAuthStateChanged,
-  signInWithPopup
+  signInWithPopup,
+  updateProfile
 } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
@@ -17,6 +19,26 @@ const MOCK_USERS = {
   'demo@netwise.com':  { uid: 'mock-1', email: 'demo@netwise.com', displayName: 'Ana Estudiante', role: 'student' },
   'profe@netwise.com': { uid: 'mock-2', email: 'profe@netwise.com', displayName: 'Carlos Profesor', role: 'teacher' },
   'admin@netwise.com': { uid: 'mock-3', email: 'admin@netwise.com', displayName: 'System Admin', role: 'admin' },
+};
+
+// Perfil real en Firestore (colección `users/{uid}`). Reemplaza el rol
+// hardcodeado de MOCK_USERS cuando hay un proyecto Firebase real conectado:
+// la primera vez que se ve un uid se crea el doc con role: 'student' por
+// defecto; ascender a 'teacher'/'admin' es una acción manual desde el panel
+// de Admin (ver AdminDashboard) o la consola de Firestore.
+const ensureUserProfile = async (firebaseUser) => {
+  const ref = doc(db, 'users', firebaseUser.uid);
+  const snap = await getDoc(ref);
+  if (snap.exists()) return snap.data();
+
+  const profile = {
+    email: firebaseUser.email,
+    displayName: firebaseUser.displayName || firebaseUser.email,
+    role: 'student',
+    createdAt: new Date().toISOString(),
+  };
+  await setDoc(ref, profile);
+  return profile;
 };
 
 export const AuthProvider = ({ children }) => {
@@ -38,8 +60,20 @@ export const AuthProvider = ({ children }) => {
     }
 
     // Real Firebase Subscription
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setCurrentUser(null);
+        setLoading(false);
+        return;
+      }
+
+      const profile = await ensureUserProfile(user);
+      setCurrentUser({
+        uid: user.uid,
+        email: user.email,
+        displayName: profile.displayName || user.displayName,
+        role: profile.role,
+      });
       setLoading(false);
     });
 
@@ -81,8 +115,20 @@ export const AuthProvider = ({ children }) => {
     }
     
     // Proper Firebase Register
-    // Note: In a real app you'd update profile with displayName here
-    return createUserWithEmailAndPassword(auth, email, password);
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    if (displayName) {
+      await updateProfile(credential.user, { displayName });
+    }
+    // Crea el perfil explícitamente (con el displayName ya definido) en vez de
+    // depender del timing de onAuthStateChanged; role siempre 'student' al
+    // auto-registrarse.
+    await setDoc(doc(db, 'users', credential.user.uid), {
+      email,
+      displayName: displayName || email,
+      role: 'student',
+      createdAt: new Date().toISOString(),
+    });
+    return credential;
   };
 
   const logout = () => {
