@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useUI } from '../context/UIContext';
 import { useAuth } from '../context/AuthContext';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import { Search, CheckCircle, XCircle, Rocket } from 'lucide-react';
+import { Search, Rocket } from 'lucide-react';
 import { fetchAllUsers, updateUserRole, updateCourseOffering } from '../lib/db';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 
@@ -97,16 +97,11 @@ const AdminDashboard = () => {
   }, []);
 
   const handleRoleChange = async (targetUser, newRole) => {
+    if (targetUser.uid === currentUser?.uid) return; // un admin no puede cambiar su propio rol
     setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, role: newRole } : u));
     await updateUserRole(targetUser.uid, newRole);
     addToast(`Rol de ${targetUser.name} actualizado a "${newRole}".`, 'success');
   };
-
-  // Course Audit State
-  const [pendingCourses, setPendingCourses] = useState([
-    { id: 101, title: 'Introducción a React', author: 'Carlos Profesor', status: 'Pendiente' },
-    { id: 102, title: 'Marketing para Ingenieros', author: 'Maria Especialista', status: 'Pendiente' }
-  ]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
@@ -116,26 +111,14 @@ const AdminDashboard = () => {
     });
   }, [users, searchQuery, roleFilter]);
 
-  const handleApprove = (id) => {
-    setPendingCourses(prev => prev.filter(c => c.id !== id));
-    addToast("Curso aprobado y publicado en el catálogo.", "success");
-  };
-
-  const handleReject = (id) => {
-    setPendingCourses(prev => prev.filter(c => c.id !== id));
-    addToast("Curso rechazado. Se notificó al docente.", "error");
-  };
-
   return (
     <div className="view active" style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '8px' }}>Panel de Administrador</h1>
-      <p style={{ color: 'var(--text2)', marginBottom: '30px' }}>Gestiona la plataforma, usuarios y configuración global.</p>
+      <p style={{ color: 'var(--text2)', marginBottom: '30px' }}>Gestiona los talleres y los usuarios de la plataforma.</p>
 
       <div className="my-learning-tabs">
         <button className={`ml-tab ${activeTab === 'workshops' ? 'active' : ''}`} onClick={() => setActiveTab('workshops')}>Talleres</button>
         <button className={`ml-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Usuarios</button>
-        <button className={`ml-tab ${activeTab === 'courses' ? 'active' : ''}`} onClick={() => setActiveTab('courses')}>Auditoría de Cursos</button>
-        <button className={`ml-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>Configuración Global</button>
       </div>
 
       {activeTab === 'workshops' && (
@@ -199,6 +182,8 @@ const AdminDashboard = () => {
                         className="input"
                         style={{ padding: '6px 10px', fontSize: '.85rem', width: 'auto' }}
                         value={u.role}
+                        disabled={u.uid === currentUser?.uid}
+                        title={u.uid === currentUser?.uid ? 'No puedes cambiar tu propio rol de administrador.' : undefined}
                         onChange={(e) => handleRoleChange(u, e.target.value)}
                       >
                         <option value="student">student</option>
@@ -219,68 +204,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {activeTab === 'courses' && (
-        <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)' }}>
-            <h3 style={{ marginBottom: '16px' }}>Auditoría de Cursos Pendientes</h3>
-            <p style={{ color: 'var(--text2)', marginBottom: '30px' }}>Aprueba o rechaza los cursos enviados recientemente por los docentes para que sean listados en el catálogo público.</p>
-            
-            {pendingCourses.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text3)' }}>
-                <CheckCircle size={48} style={{ marginBottom: '16px', opacity: 0.5, color: 'var(--green)' }} />
-                <p>Todos los cursos han sido revisados. No hay nada pendiente.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gap: '16px' }}>
-                {pendingCourses.map(course => (
-                  <div key={course.id} className="reco-card" style={{ alignItems: 'center', padding: '16px 24px' }}>
-                    <div className="reco-thumb" style={{ background: `linear-gradient(135deg, var(--accent), var(--sky))`, width: '48px', height: '48px', borderRadius: '8px', fontSize: '1.2rem' }}>📝</div>
-                    <div className="reco-body">
-                      <div className="reco-title" style={{ fontSize: '1rem' }}>{course.title}</div>
-                      <div className="reco-meta" style={{ marginTop: '4px' }}>Autor: {course.author} • <span style={{ color: 'var(--amber)' }}>{course.status}</span></div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button className="btn btn-primary btn-sm" onClick={() => handleApprove(course.id)}><CheckCircle size={14} /> Aprobar</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => handleReject(course.id)}><XCircle size={14} /> Rechazar</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'settings' && (
-        <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)', maxWidth: '600px' }}>
-            <h3 style={{ marginBottom: '24px' }}>Ajustes del Sistema</h3>
-            
-            <div className="form-fields">
-              <div className="input-group">
-                <label>Idioma por defecto de la interfaz</label>
-                <select className="input">
-                  <option>Español (ES) - Predefinido</option>
-                  <option>Inglés (EN)</option>
-                  <option>Portugués (PT)</option>
-                </select>
-              </div>
-              
-              <div className="input-group">
-                <label>Pasarela principal (Conexión API)</label>
-                <select className="input">
-                  <option>Culqi (Soles Peruanos - Activo)</option>
-                  <option>Stripe (Dólares)</option>
-                </select>
-              </div>
-
-              <div style={{ height: '1px', background: 'var(--border)', margin: '16px 0' }}></div>
-
-              <button className="btn btn-primary btn-full" onClick={() => addToast("Configuraciones guardadas localmente.", "success")}>Guardar Configuración Global</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

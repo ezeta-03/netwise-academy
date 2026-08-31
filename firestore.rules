@@ -61,13 +61,18 @@ service cloud.firestore {
 
     // Perfiles con rol. Un usuario puede crear/leer su propio doc, pero solo
     // como 'student' (evita que alguien se auto-asigne admin/teacher tocando
-    // Firestore directamente). Cambiar de rol requiere ser admin.
+    // Firestore directamente). Cambiar de rol requiere ser admin -- excepto
+    // el propio rol de un admin, que nadie (ni él mismo) puede degradar,
+    // para que no pueda quedarse bloqueado fuera del panel por accidente.
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId
                     && request.resource.data.role == 'student';
-      allow update: if isAdmin() ||
+      allow update: if (isAdmin() &&
+                          !(request.auth.uid == userId
+                            && resource.data.role == 'admin'
+                            && request.resource.data.role != 'admin')) ||
                     (isSignedIn() && request.auth.uid == userId
                      && request.resource.data.role == resource.data.role);
       allow delete: if false;
