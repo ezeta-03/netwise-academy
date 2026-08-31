@@ -37,6 +37,8 @@ const CourseDetail = () => {
     );
   }
 
+  const isStaff = currentUser?.role === 'teacher' || currentUser?.role === 'admin';
+
   const getCatLabel = (catId) => {
     const cat = CATEGORIES.find(c => c.id === catId);
     return cat ? cat.label.replace(/[^a-zA-Z\s]/g, '').trim() : 'Categoría';
@@ -122,33 +124,51 @@ const CourseDetail = () => {
               <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} />
             </div>
             <div className="preview-body">
-              {course.price == null ? (
-                <div className="preview-price" style={{ fontSize: '1.3rem' }}>Precio por confirmar</div>
+              {isStaff ? (
+                <>
+                  <div className="preview-price" style={{ fontSize: '1.05rem' }}>Vista pública del taller</div>
+                  <p style={{ fontSize: '.82rem', color: 'var(--text3)', marginBottom: '14px' }}>
+                    Así lo ven los visitantes. Como {currentUser.role === 'admin' ? 'administrador' : 'docente'} no te inscribes aquí — gestiona el taller desde tu panel.
+                  </p>
+                  <button
+                    className="btn btn-primary btn-full btn-lg"
+                    style={{ marginBottom: '10px' }}
+                    onClick={() => navigate(currentUser.role === 'admin' ? '/admin' : '/teacher')}
+                  >
+                    Ir a mi panel
+                  </button>
+                </>
               ) : (
-                <div className="preview-price">{course.price === 0 ? 'Gratis' : `S/ ${course.price}`}</div>
-              )}
-              <div className="preview-discount" style={{ color: 'var(--text2)' }}>
-                {course.startDate
-                  ? `Inicia el ${new Date(course.startDate + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                  : 'Fecha de inicio: próximamente'}
-              </div>
+                <>
+                  {course.price == null ? (
+                    <div className="preview-price" style={{ fontSize: '1.3rem' }}>Precio por confirmar</div>
+                  ) : (
+                    <div className="preview-price">{course.price === 0 ? 'Gratis' : `S/ ${course.price}`}</div>
+                  )}
+                  <div className="preview-discount" style={{ color: 'var(--text2)' }}>
+                    {course.startDate
+                      ? `Inicia el ${new Date(course.startDate + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                      : 'Fecha de inicio: próximamente'}
+                  </div>
 
-              <button
-                className={`btn btn-full btn-lg ${isPreregistered && !isEnrolled ? 'btn-ghost' : 'btn-primary'}`}
-                style={{ marginBottom: '10px' }}
-                onClick={enrollCourse}
-                disabled={enrolling || (course.price == null && !isEnrolled && (isPreregistered || saving))}
-              >
-                {isEnrolled
-                  ? <><Check size={18} /> Continuar viendo</>
-                  : course.price == null
-                    ? (isPreregistered ? <><Check size={18} /> Ya estás preinscrito</> : (saving ? 'Guardando...' : 'Preinscribirme'))
-                    : enrolling ? 'Procesando...' : course.price === 0 ? 'Inscribirse gratis' : 'Comprar ahora'}
-              </button>
-              {course.price == null && !isPreregistered && (
-                <p style={{ fontSize: '.78rem', color: 'var(--text3)', textAlign: 'center', marginTop: '-4px', marginBottom: '10px' }}>
-                  Te avisaremos por correo apenas se confirme la fecha y el precio.
-                </p>
+                  <button
+                    className={`btn btn-full btn-lg ${isPreregistered && !isEnrolled ? 'btn-ghost' : 'btn-primary'}`}
+                    style={{ marginBottom: '10px' }}
+                    onClick={enrollCourse}
+                    disabled={enrolling || (course.price == null && !isEnrolled && (isPreregistered || saving))}
+                  >
+                    {isEnrolled
+                      ? <><Check size={18} /> Continuar viendo</>
+                      : course.price == null
+                        ? (isPreregistered ? <><Check size={18} /> Ya estás preinscrito</> : (saving ? 'Guardando...' : 'Preinscribirme'))
+                        : enrolling ? 'Procesando...' : course.price === 0 ? 'Inscribirse gratis' : 'Comprar ahora'}
+                  </button>
+                  {course.price == null && !isPreregistered && (
+                    <p style={{ fontSize: '.78rem', color: 'var(--text3)', textAlign: 'center', marginTop: '-4px', marginBottom: '10px' }}>
+                      Te avisaremos por correo apenas se confirme la fecha y el precio.
+                    </p>
+                  )}
+                </>
               )}
 
               <div className="preview-includes">
