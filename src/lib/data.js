@@ -1,10 +1,10 @@
-// Los 4 talleres del Pitch Deck (Propuesta de Valor). Los "count" quedan en 0
-// hasta que se den de alta los cursos reales en COURSES.
+// Los 4 talleres del Pitch Deck (Propuesta de Valor). El conteo de cursos
+// por categoría se calcula en Catalog.jsx a partir de COURSES, no aquí.
 export const CATEGORIES = [
-  { id:'redes-ia',       label:'📱 Redes Sociales & IA',     count:0 },
-  { id:'branding',       label:'🎨 Branding & Marca',        count:0 },
-  { id:'marketing',      label:'📈 Marketing Digital',       count:0 },
-  { id:'emprendimiento', label:'🚀 Emprendimiento Digital',  count:0 },
+  { id:'redes-ia',       label:'📱 Redes Sociales & IA' },
+  { id:'branding',       label:'🎨 Branding & Marca' },
+  { id:'marketing',      label:'📈 Marketing Digital' },
+  { id:'emprendimiento', label:'🚀 Emprendimiento Digital' },
 ];
 
 // Los 4 talleres reales del Pitch Deck. "price" y "duration" quedan en null
@@ -28,8 +28,6 @@ export const COURSES = [
     badge: 'Nuevo',
     price: null,
     duration: null,
-    enrolled: false,
-    progress: 0,
   },
   {
     id: 2,
@@ -48,8 +46,6 @@ export const COURSES = [
     badge: 'Nuevo',
     price: null,
     duration: null,
-    enrolled: false,
-    progress: 0,
   },
   {
     id: 3,
@@ -68,8 +64,6 @@ export const COURSES = [
     badge: 'Nuevo',
     price: null,
     duration: null,
-    enrolled: false,
-    progress: 0,
   },
   {
     id: 4,
@@ -88,8 +82,6 @@ export const COURSES = [
     badge: 'Nuevo',
     price: null,
     duration: null,
-    enrolled: false,
-    progress: 0,
   },
 ];
 

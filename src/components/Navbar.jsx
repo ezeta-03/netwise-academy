@@ -1,17 +1,41 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Bell, LogOut, Menu, X, Sun, Moon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useTheme } from '../context/ThemeContext';
+import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
   const { theme, toggleTheme } = useTheme();
+  const { courses: COURSES } = useCourseOfferings();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchResults = searchQuery.trim()
+    ? COURSES.filter(c =>
+        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.summary.toLowerCase().includes(searchQuery.toLowerCase())
+      ).slice(0, 5)
+    : [];
+
+  const goToSearchResult = (courseId) => {
+    setSearchQuery('');
+    setSearchOpen(false);
+    navigate(`/course/${courseId}`);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter' && searchResults.length > 0) goToSearchResult(searchResults[0].id);
+    if (e.key === 'Escape') { setSearchOpen(false); e.target.blur(); }
+  };
 
   // Hide Navbar on Login, Player and active live-class room pages (similar to original design behavior)
   if (location.pathname === '/login' || location.pathname.startsWith('/player') || location.pathname.startsWith('/live/')) {
@@ -46,9 +70,32 @@ const Navbar = () => {
         </div>
 
         <div className="nav-right">
-          <div className="search-bar">
+          <div className="search-bar" style={{ position: 'relative' }}>
             <Search size={16} className="search-icon" />
-            <input type="text" placeholder="Buscar cursos..." />
+            <input
+              type="text"
+              placeholder="Buscar cursos..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
+              onKeyDown={handleSearchKeyDown}
+            />
+            {searchOpen && searchQuery.trim() && (
+              <div className="search-dropdown">
+                {searchResults.length > 0 ? searchResults.map(c => (
+                  <div key={c.id} className="search-dropdown-item" onMouseDown={() => goToSearchResult(c.id)}>
+                    <img src={COURSE_THUMBNAILS[c.id]} alt="" />
+                    <div>
+                      <div className="search-dropdown-title">{c.title}</div>
+                      <div className="search-dropdown-meta">{c.instructor}</div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="search-dropdown-empty">Sin resultados para "{searchQuery}"</div>
+                )}
+              </div>
+            )}
           </div>
           <button className="btn-icon" title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} onClick={toggleTheme}>
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}

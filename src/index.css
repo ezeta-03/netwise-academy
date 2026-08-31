@@ -227,6 +227,18 @@ body::before {
 .search-bar input::placeholder { color: var(--text3); }
 .search-icon { color: var(--text3); font-size: .9rem; flex-shrink: 0; }
 
+.search-dropdown {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg); overflow: hidden; z-index: 200;
+}
+.search-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.search-dropdown-item:hover { background: var(--surface2); }
+.search-dropdown-item img { width: 40px; height: 40px; border-radius: var(--r-sm); object-fit: cover; flex-shrink: 0; }
+.search-dropdown-title { font-size: .85rem; font-weight: 600; color: var(--text); }
+.search-dropdown-meta { font-size: .75rem; color: var(--text3); }
+.search-dropdown-empty { padding: 14px; font-size: .82rem; color: var(--text3); text-align: center; }
+
 .hamburger-btn {
   display: none; align-items: center; justify-content: center;
   padding: 8px; background: none; border: none; color: var(--text2); cursor: pointer; border-radius: var(--r-sm);

@@ -4,7 +4,7 @@ import { Play, Clock } from 'lucide-react';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useAuth } from '../context/AuthContext';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import { fetchMyPreregistrations } from '../lib/db';
+import { fetchMyPreregistrations, fetchMyEnrollments } from '../lib/db';
 
 const MyLearning = () => {
   const navigate = useNavigate();
@@ -12,19 +12,22 @@ const MyLearning = () => {
   const { courses: COURSES } = useCourseOfferings();
   const [activeTab, setActiveTab] = useState('enrolled');
   const [preregisteredIds, setPreregisteredIds] = useState([]);
+  const [enrollments, setEnrollments] = useState({});
 
   useEffect(() => {
     if (!currentUser) return;
     fetchMyPreregistrations(currentUser.uid).then(setPreregisteredIds);
+    fetchMyEnrollments(currentUser.uid).then(setEnrollments);
   }, [currentUser]);
 
   const preregisteredCourses = COURSES.filter(c => preregisteredIds.includes(c.id));
+  const progressOf = (courseId) => enrollments[courseId]?.progress ?? 0;
 
   // Filter courses based on tab
   const getCoursesForTab = () => {
     switch (activeTab) {
-      case 'enrolled': return COURSES.filter(c => c.enrolled && c.progress < 100);
-      case 'completed': return COURSES.filter(c => c.enrolled && c.progress === 100);
+      case 'enrolled': return COURSES.filter(c => enrollments[c.id] && progressOf(c.id) < 100);
+      case 'completed': return COURSES.filter(c => enrollments[c.id] && progressOf(c.id) === 100);
       case 'preregistered': return preregisteredCourses;
       case 'certs': return [];
       default: return [];
@@ -33,8 +36,8 @@ const MyLearning = () => {
 
   const currentCourses = getCoursesForTab();
 
-  const enrolledCount = COURSES.filter(c => c.enrolled && c.progress < 100).length;
-  const completedCount = COURSES.filter(c => c.enrolled && c.progress === 100).length;
+  const enrolledCount = COURSES.filter(c => enrollments[c.id] && progressOf(c.id) < 100).length;
+  const completedCount = COURSES.filter(c => enrollments[c.id] && progressOf(c.id) === 100).length;
 
   return (
     <div className="view active">
@@ -59,7 +62,11 @@ const MyLearning = () => {
           </div>
         ) : (
           currentCourses.map(c => (
-            <div key={c.id} className="enrolled-card" onClick={() => navigate(`/course/${c.id}`)}>
+            <div
+              key={c.id}
+              className="enrolled-card"
+              onClick={() => navigate(activeTab === 'preregistered' ? `/course/${c.id}` : `/player/${c.id}/1-1`)}
+            >
               <div className="ec-thumb">
                 <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="ec-thumb-img" />
                 <div className="play-overlay"><div className="play-btn-sm"><Play size={20} fill="currentColor" /></div></div>
@@ -71,9 +78,9 @@ const MyLearning = () => {
                   <>
                     <div className="ec-progress">
                       <span>Progreso del curso</span>
-                      <span className="ec-pct">{c.progress}%</span>
+                      <span className="ec-pct">{progressOf(c.id)}%</span>
                     </div>
-                    <div className="progress-bar"><div className="progress-fill" style={{ width: `${c.progress}%` }}></div></div>
+                    <div className="progress-bar"><div className="progress-fill" style={{ width: `${progressOf(c.id)}%` }}></div></div>
                   </>
                 )}
                 {activeTab === 'preregistered' && (

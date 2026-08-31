@@ -260,5 +260,73 @@ export const saveCourseContent = async (courseId, modules, teacherUid) => {
   return payload;
 };
 
-// Functions to implement later:
-// export const updateLessonProgress = async (uid, courseId, lessonId) => {}
+// --- Inscripciones y progreso reales (colección Firestore `enrollments`) ---
+// A diferencia de `enrolled`/`progress` en COURSES (compartido entre TODOS
+// los estudiantes y nunca actualizado por nada), esto es un doc por
+// alumno+curso -- lo que permite que "Mi Aprendizaje" y "Marcar completada"
+// reflejen el avance real de cada estudiante en cada curso.
+
+export const fetchMyEnrollments = async (uid) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_enrollments_${uid}`);
+    return raw ? JSON.parse(raw) : {};
+  }
+
+  const q = query(collection(db, 'enrollments'), where('uid', '==', uid));
+  const snapshot = await getDocs(q);
+  const map = {};
+  snapshot.forEach((d) => { map[d.data().courseId] = d.data(); });
+  return map;
+};
+
+export const enrollInCourse = async (uid, course) => {
+  const payload = {
+    uid,
+    courseId: course.id,
+    courseTitle: course.title,
+    enrolledAt: new Date().toISOString(),
+    completedLessonIds: [],
+    progress: 0,
+  };
+
+  if (!isConfigValid) {
+    const key = `mock_enrollments_${uid}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    if (!map[course.id]) {
+      map[course.id] = payload;
+      localStorage.setItem(key, JSON.stringify(map));
+    }
+    return;
+  }
+
+  const ref = doc(db, 'enrollments', `${uid}_${course.id}`);
+  const existing = await getDoc(ref);
+  if (existing.exists()) return; // ya estaba inscrito -- no reinicia el progreso
+  await setDoc(ref, payload);
+};
+
+export const markLessonComplete = async (uid, courseId, lessonId, totalLessons) => {
+  if (!isConfigValid) {
+    const key = `mock_enrollments_${uid}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    const current = map[courseId] || { uid, courseId, completedLessonIds: [], progress: 0 };
+    const completedLessonIds = current.completedLessonIds.includes(lessonId)
+      ? current.completedLessonIds
+      : [...current.completedLessonIds, lessonId];
+    const progress = totalLessons > 0 ? Math.round((completedLessonIds.length / totalLessons) * 100) : 0;
+    map[courseId] = { ...current, completedLessonIds, progress };
+    localStorage.setItem(key, JSON.stringify(map));
+    return map[courseId];
+  }
+
+  const ref = doc(db, 'enrollments', `${uid}_${courseId}`);
+  const existing = await getDoc(ref);
+  const current = existing.exists() ? existing.data() : { completedLessonIds: [] };
+  const completedLessonIds = (current.completedLessonIds || []).includes(lessonId)
+    ? current.completedLessonIds
+    : [...(current.completedLessonIds || []), lessonId];
+  const progress = totalLessons > 0 ? Math.round((completedLessonIds.length / totalLessons) * 100) : 0;
+  const payload = { uid, courseId, completedLessonIds, progress, updatedAt: new Date().toISOString() };
+  await setDoc(ref, payload, { merge: true });
+  return payload;
+};

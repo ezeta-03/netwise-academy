@@ -1,17 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { fetchCourseContent } from '../lib/db';
+import { fetchCourseContent, fetchMyEnrollments, markLessonComplete } from '../lib/db';
 import { toEmbedUrl } from '../lib/embedUrl';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { useAuth } from '../context/AuthContext';
+import { useUI } from '../context/UIContext';
 
 const Player = () => {
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
   const { courses: COURSES } = useCourseOfferings();
+  const { currentUser } = useAuth();
+  const { addToast } = useUI();
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isPlaying, setIsPlaying] = useState(false);
   const [modules, setModules] = useState(null); // null = cargando
+  const [progress, setProgress] = useState(0);
+  const [completedLessonIds, setCompletedLessonIds] = useState([]);
+  const [marking, setMarking] = useState(false);
 
   const course = COURSES.find(c => c.id.toString() === courseId);
 
@@ -19,6 +26,15 @@ const Player = () => {
     if (!courseId) return;
     fetchCourseContent(courseId).then((data) => setModules(data.modules || []));
   }, [courseId]);
+
+  useEffect(() => {
+    if (!currentUser || !courseId) return;
+    fetchMyEnrollments(currentUser.uid).then((map) => {
+      const record = map[courseId];
+      setProgress(record?.progress ?? 0);
+      setCompletedLessonIds(record?.completedLessonIds ?? []);
+    });
+  }, [currentUser, courseId]);
 
   if (!course) {
     return (
@@ -72,6 +88,24 @@ const Player = () => {
       </div>
     );
   }
+
+  const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
+  const isLessonDone = completedLessonIds.includes(lesson.id);
+
+  const handleMarkComplete = async () => {
+    if (!currentUser || isLessonDone || marking) return;
+    setMarking(true);
+    try {
+      const updated = await markLessonComplete(currentUser.uid, course.id, lesson.id, totalLessons);
+      if (updated) {
+        setProgress(updated.progress);
+        setCompletedLessonIds(updated.completedLessonIds);
+      }
+      addToast('Lección marcada como completada.', 'success');
+    } finally {
+      setMarking(false);
+    }
+  };
 
   const goNext = () => {
     let nextLess = lessIdx + 1;
@@ -130,7 +164,9 @@ const Player = () => {
 
             <div className="player-nav">
               <button className="btn btn-ghost btn-sm" onClick={goPrev}>← Anterior</button>
-              <button className="btn btn-primary btn-sm" onClick={() => alert("Marked Done!")}>✓ Marcar completada</button>
+              <button className="btn btn-primary btn-sm" onClick={handleMarkComplete} disabled={isLessonDone || marking}>
+                {isLessonDone ? '✓ Completada' : marking ? 'Guardando...' : '✓ Marcar completada'}
+              </button>
               <button className="btn btn-ghost btn-sm" onClick={goNext}>Siguiente →</button>
             </div>
 
@@ -185,10 +221,10 @@ const Player = () => {
             <h3>{course.title}</h3>
             <div className="sidebar-progress-text">
               <span>Progreso del curso</span>
-              <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>{course.progress}%</span>
+              <span style={{ color: 'var(--accent2)', fontWeight: 600 }}>{progress}%</span>
             </div>
             <div className="progress-bar" style={{ height: '6px' }}>
-              <div className="progress-fill" style={{ width: `${course.progress}%` }}></div>
+              <div className="progress-fill" style={{ width: `${progress}%` }}></div>
             </div>
           </div>
 
@@ -198,13 +234,15 @@ const Player = () => {
                 <div className="sidebar-module-header">{mod.title}</div>
                 {mod.lessons.map((l, lIndex) => {
                   const isCurrent = mIndex === modIdx && lIndex === lessIdx;
+                  const isDone = completedLessonIds.includes(l.id);
+                  const cls = isCurrent ? 'sl-current active' : isDone ? 'sl-done' : '';
                   return (
                     <div
                       key={l.id}
                       className={`sidebar-lesson ${isCurrent ? 'active' : ''}`}
                       onClick={() => navigate(`/player/${course.id}/${mIndex + 1}-${lIndex + 1}`)}
                     >
-                      <div className={`sl-icon ${isCurrent ? 'sl-current active' : ''}`}>{isCurrent ? '▶' : '○'}</div>
+                      <div className={`sl-icon ${cls}`}>{isCurrent ? '▶' : isDone ? '✓' : '○'}</div>
                       <span className="sl-title">{l.title}</span>
                       <span className="sl-dur">{l.duration}</span>
                     </div>

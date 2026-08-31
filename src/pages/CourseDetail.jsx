@@ -1,22 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { CATEGORIES } from '../lib/data';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCulqi } from '../hooks/useCulqi';
 import { usePreregistration } from '../hooks/usePreregistration';
+import { useEnrollment } from '../hooks/useEnrollment';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { useAuth } from '../context/AuthContext';
+import { useUI } from '../context/UIContext';
 
 const CourseDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { courses: COURSES } = useCourseOfferings();
+  const { currentUser } = useAuth();
+  const { addToast } = useUI();
+  const [enrolling, setEnrolling] = useState(false);
 
   const course = COURSES.find(c => c.id.toString() === id);
   const relatedCourses = course ? COURSES.filter(c => c.id !== course.id).slice(0, 3) : [];
 
   const { openCulqiCheckout } = useCulqi(course?.price ? course.price * 3.75 : 0, course?.title || ''); // PEN conversion dummy
   const { isPreregistered, saving, preregister } = usePreregistration(course);
+  const { isEnrolled, enroll } = useEnrollment(course);
 
   if (!course) {
     return (
@@ -35,18 +42,33 @@ const CourseDetail = () => {
     return cat ? cat.label.replace(/[^a-zA-Z\s]/g, '').trim() : 'Categoría';
   };
 
-  const enrollCourse = () => {
+  const enrollCourse = async () => {
+    if (!currentUser) {
+      navigate('/login');
+      return;
+    }
+    if (isEnrolled) {
+      navigate(`/player/${course.id}/1-1`);
+      return;
+    }
     if (course.price == null) {
       preregister();
       return;
     }
+    setEnrolling(true);
     if (course.price === 0) {
-      alert("Te has inscrito en el taller gratuito.");
-      navigate(`/player/${course.id}/1`);
+      await enroll();
+      setEnrolling(false);
+      addToast('Te has inscrito en el taller gratuito.', 'success');
+      navigate(`/player/${course.id}/1-1`);
     } else {
       openCulqiCheckout();
-      // In real app, navigate inside the Culqi success callback
-      setTimeout(() => navigate(`/player/${course.id}/1`), 1600);
+      // En una integración real, esto pasaría dentro del callback de éxito de Culqi.
+      setTimeout(async () => {
+        await enroll();
+        setEnrolling(false);
+        navigate(`/player/${course.id}/1-1`);
+      }, 1600);
     }
   };
 
@@ -112,21 +134,22 @@ const CourseDetail = () => {
               </div>
 
               <button
-                className={`btn btn-full btn-lg ${isPreregistered ? 'btn-ghost' : 'btn-primary'}`}
+                className={`btn btn-full btn-lg ${isPreregistered && !isEnrolled ? 'btn-ghost' : 'btn-primary'}`}
                 style={{ marginBottom: '10px' }}
                 onClick={enrollCourse}
-                disabled={course.price == null && (isPreregistered || saving)}
+                disabled={enrolling || (course.price == null && !isEnrolled && (isPreregistered || saving))}
               >
-                {course.price == null
-                  ? (isPreregistered ? <><Check size={18} /> Ya estás preinscrito</> : (saving ? 'Guardando...' : 'Preinscribirme'))
-                  : course.price === 0 ? 'Inscribirse gratis' : 'Comprar ahora'}
+                {isEnrolled
+                  ? <><Check size={18} /> Continuar viendo</>
+                  : course.price == null
+                    ? (isPreregistered ? <><Check size={18} /> Ya estás preinscrito</> : (saving ? 'Guardando...' : 'Preinscribirme'))
+                    : enrolling ? 'Procesando...' : course.price === 0 ? 'Inscribirse gratis' : 'Comprar ahora'}
               </button>
               {course.price == null && !isPreregistered && (
                 <p style={{ fontSize: '.78rem', color: 'var(--text3)', textAlign: 'center', marginTop: '-4px', marginBottom: '10px' }}>
                   Te avisaremos por correo apenas se confirme la fecha y el precio.
                 </p>
               )}
-              <button className="btn btn-ghost btn-full" onClick={() => alert("Guardado en tu lista")}>Guardar para después</button>
 
               <div className="preview-includes">
                 <h4>Este taller incluye:</h4>

@@ -67,6 +67,21 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Inscripciones y progreso reales: un alumno solo puede crear/leer/
+    // actualizar su propia inscripción (progreso, lecciones completadas); un
+    // admin puede leerlas todas. No se borran desde el cliente.
+    // `resource == null` cubre el `get()` que hace enrollInCourse/
+    // markLessonComplete para revisar si el doc ya existe antes de crearlo --
+    // sin ese permiso, leer un doc que todavía no existe da permission-denied
+    // en vez de "no existe", porque `resource` es null y no tiene `.data`.
+    match /enrollments/{enrollmentId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
     // Perfiles con rol. Un usuario puede crear/leer su propio doc, pero solo
     // como 'student' (evita que alguien se auto-asigne admin/teacher tocando
     // Firestore directamente). Cambiar de rol requiere ser admin -- excepto

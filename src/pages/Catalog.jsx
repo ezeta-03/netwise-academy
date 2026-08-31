@@ -1,23 +1,41 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { CATEGORIES } from '../lib/data';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { useAuth } from '../context/AuthContext';
+import { fetchMyEnrollments } from '../lib/db';
 
 const Catalog = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { courses: COURSES } = useCourseOfferings();
+  const { currentUser } = useAuth();
+  const [enrollments, setEnrollments] = useState({});
   const queryParams = new URLSearchParams(location.search);
   const filterCat = queryParams.get('cat') || '';
-  
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchMyEnrollments(currentUser.uid).then(setEnrollments);
+  }, [currentUser]);
+
   const chips = [{ id:'', label:'Todos' }, ...CATEGORIES];
 
   // Active filter states
   const [filters, setFilters] = useState({ free: false, paid: false });
+  const [sortBy, setSortBy] = useState('popular');
 
   const toggleFilter = (key) => setFilters(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Cuántos talleres reales hay por categoría -- antes venía hardcodeado en
+  // 0 desde CATEGORIES (data.js) y nunca reflejaba el catálogo real.
+  const categoryCounts = useMemo(() => {
+    const counts = {};
+    COURSES.forEach(c => { counts[c.cat] = (counts[c.cat] || 0) + 1; });
+    return counts;
+  }, [COURSES]);
 
   // Computed Functional Filter Logic
   const filteredCourses = useMemo(() => {
@@ -30,17 +48,21 @@ const Catalog = () => {
     if (filters.free && !filters.paid) result = result.filter(c => c.price === 0);
     if (filters.paid && !filters.free) result = result.filter(c => c.price > 0);
 
+    result = [...result];
+    if (sortBy === 'recent') result.sort((a, b) => b.id - a.id);
+    if (sortBy === 'price-asc') result.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+
     return result;
-  }, [COURSES, filterCat, filters]);
+  }, [COURSES, filterCat, filters, sortBy]);
 
   const courses = filteredCourses;
   const freeCount = COURSES.filter(c => c.price === 0).length;
   const paidCount = COURSES.filter(c => c.price > 0).length;
 
-  const getPriceBadge = (price, enrolled) => {
+  const getPriceBadge = (price, isEnrolled) => {
+    if (isEnrolled) return { text: '✓ Inscrito', className: 'course-price' };
     if (price == null) return { text: 'Por confirmar', className: 'course-price' };
     if (price === 0) return { text: 'Gratis', className: 'course-price free' };
-    if (enrolled) return { text: '✓ Inscrito', className: 'course-price' };
     return { text: `S/ ${price}`, className: 'course-price' };
   };
 
@@ -60,7 +82,7 @@ const Catalog = () => {
                 <div key={c.id} className={`filter-option ${filterCat === c.id ? 'checked' : ''}`} onClick={() => navigate(`/catalog?cat=${c.id}`)}>
                   <div className="filter-checkbox"></div>
                   <span className="filter-label">{c.label}</span>
-                  <span className="filter-count">{c.count}</span>
+                  <span className="filter-count">{categoryCounts[c.id] || 0}</span>
                 </div>
               ))}
             </div>
@@ -91,11 +113,10 @@ const Catalog = () => {
                 </div>
               ))}
             </div>
-            <select className="sort-select" defaultValue="Más populares">
-              <option>Más populares</option>
-              <option>Mejor valorados</option>
-              <option>Más recientes</option>
-              <option>Precio: menor a mayor</option>
+            <select className="sort-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="popular">Más populares</option>
+              <option value="recent">Más recientes</option>
+              <option value="price-asc">Precio: menor a mayor</option>
             </select>
           </div>
           
@@ -107,9 +128,10 @@ const Catalog = () => {
           ) : (
           <div className="courses-grid">
             {courses.map(c => {
-              const priceInfo = getPriceBadge(c.price, c.enrolled);
+              const enrollment = enrollments[c.id];
+              const priceInfo = getPriceBadge(c.price, !!enrollment);
               return (
-                <div className="course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
+                <div className="course-card" key={c.id} onClick={() => navigate(enrollment ? `/player/${c.id}/1-1` : `/course/${c.id}`)}>
                   <div className="course-thumb">
                     <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="course-thumb-img" />
                     <div className="play-overlay"><div className="play-btn-sm"><Play size={20} fill="currentColor" /></div></div>
@@ -123,10 +145,10 @@ const Catalog = () => {
                       <span className={priceInfo.className}>{priceInfo.text}</span>
                     </div>
                   </div>
-                  {c.enrolled && c.progress > 0 && (
+                  {enrollment && enrollment.progress > 0 && (
                     <div className="course-progress-wrap">
-                      <div className="enrolled-badge">✓ Inscrito · {c.progress}%</div>
-                      <div className="progress-bar"><div className="progress-fill" style={{ width: `${c.progress}%` }}></div></div>
+                      <div className="enrolled-badge">✓ Inscrito · {enrollment.progress}%</div>
+                      <div className="progress-bar"><div className="progress-fill" style={{ width: `${enrollment.progress}%` }}></div></div>
                     </div>
                   )}
                 </div>
