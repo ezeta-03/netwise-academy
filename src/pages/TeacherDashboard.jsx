@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, Plus, Video, FileText, Trash2, Edit2, Play, CheckCircle, Radio, LogIn } from 'lucide-react';
+import { UploadCloud, Plus, Video, FileText, Trash2, Edit2, Play, CheckCircle, XCircle, Radio, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import { scheduleLiveSession, fetchLiveSessions } from '../lib/db';
+import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession } from '../lib/db';
+import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 
 const LiveClassScheduler = () => {
   const { currentUser } = useAuth();
@@ -23,7 +24,7 @@ const LiveClassScheduler = () => {
   // esta sesión del navegador), para poder entrar a la sala desde aquí.
   const loadMySessions = useCallback(() => {
     fetchLiveSessions().then((all) => {
-      setMySessions(all.filter(s => s.instructor === currentUser?.displayName));
+      setMySessions(all.filter(s => s.instructorUid ? s.instructorUid === currentUser?.uid : s.instructor === currentUser?.displayName));
     });
   }, [currentUser]);
 
@@ -40,6 +41,7 @@ const LiveClassScheduler = () => {
         courseTitle: course.title,
         title,
         instructor: currentUser?.displayName || 'Docente',
+        instructorUid: currentUser?.uid,
         startsAt,
         durationMin: Number(durationMin),
       });
@@ -51,6 +53,28 @@ const LiveClassScheduler = () => {
       addToast('No se pudo programar la clase.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCancel = async (session) => {
+    if (!confirm(`¿Cancelar "${session.title}"? Los estudiantes verán la clase marcada como cancelada.`)) return;
+    try {
+      await cancelLiveSession(session.id);
+      addToast('Clase cancelada.', 'success');
+      loadMySessions();
+    } catch {
+      addToast('No se pudo cancelar la clase.', 'error');
+    }
+  };
+
+  const handleDelete = async (session) => {
+    if (!confirm(`¿Eliminar "${session.title}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    try {
+      await deleteLiveSession(session.id);
+      addToast('Clase eliminada.', 'success');
+      loadMySessions();
+    } catch {
+      addToast('No se pudo eliminar la clase.', 'error');
     }
   };
 
@@ -98,21 +122,40 @@ const LiveClassScheduler = () => {
       {mySessions.length > 0 && (
         <div>
           <h3 style={{ marginBottom: '12px', fontSize: '.95rem' }}>Tus clases en vivo</h3>
-          {mySessions.map(s => (
-            <div key={s.id} style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '.9rem' }}>{s.title}</div>
-                <div style={{ fontSize: '.8rem', color: 'var(--text3)' }}>{s.courseTitle} · {new Date(s.startsAt).toLocaleString('es-PE')}</div>
+          {mySessions.map(s => {
+            const liveStatus = getLiveSessionStatus(s);
+            const joinable = liveStatus === 'live' || liveStatus === 'upcoming';
+            const canCancel = liveStatus === 'upcoming' || liveStatus === 'live';
+            return (
+              <div key={s.id} style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '.9rem' }}>
+                    {s.title}
+                    {liveStatus === 'cancelled' && <span className="badge badge-rose" style={{ marginLeft: '8px' }}>Cancelada</span>}
+                    {liveStatus === 'ended' && <span className="badge badge-accent" style={{ marginLeft: '8px' }}>Finalizada</span>}
+                  </div>
+                  <div style={{ fontSize: '.8rem', color: 'var(--text3)' }}>{s.courseTitle} · {new Date(s.startsAt).toLocaleString('es-PE')}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {joinable && (
+                    <button className={`btn ${liveStatus === 'live' ? 'btn-primary' : 'btn-ghost'} btn-sm`} onClick={() => navigate(`/live/${s.id}`)}>
+                      <LogIn size={14} /> Entrar
+                    </button>
+                  )}
+                  {canCancel && (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => handleCancel(s)}>
+                      <XCircle size={14} /> Cancelar
+                    </button>
+                  )}
+                  {!canCancel && (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => handleDelete(s)}>
+                      <Trash2 size={14} /> Eliminar
+                    </button>
+                  )}
+                </div>
               </div>
-              <button
-                className={`btn ${s.status === 'live' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                disabled={s.status === 'ended'}
-                onClick={() => navigate(`/live/${s.id}`)}
-              >
-                <LogIn size={14} /> Entrar
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

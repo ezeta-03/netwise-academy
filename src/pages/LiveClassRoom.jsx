@@ -46,7 +46,7 @@ const LiveClassRoom = () => {
   }, [sessionId]);
 
   useEffect(() => {
-    if (!session || !containerRef.current) return;
+    if (!session || session.status === 'cancelled' || !containerRef.current) return;
 
     let cancelled = false;
 
@@ -83,6 +83,16 @@ const LiveClassRoom = () => {
     return (
       <div className="view active" style={{ padding: '40px', textAlign: 'center' }}>
         <p style={{ color: 'var(--text2)', marginBottom: '16px' }}>No se encontró esta clase en vivo.</p>
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/live')}>← Volver a Clases en vivo</button>
+      </div>
+    );
+  }
+
+  if (session.status === 'cancelled') {
+    return (
+      <div className="view active" style={{ padding: '40px', textAlign: 'center' }}>
+        <p style={{ fontWeight: 600, marginBottom: '8px' }}>{session.title}</p>
+        <p style={{ color: 'var(--text2)', marginBottom: '16px' }}>❌ Esta clase en vivo fue cancelada por el docente.</p>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/live')}>← Volver a Clases en vivo</button>
       </div>
     );

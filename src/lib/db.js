@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 
 // Determine env (Firebase valid vs Mock)
@@ -89,9 +89,9 @@ export const fetchLiveSessionById = async (sessionId) => {
   return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
 };
 
-export const scheduleLiveSession = async ({ courseId, courseTitle, title, instructor, startsAt, durationMin }) => {
+export const scheduleLiveSession = async ({ courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin }) => {
   const roomName = `netwise-academy-${courseId}-${Date.now()}`;
-  const payload = { courseId, courseTitle, title, instructor, startsAt, durationMin, roomName, status: 'upcoming' };
+  const payload = { courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin, roomName, status: 'upcoming' };
 
   if (!isConfigValid) {
     return new Promise((resolve) => {
@@ -103,6 +103,28 @@ export const scheduleLiveSession = async ({ courseId, courseTitle, title, instru
 
   const docRef = await addDoc(collection(db, 'liveSessions'), payload);
   return { id: docRef.id, ...payload };
+};
+
+// Cancelar = baja "suave": el registro se conserva (con status 'cancelled')
+// para que quien ya la tenía agendada vea que se canceló en vez de que
+// desaparezca sin explicación. Eliminar = borra el doc por completo, para
+// limpiar clases ya finalizadas/canceladas que ya no aportan nada.
+export const cancelLiveSession = async (sessionId) => {
+  if (!isConfigValid) {
+    const session = LIVE_SESSIONS.find((s) => s.id === sessionId);
+    if (session) session.status = 'cancelled';
+    return;
+  }
+  await updateDoc(doc(db, 'liveSessions', sessionId), { status: 'cancelled' });
+};
+
+export const deleteLiveSession = async (sessionId) => {
+  if (!isConfigValid) {
+    const idx = LIVE_SESSIONS.findIndex((s) => s.id === sessionId);
+    if (idx !== -1) LIVE_SESSIONS.splice(idx, 1);
+    return;
+  }
+  await deleteDoc(doc(db, 'liveSessions', sessionId));
 };
 
 // --- Usuarios y roles (colección Firestore `users`, creada por AuthContext) ---

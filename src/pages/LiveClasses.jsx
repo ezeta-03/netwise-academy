@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Video, Clock, Radio } from 'lucide-react';
 import { fetchLiveSessions } from '../lib/db';
+import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 
 const STATUS_BADGE = {
-  live:     { label: '🔴 En vivo ahora', className: 'badge badge-rose' },
-  upcoming: { label: '📅 Próxima', className: 'badge badge-sky' },
-  ended:    { label: '✔ Finalizada', className: 'badge badge-accent' },
+  live:      { label: '🔴 En vivo ahora', className: 'badge badge-rose' },
+  upcoming:  { label: '📅 Próxima', className: 'badge badge-sky' },
+  ended:     { label: '✔ Finalizada', className: 'badge badge-accent' },
+  cancelled: { label: '❌ Cancelada', className: 'badge badge-rose' },
 };
 
 const formatDate = (iso) => {
@@ -46,7 +48,9 @@ const LiveClasses = () => {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {sessions.map((s) => {
-          const status = STATUS_BADGE[s.status] || STATUS_BADGE.upcoming;
+          const liveStatus = getLiveSessionStatus(s);
+          const status = STATUS_BADGE[liveStatus] || STATUS_BADGE.upcoming;
+          const joinable = liveStatus === 'live' || liveStatus === 'upcoming';
           return (
             <div key={s.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
               <div>
@@ -58,11 +62,11 @@ const LiveClasses = () => {
                 </div>
               </div>
               <button
-                className={`btn ${s.status === 'live' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                disabled={s.status === 'ended'}
+                className={`btn ${liveStatus === 'live' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+                disabled={!joinable}
                 onClick={() => navigate(`/live/${s.id}`)}
               >
-                <Video size={14} /> {s.status === 'live' ? 'Unirse ahora' : s.status === 'upcoming' ? 'Ver sala' : 'Finalizada'}
+                <Video size={14} /> {liveStatus === 'live' ? 'Unirse ahora' : liveStatus === 'upcoming' ? 'Ver sala' : liveStatus === 'cancelled' ? 'Cancelada' : 'Finalizada'}
               </button>
             </div>
           );

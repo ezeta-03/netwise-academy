@@ -6,9 +6,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
     function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && myRole() == 'admin';
+    }
+
+    function isTeacherOrAdmin() {
+      return isSignedIn() && (myRole() == 'teacher' || myRole() == 'admin');
     }
 
     // Catálogo público: cualquiera puede leer, solo un admin escribe
@@ -32,11 +39,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Clases en vivo: cualquier usuario autenticado puede verlas y
-    // programarlas (docentes/estudiantes según la UI de la app).
+    // Clases en vivo: cualquier usuario autenticado puede verlas. Solo
+    // docentes/admin pueden programarlas, y solo quien la creó (o un admin)
+    // puede editarla/cancelarla/borrarla -- antes CUALQUIER usuario logueado,
+    // incluyendo estudiantes, podía modificar o borrar la clase de otro.
     match /liveSessions/{sessionId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow create: if isTeacherOrAdmin() && request.resource.data.instructorUid == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.instructorUid == request.auth.uid || isAdmin());
     }
 
     // Preinscripciones ("me interesa este taller"): un alumno solo puede
