@@ -4,6 +4,7 @@ import { X, Play, Check, ArrowRight, Globe } from 'lucide-react';
 import { CATEGORIES } from '../lib/data';
 import { usePreregistration } from '../hooks/usePreregistration';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { useAuth } from '../context/AuthContext';
 
 // La currícula real (semana a semana) todavía no está definida -- este
 // cronograma se arma en el momento a partir de los 3 "highlights" que cada
@@ -21,9 +22,19 @@ const buildSchedule = (course) => {
 
 const CourseInfoModal = ({ slide, onClose }) => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const { courses: COURSES } = useCourseOfferings();
   const course = COURSES.find((c) => c.id === slide.id);
   const { isPreregistered, saving, preregister } = usePreregistration(course);
+
+  const handlePreregister = () => {
+    if (!currentUser) {
+      onClose();
+      navigate('/login');
+      return;
+    }
+    preregister();
+  };
 
   // Cierra con Escape y bloquea el scroll de fondo mientras el modal está abierto.
   useEffect(() => {
@@ -67,7 +78,7 @@ const CourseInfoModal = ({ slide, onClose }) => {
             <div className="nf-modal-actions">
               <button
                 className="btn-nf btn-nf-play"
-                onClick={preregister}
+                onClick={handlePreregister}
                 disabled={isPreregistered || saving}
               >
                 {isPreregistered ? <><Check size={18} /> Preinscrito</> : <><Play size={18} fill="currentColor" /> {saving ? 'Guardando...' : 'Preinscribirme'}</>}

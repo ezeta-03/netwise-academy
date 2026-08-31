@@ -21,11 +21,15 @@ import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 import Profile from './pages/Profile';
 
-// Protected Route using real AuthContext
+// Sin sesión, mandamos a "/" (Inicio público) y no a "/login": así el
+// usuario cae en una página navegable con un botón bien visible para
+// iniciar sesión, en vez de un formulario a la fuerza -- y de paso evita
+// una carrera de redirecciones contradictorias justo al cerrar sesión
+// desde una ruta protegida (ver handleLogout en Navbar.jsx).
 const ProtectedRoute = ({ children }) => {
   const { currentUser } = useAuth();
-  
-  if (!currentUser) return <Navigate to="/login" replace />;
+
+  if (!currentUser) return <Navigate to="/" replace />;
   return children;
 };
 
@@ -33,15 +37,16 @@ const ProtectedRoute = ({ children }) => {
 const RoleRoute = ({ children, allowedRoles }) => {
   const { currentUser } = useAuth();
 
-  if (!currentUser) return <Navigate to="/login" replace />;
+  if (!currentUser) return <Navigate to="/" replace />;
   if (!allowedRoles.includes(currentUser.role)) return <Navigate to="/" replace />;
 
   return children;
 };
 
-// "/" es el catálogo de talleres pensado para estudiantes. Un docente o
-// admin que aterriza ahí no tiene nada que hacer en esa vista -- su propio
-// panel (con lo que sí gestionan) ya vive en /teacher y /admin.
+// "/" es pública (como /catalog y /course/:id): un visitante sin sesión
+// también puede ver el Inicio. Un docente o admin logueado no tiene nada
+// que hacer ahí -- su propio panel ya vive en /teacher y /admin. Un
+// estudiante (o nadie logueado) ve el Home normal.
 const RoleHome = () => {
   const { currentUser } = useAuth();
 
@@ -63,11 +68,11 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
+          <Route path="/" element={<RoleHome />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/course/:id" element={<CourseDetail />} />
 
           {/* Protected Routes */}
-          <Route path="/" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
           <Route path="/my-learning" element={<ProtectedRoute><MyLearning /></ProtectedRoute>} />
           <Route path="/live" element={<ProtectedRoute><LiveClasses /></ProtectedRoute>} />

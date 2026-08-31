@@ -26,6 +26,13 @@ const Navbar = () => {
       ).slice(0, 5)
     : [];
 
+  // Cerrar sesión debe llevar al Inicio público (no logueado), no dejar que
+  // la ruta protegida en la que estabas te rebote sola a /login.
+  const handleLogout = async () => {
+    await logout();
+    navigate('/', { replace: true });
+  };
+
   const goToSearchResult = (courseId) => {
     setSearchQuery('');
     setSearchOpen(false);
@@ -124,7 +131,7 @@ const Navbar = () => {
                 {currentUser.displayName ? getInitials(currentUser.displayName) : getInitials(currentUser.email)}
               </Link>
 
-              <button className="btn-icon" title="Cerrar sesión" onClick={logout}>
+              <button className="btn-icon" title="Cerrar sesión" onClick={handleLogout}>
                 <LogOut size={16} />
               </button>
             </div>
@@ -174,7 +181,7 @@ const Navbar = () => {
 
         <div className="mm-footer">
           {currentUser ? (
-            <button className="btn btn-ghost btn-full" onClick={() => { closeMenu(); logout(); }}>
+            <button className="btn btn-ghost btn-full" onClick={() => { closeMenu(); handleLogout(); }}>
               <LogOut size={16} /> Cerrar sesión
             </button>
           ) : (
