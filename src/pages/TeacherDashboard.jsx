@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, Plus, Video, FileText, Trash2, Edit2, Play, CheckCircle, XCircle, Radio, LogIn } from 'lucide-react';
+import { Plus, Video, FileText, Trash2, Edit2, Radio, LogIn, Link2, Save, X, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession } from '../lib/db';
+import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent, saveCourseContent } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
+
+const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 const LiveClassScheduler = () => {
   const { currentUser } = useAuth();
@@ -162,62 +164,234 @@ const LiveClassScheduler = () => {
   );
 };
 
+// Formulario para crear/editar una lección: video (link de YouTube/Vimeo,
+// convertido a embed recién al reproducirla) + materiales como enlaces --
+// el proyecto no tiene Firebase Storage habilitado para subir archivos.
+const LessonEditor = ({ initial, onSave, onCancel }) => {
+  const [title, setTitle] = useState(initial?.title || '');
+  const [videoUrl, setVideoUrl] = useState(initial?.videoUrl || '');
+  const [duration, setDuration] = useState(initial?.duration || '');
+  const [resources, setResources] = useState(initial?.resources || []);
+
+  const addResource = () => setResources([...resources, { id: uid('r'), title: '', url: '' }]);
+  const updateResource = (id, field, value) => setResources(resources.map(r => r.id === id ? { ...r, [field]: value } : r));
+  const removeResource = (id) => setResources(resources.filter(r => r.id !== id));
+
+  const canSave = title.trim() && videoUrl.trim();
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave({
+      id: initial?.id || uid('l'),
+      title: title.trim(),
+      videoUrl: videoUrl.trim(),
+      duration: duration.trim(),
+      resources: resources.filter(r => r.title.trim() && r.url.trim()),
+    });
+  };
+
+  return (
+    <div style={{ background: 'var(--bg)', border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)', padding: '16px', marginBottom: '10px' }}>
+      <div className="input-group" style={{ marginBottom: '10px' }}>
+        <label style={{ fontSize: '.75rem' }}>Título de la lección</label>
+        <input className="input" type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ej. Introducción a los prompts" />
+      </div>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+        <div className="input-group" style={{ flex: 1 }}>
+          <label style={{ fontSize: '.75rem' }}>Link del video (YouTube/Vimeo)</label>
+          <input className="input" type="text" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." />
+        </div>
+        <div className="input-group" style={{ width: '110px' }}>
+          <label style={{ fontSize: '.75rem' }}>Duración</label>
+          <input className="input" type="text" value={duration} onChange={e => setDuration(e.target.value)} placeholder="12:00" />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '10px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+          <label style={{ fontSize: '.75rem', color: 'var(--text2)' }}>Materiales (enlaces)</label>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={addResource}><Link2 size={12} /> Agregar material</button>
+        </div>
+        {resources.map(r => (
+          <div key={r.id} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+            <input className="input" style={{ flex: 1 }} type="text" placeholder="Nombre (Ej. Slides)" value={r.title} onChange={e => updateResource(r.id, 'title', e.target.value)} />
+            <input className="input" style={{ flex: 2 }} type="text" placeholder="https://..." value={r.url} onChange={e => updateResource(r.id, 'url', e.target.value)} />
+            <button type="button" className="btn-icon" style={{ color: 'var(--rose)' }} onClick={() => removeResource(r.id)}><X size={14} /></button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancelar</button>
+        <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={!canSave}><Save size={14} /> Guardar lección</button>
+      </div>
+    </div>
+  );
+};
+
+// Editor real del temario de un curso: módulos -> lecciones, cada una con su
+// propio video y materiales. Antes "Constructor de Cursos" no tocaba
+// Firestore para nada -- todo vivía en useState y se perdía al recargar, y
+// lo que veían los estudiantes en el reproductor era un temario genérico
+// idéntico para los 4 cursos.
+const CourseContentBuilder = ({ courseId, onCourseIdChange }) => {
+  const { currentUser } = useAuth();
+  const { addToast } = useUI();
+  const { courses: COURSES } = useCourseOfferings();
+  const [modules, setModules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingLesson, setEditingLesson] = useState(null); // { moduleId, lessonId | 'new' }
+
+  const loadContent = useCallback(() => {
+    if (!courseId) return;
+    setLoading(true);
+    fetchCourseContent(courseId).then((data) => {
+      setModules(data.modules || []);
+      setLoading(false);
+      setEditingLesson(null);
+    });
+  }, [courseId]);
+
+  useEffect(() => { loadContent(); }, [loadContent]);
+
+  const addModule = () => setModules([...modules, { id: uid('m'), title: `Módulo ${modules.length + 1}`, lessons: [] }]);
+
+  const renameModule = (id) => {
+    const mod = modules.find(m => m.id === id);
+    const title = prompt('Nuevo nombre del módulo:', mod?.title);
+    if (title) setModules(modules.map(m => m.id === id ? { ...m, title } : m));
+  };
+
+  const deleteModule = (id) => {
+    if (confirm('¿Eliminar este módulo y todas sus lecciones?')) {
+      setModules(modules.filter(m => m.id !== id));
+    }
+  };
+
+  const saveLesson = (moduleId, lesson) => {
+    setModules(modules.map(m => {
+      if (m.id !== moduleId) return m;
+      const exists = m.lessons.some(l => l.id === lesson.id);
+      const lessons = exists ? m.lessons.map(l => l.id === lesson.id ? lesson : l) : [...m.lessons, lesson];
+      return { ...m, lessons };
+    }));
+    setEditingLesson(null);
+  };
+
+  const deleteLesson = (moduleId, lessonId) => {
+    if (!confirm('¿Eliminar esta lección?')) return;
+    setModules(modules.map(m => m.id === moduleId ? { ...m, lessons: m.lessons.filter(l => l.id !== lessonId) } : m));
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    try {
+      await saveCourseContent(courseId, modules, currentUser?.uid);
+      addToast('Contenido del curso guardado. Ya está disponible para los estudiantes.', 'success');
+    } catch {
+      addToast('No se pudo guardar el contenido.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (COURSES.length === 0) {
+    return <div className="empty-state" style={{ padding: '32px 16px' }}><p>Todavía no hay cursos publicados.</p></div>;
+  }
+
+  return (
+    <div className="anim-fade-up d1" style={{ paddingTop: '32px', maxWidth: '760px' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+        <div className="input-group" style={{ marginBottom: 0 }}>
+          <label>Curso a editar</label>
+          <select className="input" value={courseId} onChange={e => onCourseIdChange(e.target.value)}>
+            {COURSES.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)' }}>Cargando temario...</div>
+      ) : (
+        <>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0 }}>Temario</h3>
+              <button className="btn btn-ghost btn-sm" onClick={addModule}><Plus size={16} /> Agregar Módulo</button>
+            </div>
+
+            {modules.length === 0 && (
+              <div className="empty-state" style={{ padding: '24px' }}><p>Este curso todavía no tiene módulos. Agrega el primero.</p></div>
+            )}
+
+            {modules.map((mod, mi) => (
+              <div key={mod.id} style={{ background: 'var(--bg)', border: '1px dashed var(--border)', borderRadius: 'var(--r-sm)', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Módulo {mi + 1}: {mod.title}</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button className="btn-icon" style={{ padding: '6px', width: '28px', height: '28px' }} onClick={() => renameModule(mod.id)}><Edit2 size={12} /></button>
+                    <button className="btn-icon" style={{ padding: '6px', width: '28px', height: '28px', color: 'var(--rose)' }} onClick={() => deleteModule(mod.id)}><Trash2 size={12} /></button>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '14px' }}>
+                  {mod.lessons.map((les) => (
+                    editingLesson?.moduleId === mod.id && editingLesson?.lessonId === les.id ? (
+                      <LessonEditor
+                        key={les.id}
+                        initial={les}
+                        onSave={(l) => saveLesson(mod.id, l)}
+                        onCancel={() => setEditingLesson(null)}
+                      />
+                    ) : (
+                      <div key={les.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--surface)', borderRadius: 'var(--r-sm)', marginBottom: '8px', fontSize: '.85rem' }}>
+                        <div>
+                          <div style={{ fontWeight: 500 }}>{les.title}</div>
+                          <div style={{ color: 'var(--text3)', fontSize: '.78rem' }}>
+                            <Video size={11} style={{ verticalAlign: '-2px' }} /> {les.duration || 'Sin duración'} · {les.resources?.length || 0} material(es)
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button className="btn-icon" style={{ padding: '6px', width: '28px', height: '28px' }} onClick={() => setEditingLesson({ moduleId: mod.id, lessonId: les.id })}><Edit2 size={12} /></button>
+                          <button className="btn-icon" style={{ padding: '6px', width: '28px', height: '28px', color: 'var(--rose)' }} onClick={() => deleteLesson(mod.id, les.id)}><Trash2 size={12} /></button>
+                        </div>
+                      </div>
+                    )
+                  ))}
+
+                  {editingLesson?.moduleId === mod.id && editingLesson?.lessonId === 'new' ? (
+                    <LessonEditor onSave={(l) => saveLesson(mod.id, l)} onCancel={() => setEditingLesson(null)} />
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" style={{ background: 'var(--surface)', fontSize: '.75rem' }} onClick={() => setEditingLesson({ moduleId: mod.id, lessonId: 'new' })}>
+                      <Plus size={12} /> Agregar Lección
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button className="btn btn-primary btn-full" onClick={handleSaveAll} disabled={saving}>
+            <Save size={16} /> {saving ? 'Guardando...' : 'Guardar contenido del curso'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
 const TeacherDashboard = () => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
   const { courses: COURSES } = useCourseOfferings();
 
   const [activeTab, setActiveTab] = useState('my-courses');
-  const [modules, setModules] = useState([{ id: 1, title: 'Introducción', lessons: [] }]);
-  const [courseTitle, setCourseTitle] = useState('');
-  const [dragActive, setDragActive] = useState(false);
+  const [builderCourseId, setBuilderCourseId] = useState(COURSES[0]?.id ?? '');
 
-  // Module Management
-  const addModule = () => setModules([...modules, { id: Date.now(), title: 'Nuevo Módulo', lessons: [] }]);
-  
-  const renameModule = (id) => {
-    const title = prompt("Nuevo nombre del módulo:");
-    if (title) setModules(modules.map(m => m.id === id ? { ...m, title } : m));
-  };
-  
-  const deleteModule = (id) => {
-    if (confirm("¿Seguro que deseas eliminar este módulo?")) {
-      setModules(modules.filter(m => m.id !== id));
-    }
-  };
-
-  // Drag & Drop Handlers
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
-    else if (e.type === "dragleave") setDragActive(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      addToast(`Archivo ${e.dataTransfer.files[0].name} cargado vía Drag & Drop.`, "success");
-    }
-  };
-
-  const handleUploadClick = (e) => {
-    e.preventDefault();
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.onchange = (e) => {
-      if (e.target.files[0]) addToast(`Añadido archivo: ${e.target.files[0].name}`, "info");
-    };
-    input.click();
-  };
-
-  const submitToApproval = () => {
-    if(!courseTitle) return addToast("Añade un título al curso antes de publicarlo.", "error");
-    addToast(`¡El curso "${courseTitle}" ha sido enviado a revisión!`, "success");
-    setCourseTitle('');
-    setActiveTab('my-courses');
+  const openContentEditor = (courseId) => {
+    setBuilderCourseId(courseId);
+    setActiveTab('builder');
   };
 
   return (
@@ -227,12 +401,12 @@ const TeacherDashboard = () => {
           <h1 style={{ marginBottom: '8px' }}>Panel de Docente</h1>
           <p style={{ color: 'var(--text2)' }}>Hola, {currentUser?.displayName}. Gestiona tu oferta académica aquí.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setActiveTab('builder')}><Plus size={18} /> Crear Nuevo Curso</button>
+        <button className="btn btn-primary" onClick={() => openContentEditor(builderCourseId)}><Edit2 size={18} /> Editar Contenido</button>
       </div>
 
       <div className="my-learning-tabs">
         <button className={`ml-tab ${activeTab === 'my-courses' ? 'active' : ''}`} onClick={() => setActiveTab('my-courses')}>Mis Cursos Publicados</button>
-        <button className={`ml-tab ${activeTab === 'builder' ? 'active' : ''}`} onClick={() => setActiveTab('builder')}>Constructor de Cursos</button>
+        <button className={`ml-tab ${activeTab === 'builder' ? 'active' : ''}`} onClick={() => setActiveTab('builder')}>Contenido del Curso</button>
         <button className={`ml-tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Clases en Vivo</button>
         <button className={`ml-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi CV & Perfil</button>
       </div>
@@ -244,7 +418,7 @@ const TeacherDashboard = () => {
           {COURSES.length === 0 ? (
             <div className="empty-state">
               <div className="es-icon">📭</div>
-              <p>Todavía no tienes cursos publicados. Usa "Crear Nuevo Curso" para empezar.</p>
+              <p>Todavía no hay cursos publicados.</p>
             </div>
           ) : (
             <div className="courses-grid">
@@ -256,10 +430,9 @@ const TeacherDashboard = () => {
                   <div className="course-body">
                     <div className="course-title">{c.title}</div>
                     <div style={{ fontSize: '.85rem', color: 'var(--text2)', marginBottom: '12px' }}>Estado: <strong>Publicado</strong></div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}><Edit2 size={14} /> Editar</button>
-                      <button className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--rose)' }} onClick={() => addToast('Curso eliminado', 'success')}><Trash2 size={14} /></button>
-                    </div>
+                    <button className="btn btn-ghost btn-sm" style={{ width: '100%' }} onClick={() => openContentEditor(c.id)}>
+                      <Edit2 size={14} /> Editar contenido
+                    </button>
                   </div>
                 </div>
               ))}
@@ -268,78 +441,7 @@ const TeacherDashboard = () => {
         </div>
       )}
 
-      {activeTab === 'builder' && (
-        <div className="anim-fade-up d1" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '40px', paddingTop: '32px' }}>
-          <div>
-            <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)', marginBottom: '24px' }}>
-              <h3 style={{ marginBottom: '20px' }}>1. Información General</h3>
-              <div className="input-group" style={{ marginBottom: '16px' }}>
-                <label>Título del Curso</label>
-                <input className="input" type="text" placeholder="Ej. Master en Diseño UI" value={courseTitle} onChange={e => setCourseTitle(e.target.value)} />
-              </div>
-              <div className="input-group">
-                <label>Descripción corta para estudiantes</label>
-                <textarea className="input" placeholder="Resumen de lo que aprenderán..." rows={4}></textarea>
-              </div>
-            </div>
-
-            <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h3 style={{ margin: 0 }}>2. Temario del Curso</h3>
-                <button className="btn btn-ghost btn-sm" onClick={addModule}><Plus size={16} /> Agregar Módulo</button>
-              </div>
-              
-              {modules.map((mod, i) => (
-                <div key={mod.id} style={{ background: 'var(--bg)', border: '1px dashed var(--border)', borderRadius: 'var(--r-sm)', padding: '16px', marginBottom: '16px' }}>
-                  <div style={{ fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Módulo {i + 1}: {mod.title}</span>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button className="btn-icon" style={{ padding: '6px', width:'28px', height:'28px' }} onClick={() => renameModule(mod.id)}><Edit2 size={12} /></button>
-                      <button className="btn-icon" style={{ padding: '6px', width:'28px', height:'28px', color: 'var(--rose)' }} onClick={() => deleteModule(mod.id)}><Trash2 size={12} /></button>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
-                    <button className="btn btn-ghost btn-sm" style={{ background: 'var(--surface)', fontSize: '.75rem' }}><Video size={12} /> Añadir Video</button>
-                    <button className="btn btn-ghost btn-sm" style={{ background: 'var(--surface)', fontSize: '.75rem' }}><FileText size={12} /> Añadir Recurso</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-xl)', padding: '30px', border: '1px solid var(--border)', position: 'sticky', top: '100px' }}>
-              <h3 style={{ marginBottom: '8px' }}>Materiales</h3>
-              <p style={{ fontSize: '.85rem', color: 'var(--text2)', marginBottom: '20px' }}>Sube videos y documentos para adjuntarlos a tus módulos.</p>
-              
-              <div 
-                className={`upload-box ${dragActive ? 'drag-active' : ''}`}
-                onDragEnter={handleDrag} onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}
-                onClick={handleUploadClick}
-                style={{ 
-                  border: `2px dashed ${dragActive ? 'var(--accent)' : 'var(--border2)'}`, 
-                  background: dragActive ? 'var(--accent-bg)' : 'var(--bg)',
-                  borderRadius: 'var(--r-md)', padding: '40px 20px', textAlign: 'center', marginBottom: '24px', cursor: 'pointer', transition: 'all .2s'
-                }}
-              >
-                <UploadCloud size={40} style={{ color: dragActive ? 'var(--accent)' : 'var(--text3)', marginBottom: '16px' }} />
-                <p style={{ fontSize: '.95rem', fontWeight: 500, marginBottom: '6px', color: dragActive ? 'var(--accent)' : 'var(--text)' }}>
-                  Arrastra tu archivo aquí
-                </p>
-                <p style={{ fontSize: '.8rem', color: 'var(--text3)' }}>Soportado: MP4, PDF, DOCX, XLSX (Max 2GB)</p>
-              </div>
-
-              <div style={{ height: '1px', background: 'var(--border)', margin: '24px 0' }}></div>
-
-              <h3 style={{ marginBottom: '16px', fontSize: '.95rem' }}>Acciones Finales</h3>
-              <button onClick={submitToApproval} className="btn btn-primary btn-full" style={{ marginBottom: '12px' }}>
-                <CheckCircle size={16} /> Enviar a Revisión de Admin
-              </button>
-              <button className="btn btn-ghost btn-full" onClick={() => addToast('Borrador guardado localmente', 'info')}>Guardar Borrador</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'builder' && <CourseContentBuilder courseId={builderCourseId} onCourseIdChange={setBuilderCourseId} />}
 
       {activeTab === 'profile' && (
         <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
@@ -353,7 +455,7 @@ const TeacherDashboard = () => {
               <label>Biografía Profesional (Se mostrará en los cursos)</label>
               <textarea className="input" rows={5} placeholder="Cuéntanos sobre tu experiencia..."></textarea>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg)', padding: '16px', borderRadius: 'var(--r-sm)', border: '1px solid var(--border)', marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '40px', height: '40px', background: 'var(--accent-bg)', color: 'var(--accent)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

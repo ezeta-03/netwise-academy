@@ -39,6 +39,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Temario real de cada taller (módulos/lecciones con video y
+    // materiales). Solo usuarios logueados lo leen (se consume desde el
+    // reproductor, que ya requiere sesión); solo docentes/admin lo editan.
+    match /courseContent/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if isTeacherOrAdmin();
+    }
+
     // Clases en vivo: cualquier usuario autenticado puede verlas. Solo
     // docentes/admin pueden programarlas, y solo quien la creó (o un admin)
     // puede editarla/cancelarla/borrarla -- antes CUALQUIER usuario logueado,

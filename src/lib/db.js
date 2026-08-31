@@ -228,5 +228,37 @@ export const updateCourseOffering = async (courseId, { price, startDate }, admin
   return payload;
 };
 
+// --- Contenido real de cada taller (colección Firestore `courseContent`) ---
+// Módulos y lecciones que el docente arma para un curso específico -- lo que
+// ve el estudiante en el reproductor. Antes esto era un temario genérico
+// (CURRICULUM_DATA) idéntico para los 4 cursos, sin conexión a nada real.
+// Cada lección guarda un link de video (YouTube/Vimeo) en vez de un archivo
+// propio, porque el proyecto no tiene Firebase Storage habilitado.
+
+const EMPTY_COURSE_CONTENT = { modules: [] };
+
+export const fetchCourseContent = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_course_content_${courseId}`);
+    return raw ? JSON.parse(raw) : EMPTY_COURSE_CONTENT;
+  }
+
+  const docRef = doc(db, 'courseContent', courseId.toString());
+  const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? docSnap.data() : EMPTY_COURSE_CONTENT;
+};
+
+export const saveCourseContent = async (courseId, modules, teacherUid) => {
+  const payload = { modules, updatedAt: new Date().toISOString(), updatedBy: teacherUid };
+
+  if (!isConfigValid) {
+    localStorage.setItem(`mock_course_content_${courseId}`, JSON.stringify(payload));
+    return payload;
+  }
+
+  await setDoc(doc(db, 'courseContent', courseId.toString()), payload);
+  return payload;
+};
+
 // Functions to implement later:
 // export const updateLessonProgress = async (uid, courseId, lessonId) => {}

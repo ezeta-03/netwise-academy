@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { CURRICULUM_DATA } from '../lib/data';
+import { fetchCourseContent } from '../lib/db';
+import { toEmbedUrl } from '../lib/embedUrl';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
 
 const Player = () => {
@@ -10,12 +11,14 @@ const Player = () => {
 
   const [activeTab, setActiveTab] = useState('overview');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [modules, setModules] = useState(null); // null = cargando
 
-  // Derive lesson details from URL
-  const [modIdx, lessIdx] = (lessonId || '1-1').split('-').map(n => parseInt(n) - 1);
   const course = COURSES.find(c => c.id.toString() === courseId);
-  const module = CURRICULUM_DATA[modIdx] || CURRICULUM_DATA[0];
-  const lesson = module?.lessons[lessIdx] || module?.lessons[0];
+
+  useEffect(() => {
+    if (!courseId) return;
+    fetchCourseContent(courseId).then((data) => setModules(data.modules || []));
+  }, [courseId]);
 
   if (!course) {
     return (
@@ -29,6 +32,47 @@ const Player = () => {
     );
   }
 
+  if (modules === null) {
+    return (
+      <div className="view active">
+        <div className="empty-state" style={{ padding: '96px 24px' }}><p>Cargando lecciones...</p></div>
+      </div>
+    );
+  }
+
+  if (modules.length === 0) {
+    return (
+      <div className="view active">
+        <div className="empty-state" style={{ padding: '96px 24px' }}>
+          <div className="es-icon">🎬</div>
+          <p>Este curso todavía no tiene lecciones publicadas. Vuelve pronto.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => navigate(`/course/${course.id}`)}>Volver al curso</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Deriva el módulo/lección desde la URL (formato "1-1" = módulo 1, lección
+  // 1). Si el índice pedido no existe (curso recortado, link viejo, etc.) cae
+  // al primero disponible en vez de romper.
+  const [modIdxRaw, lessIdxRaw] = (lessonId || '1-1').split('-').map(n => parseInt(n) - 1);
+  const modIdx = modules[modIdxRaw] ? modIdxRaw : 0;
+  const module = modules[modIdx];
+  const lessIdx = module.lessons[lessIdxRaw] ? lessIdxRaw : 0;
+  const lesson = module.lessons[lessIdx];
+
+  if (!lesson) {
+    return (
+      <div className="view active">
+        <div className="empty-state" style={{ padding: '96px 24px' }}>
+          <div className="es-icon">🎬</div>
+          <p>Este módulo todavía no tiene lecciones.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => navigate(`/course/${course.id}`)}>Volver al curso</button>
+        </div>
+      </div>
+    );
+  }
+
   const goNext = () => {
     let nextLess = lessIdx + 1;
     let nextMod = modIdx;
@@ -36,7 +80,7 @@ const Player = () => {
       nextMod += 1;
       nextLess = 0;
     }
-    if (nextMod < CURRICULUM_DATA.length) {
+    if (nextMod < modules.length) {
       navigate(`/player/${course.id}/${nextMod + 1}-${nextLess + 1}`);
       setIsPlaying(false);
     }
@@ -47,7 +91,7 @@ const Player = () => {
     let prevMod = modIdx;
     if (prevLess < 0) {
       prevMod -= 1;
-      if (prevMod >= 0) prevLess = CURRICULUM_DATA[prevMod].lessons.length - 1;
+      if (prevMod >= 0) prevLess = modules[prevMod].lessons.length - 1;
     }
     if (prevMod >= 0) {
       navigate(`/player/${course.id}/${prevMod + 1}-${prevLess + 1}`);
@@ -67,59 +111,54 @@ const Player = () => {
                   <p>Haz clic para reproducir la lección</p>
                 </div>
               ) : (
-                <iframe src={course.video} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Video"></iframe>
+                <iframe src={toEmbedUrl(lesson.videoUrl)} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen title="Video"></iframe>
               )}
             </div>
           </div>
-          
+
           <div className="player-info">
             <div className="player-breadcrumb" onClick={() => navigate(`/course/${course.id}`)}>
               ← {course.title}
             </div>
-            
+
             <div className="player-lesson-title">{lesson.title}</div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <span className="badge badge-sky">📺 Video · {lesson.dur}</span>
-              <span className="badge badge-accent">{module.module.split(':')[0]}</span>
+              {lesson.duration && <span className="badge badge-sky">📺 Video · {lesson.duration}</span>}
+              <span className="badge badge-accent">{module.title}</span>
             </div>
-            
+
             <div className="player-nav">
               <button className="btn btn-ghost btn-sm" onClick={goPrev}>← Anterior</button>
               <button className="btn btn-primary btn-sm" onClick={() => alert("Marked Done!")}>✓ Marcar completada</button>
               <button className="btn btn-ghost btn-sm" onClick={goNext}>Siguiente →</button>
             </div>
-            
+
             <div className="player-tabs">
               <button className={`player-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Descripción</button>
               <button className={`player-tab ${activeTab === 'resources' ? 'active' : ''}`} onClick={() => setActiveTab('resources')}>Recursos</button>
               <button className={`player-tab ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Mis notas</button>
               <button className={`player-tab ${activeTab === 'qa' ? 'active' : ''}`} onClick={() => setActiveTab('qa')}>Q&A</button>
             </div>
-            
+
             {activeTab === 'overview' && (
               <div className="player-content-tab active">
-                <p style={{ color: 'var(--text2)', lineHeight: 1.8, fontSize: '.92rem' }}>En esta lección profundizamos en los conceptos clave. Aprenderás cuándo y cómo usar las herramientas adecuadas para evitar problemas y escribir código más eficiente en producción.</p>
-                <div style={{ marginTop: '20px', padding: '16px', background: 'var(--surface)', borderRadius: 'var(--r-md)', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: '.82rem', textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text3)', marginBottom: '12px' }}>Lo que aprenderás</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '.87rem', color: 'var(--text2)' }}>
-                    <div>✓ Diferencias clave</div>
-                    <div>✓ Casos de uso reales con ejemplos</div>
-                    <div>✓ Solución de problemas comunes</div>
-                    <div>✓ Profiling avanzado</div>
-                  </div>
-                </div>
+                <p style={{ color: 'var(--text2)', lineHeight: 1.8, fontSize: '.92rem' }}>{course.description}</p>
               </div>
             )}
-            
+
             {activeTab === 'resources' && (
               <div className="player-content-tab active">
-                <div className="resource-item"><span className="resource-icon">📄</span><span className="resource-name">Slides de la lección</span><span className="resource-size">PDF · 2.4MB</span></div>
-                <div className="resource-item"><span className="resource-icon">💻</span><span className="resource-name">Código fuente del ejercicio</span><span className="resource-size">ZIP · 845KB</span></div>
-                <div className="resource-item"><span className="resource-icon">🔗</span><span className="resource-name">Documentación oficial</span><span className="resource-size">Enlace externo</span></div>
+                {lesson.resources?.length > 0 ? lesson.resources.map((r, ri) => (
+                  <a key={ri} className="resource-item" href={r.url} target="_blank" rel="noopener noreferrer">
+                    <span className="resource-icon">🔗</span><span className="resource-name">{r.title}</span>
+                  </a>
+                )) : (
+                  <p style={{ color: 'var(--text3)', fontSize: '.9rem', padding: '12px 0' }}>Esta lección no tiene materiales adjuntos.</p>
+                )}
               </div>
             )}
-            
+
             {activeTab === 'notes' && (
               <div className="player-content-tab active">
                 <textarea className="notes-input" placeholder="Escribe tus notas sobre esta lección...&#10;&#10;Tip: Las notas se guardan automáticamente."></textarea>
@@ -128,7 +167,7 @@ const Player = () => {
                 </div>
               </div>
             )}
-            
+
             {activeTab === 'qa' && (
               <div className="player-content-tab active">
                 <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text3)' }}>
@@ -152,25 +191,22 @@ const Player = () => {
               <div className="progress-fill" style={{ width: `${course.progress}%` }}></div>
             </div>
           </div>
-          
+
           <div className="sidebar-lessons">
-            {CURRICULUM_DATA.map((mod, mIndex) => (
-              <div key={mIndex} className="sidebar-module">
-                <div className="sidebar-module-header">{mod.module}</div>
+            {modules.map((mod, mIndex) => (
+              <div key={mod.id} className="sidebar-module">
+                <div className="sidebar-module-header">{mod.title}</div>
                 {mod.lessons.map((l, lIndex) => {
                   const isCurrent = mIndex === modIdx && lIndex === lessIdx;
-                  const cls = isCurrent ? 'sl-current active' : l.done ? 'sl-done' : 'sl-locked';
-                  let icon = isCurrent ? '▶' : l.done ? '✓' : '○';
-                  if (!isCurrent) icon = l.locked ? '🔒' : icon;
                   return (
-                    <div 
-                      key={lIndex} 
+                    <div
+                      key={l.id}
                       className={`sidebar-lesson ${isCurrent ? 'active' : ''}`}
-                      onClick={() => !l.locked && navigate(`/player/${course.id}/${mIndex+1}-${lIndex+1}`)}
+                      onClick={() => navigate(`/player/${course.id}/${mIndex + 1}-${lIndex + 1}`)}
                     >
-                      <div className={`sl-icon ${cls}`}>{icon}</div>
+                      <div className={`sl-icon ${isCurrent ? 'sl-current active' : ''}`}>{isCurrent ? '▶' : '○'}</div>
                       <span className="sl-title">{l.title}</span>
-                      <span className="sl-dur">{l.dur}</span>
+                      <span className="sl-dur">{l.duration}</span>
                     </div>
                   );
                 })}

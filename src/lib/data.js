@@ -93,38 +93,6 @@ export const COURSES = [
   },
 ];
 
-export const CURRICULUM_DATA = [
-  { module:'Módulo 1: Fundamentos de React', lessons:[
-    {title:'Configuración del entorno',      dur:'12m', type:'video', done:true},
-    {title:'JSX y componentes funcionales',  dur:'18m', type:'video', done:true},
-    {title:'Props y desestructuración',      dur:'22m', type:'video', done:true},
-    {title:'Quiz: Fundamentos',              dur:'10m', type:'quiz',  done:true},
-  ]},
-  { module:'Módulo 2: Hooks Básicos', lessons:[
-    {title:'useState en profundidad',        dur:'25m', type:'video', done:true},
-    {title:'useEffect y su ciclo de vida',   dur:'30m', type:'video', done:true},
-    {title:'useRef y DOM manipulation',      dur:'20m', type:'video', done:true},
-    {title:'Proyecto: Todo App con Hooks',   dur:'45m', type:'doc',   done:true},
-  ]},
-  { module:'Módulo 3: Optimización', lessons:[
-    {title:'useCallback: cuándo y cómo',     dur:'22m', type:'video', done:true},
-    {title:'useMemo y React.memo',           dur:'18m', type:'video', done:false, current:true},
-    {title:'Profiling con React DevTools',   dur:'20m', type:'video', done:false},
-    {title:'Code splitting y lazy loading',  dur:'25m', type:'video', done:false},
-  ]},
-  { module:'Módulo 4: Context y Estado Global', lessons:[
-    {title:'useContext: el patrón Provider', dur:'28m', type:'video', done:false, locked:true},
-    {title:'useReducer + Context',           dur:'35m', type:'video', done:false, locked:true},
-    {title:'Zustand como alternativa ligera',dur:'22m', type:'video', done:false, locked:true},
-  ]},
-  { module:'Módulo 5: Patrones Avanzados', lessons:[
-    {title:'Compound Components',            dur:'30m', type:'video', done:false, locked:true},
-    {title:'Render Props pattern',           dur:'25m', type:'video', done:false, locked:true},
-    {title:'Custom Hooks: patrones reales',  dur:'40m', type:'video', done:false, locked:true},
-    {title:'Proyecto Final: Dashboard React',dur:'90m', type:'doc',   done:false, locked:true},
-  ]},
-];
-
 // Clases en vivo: se programan desde el panel de Docente (ver
 // scheduleLiveSession en lib/db.js). En producción cada doc vive en la
 // colección Firestore `liveSessions`.
