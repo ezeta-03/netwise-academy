@@ -49,11 +49,17 @@ const Navbar = () => {
     return parts[0].substring(0, 2).toUpperCase();
   };
 
+  // "Mi Aprendizaje" es el dashboard de progreso del estudiante -- no aplica
+  // a un docente o admin. "En Vivo" (la lista para unirse a una clase) tiene
+  // sentido para estudiante y docente, pero no para admin: su propia
+  // pestaña "Actividad" ya le muestra todas las clases con más control
+  // (cancelar/eliminar), así que mostrarle también la vista de estudiante
+  // sería redundante.
   const navItems = [
     { to: '/', label: 'Inicio' },
     { to: '/catalog', label: 'Explorar' },
-    { to: '/my-learning', label: 'Mi Aprendizaje' },
-    { to: '/live', label: 'En Vivo' },
+    ...(currentUser?.role === 'student' ? [{ to: '/my-learning', label: 'Mi Aprendizaje' }] : []),
+    ...(currentUser?.role === 'student' || currentUser?.role === 'teacher' ? [{ to: '/live', label: 'En Vivo' }] : []),
   ];
 
   return (

@@ -19,7 +19,7 @@ import LiveClassRoom from './pages/LiveClassRoom';
 // Phase 3 Dashboards
 import AdminDashboard from './pages/AdminDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
-import StudentProfile from './pages/StudentProfile';
+import Profile from './pages/Profile';
 
 // Protected Route using real AuthContext
 const ProtectedRoute = ({ children }) => {
@@ -76,7 +76,7 @@ function App() {
           {/* Role-Specific Dashboards */}
           <Route path="/admin" element={<RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute>} />
           <Route path="/teacher" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherDashboard /></RoleRoute>} />
-          <Route path="/profile" element={<ProtectedRoute><StudentProfile /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

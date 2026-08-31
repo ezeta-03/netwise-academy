@@ -175,6 +175,27 @@ export const AuthProvider = ({ children }) => {
     return signInWithPopup(auth, googleProvider);
   };
 
+  // Cambiar el nombre para mostrar, disponible para cualquier rol -- se
+  // guarda tanto en el perfil de Firebase Auth como en `users/{uid}`, y
+  // actualiza currentUser al toque para que el saludo cambie en toda la app
+  // sin necesitar recargar.
+  const updateDisplayName = async (newName) => {
+    const trimmed = newName.trim();
+    if (!trimmed || !currentUser) return;
+
+    if (isMockEnv) {
+      const updated = { ...currentUser, displayName: trimmed };
+      if (MOCK_USERS[currentUser.email]) MOCK_USERS[currentUser.email].displayName = trimmed;
+      setCurrentUser(updated);
+      localStorage.setItem('mock_user_session', JSON.stringify(updated));
+      return;
+    }
+
+    await updateProfile(auth.currentUser, { displayName: trimmed });
+    await setDoc(doc(db, 'users', currentUser.uid), { displayName: trimmed }, { merge: true });
+    setCurrentUser((prev) => ({ ...prev, displayName: trimmed }));
+  };
+
   const loginWithGithub = () => {
     if (isMockEnv) {
       return new Promise((resolve) => {
@@ -195,7 +216,8 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     loginWithGoogle,
-    loginWithGithub
+    loginWithGithub,
+    updateDisplayName
   };
 
   return (
