@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { CATEGORIES } from '../lib/data';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 
 const Login = () => {
@@ -236,10 +237,9 @@ const Login = () => {
                 <div className="input-group">
                   <label>¿Qué quieres aprender?</label>
                   <select className="input" name="interest">
-                    <option>Desarrollo Web</option>
-                    <option>Diseño UX/UI</option>
-                    <option>Marketing</option>
-                    <option>Negocios</option>
+                    {CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
                   </select>
                 </div>
                 <button type="submit" disabled={loading} className="btn btn-primary btn-full btn-lg">
