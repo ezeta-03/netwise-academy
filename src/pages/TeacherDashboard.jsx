@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Video, FileText, Trash2, Edit2, Radio, LogIn, Link2, Save, X, XCircle } from 'lucide-react';
+import { Plus, Video, Trash2, Edit2, Radio, LogIn, Link2, Save, X, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
@@ -383,7 +383,6 @@ const CourseContentBuilder = ({ courseId, onCourseIdChange }) => {
 
 const TeacherDashboard = () => {
   const { currentUser } = useAuth();
-  const { addToast } = useUI();
   const { courses: COURSES } = useCourseOfferings();
 
   const [activeTab, setActiveTab] = useState('my-courses');
@@ -408,7 +407,6 @@ const TeacherDashboard = () => {
         <button className={`ml-tab ${activeTab === 'my-courses' ? 'active' : ''}`} onClick={() => setActiveTab('my-courses')}>Mis Cursos Publicados</button>
         <button className={`ml-tab ${activeTab === 'builder' ? 'active' : ''}`} onClick={() => setActiveTab('builder')}>Contenido del Curso</button>
         <button className={`ml-tab ${activeTab === 'live' ? 'active' : ''}`} onClick={() => setActiveTab('live')}>Clases en Vivo</button>
-        <button className={`ml-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Mi CV & Perfil</button>
       </div>
 
       {activeTab === 'live' && <LiveClassScheduler />}
@@ -442,37 +440,6 @@ const TeacherDashboard = () => {
       )}
 
       {activeTab === 'builder' && <CourseContentBuilder courseId={builderCourseId} onCourseIdChange={setBuilderCourseId} />}
-
-      {activeTab === 'profile' && (
-        <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)' }}>
-            <h3 style={{ marginBottom: '24px' }}>Hoja de Vida Académica</h3>
-            <div className="input-group" style={{ marginBottom: '20px' }}>
-              <label>Grados Universitarios o Especialidades</label>
-              <input type="text" className="input" placeholder="Ej. Ingeniero de Software, Universidad ABC" />
-            </div>
-            <div className="input-group" style={{ marginBottom: '20px' }}>
-              <label>Biografía Profesional (Se mostrará en los cursos)</label>
-              <textarea className="input" rows={5} placeholder="Cuéntanos sobre tu experiencia..."></textarea>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg)', padding: '16px', borderRadius: 'var(--r-sm)', border: '1px solid var(--border)', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', background: 'var(--accent-bg)', color: 'var(--accent)', borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <FileText size={20} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '.9rem', fontWeight: 500 }}>Certificado_AWS.pdf</div>
-                  <div style={{ fontSize: '.75rem', color: 'var(--text3)' }}>Validado hace 2 días</div>
-                </div>
-              </div>
-              <button className="btn btn-ghost btn-sm">Subir Nuevo Certificado</button>
-            </div>
-
-            <button className="btn btn-primary" onClick={() => addToast("CV actualizado exitosamente", "success")}>Guardar Perfil</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

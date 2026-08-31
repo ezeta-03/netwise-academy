@@ -173,8 +173,6 @@ const Player = () => {
             <div className="player-tabs">
               <button className={`player-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Descripción</button>
               <button className={`player-tab ${activeTab === 'resources' ? 'active' : ''}`} onClick={() => setActiveTab('resources')}>Recursos</button>
-              <button className={`player-tab ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Mis notas</button>
-              <button className={`player-tab ${activeTab === 'qa' ? 'active' : ''}`} onClick={() => setActiveTab('qa')}>Q&A</button>
             </div>
 
             {activeTab === 'overview' && (
@@ -192,25 +190,6 @@ const Player = () => {
                 )) : (
                   <p style={{ color: 'var(--text3)', fontSize: '.9rem', padding: '12px 0' }}>Esta lección no tiene materiales adjuntos.</p>
                 )}
-              </div>
-            )}
-
-            {activeTab === 'notes' && (
-              <div className="player-content-tab active">
-                <textarea className="notes-input" placeholder="Escribe tus notas sobre esta lección...&#10;&#10;Tip: Las notas se guardan automáticamente."></textarea>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  <button className="btn btn-primary btn-sm" onClick={() => alert("Nota guardada")}>Guardar nota</button>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'qa' && (
-              <div className="player-content-tab active">
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text3)' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '12px' }}>💬</div>
-                  <p style={{ marginBottom: '16px' }}>¿Tienes dudas sobre esta lección?</p>
-                  <button className="btn btn-primary btn-sm" onClick={() => alert("Próximamente")}>Hacer una pregunta</button>
-                </div>
               </div>
             )}
           </div>
