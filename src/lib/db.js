@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, query, orderBy, where } from 'firebase/firestore';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 
 // Determine env (Firebase valid vs Mock)
@@ -31,7 +31,7 @@ export const fetchCourseById = async (courseId) => {
   if (!isConfigValid) {
     return new Promise((resolve) => {
       const course = COURSES.find(c => c.id.toString() === courseId.toString());
-      setTimeout(() => resolve(course || COURSES[0]), 300);
+      setTimeout(() => resolve(course || null), 300);
     });
   }
 
@@ -123,6 +123,88 @@ export const updateUserRole = async (uid, role) => {
   await setDoc(doc(db, 'users', uid), { role }, { merge: true });
 };
 
+// --- Preinscripciones (colección Firestore `preregistrations`) ---
+// Los 4 talleres todavía no tienen precio ni fecha de inicio confirmados, así
+// que "Preinscribirme" no puede ser una compra real todavía. Lo que sí
+// podemos hacer ahora es dejar registrado el interés del alumno para poder
+// avisarle apenas se abra la cohorte -- doc id = `${uid}_${courseId}` para
+// que un mismo alumno no quede duplicado si hace clic más de una vez.
+
+export const fetchMyPreregistrations = async (uid) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_preregistrations_${uid}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  const q = query(collection(db, 'preregistrations'), where('uid', '==', uid));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => d.data().courseId);
+};
+
+export const preregisterInterest = async (uid, course, user) => {
+  const payload = {
+    uid,
+    courseId: course.id,
+    courseTitle: course.title,
+    name: user.displayName || user.email,
+    email: user.email,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const key = `mock_preregistrations_${uid}`;
+    const current = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!current.includes(course.id)) {
+      current.push(course.id);
+      localStorage.setItem(key, JSON.stringify(current));
+    }
+    return payload;
+  }
+
+  await setDoc(doc(db, 'preregistrations', `${uid}_${course.id}`), payload);
+  return payload;
+};
+
+// --- Apertura de cohorte (colección Firestore `courseOfferings`) ---
+// El contenido del taller (título, descripción, highlights) sigue viviendo
+// en data.js -- lo que decide el Admin acá es solo si el taller ya tiene
+// precio y fecha de inicio confirmados ("abrir la cohorte"). Se guarda
+// aparte, en un doc por curso, para no mezclar contenido editorial con una
+// decisión de negocio.
+
+export const fetchCourseOfferings = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_course_offerings');
+    return raw ? JSON.parse(raw) : {};
+  }
+
+  const querySnapshot = await getDocs(collection(db, 'courseOfferings'));
+  const offerings = {};
+  querySnapshot.forEach((d) => {
+    offerings[d.id] = d.data();
+  });
+  return offerings;
+};
+
+export const updateCourseOffering = async (courseId, { price, startDate }, adminUid) => {
+  const payload = {
+    price: price === '' || price == null ? null : Number(price),
+    startDate: startDate || null,
+    updatedAt: new Date().toISOString(),
+    updatedBy: adminUid,
+  };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_course_offerings');
+    const map = raw ? JSON.parse(raw) : {};
+    map[courseId] = payload;
+    localStorage.setItem('mock_course_offerings', JSON.stringify(map));
+    return payload;
+  }
+
+  await setDoc(doc(db, 'courseOfferings', courseId.toString()), payload, { merge: true });
+  return payload;
+};
+
 // Functions to implement later:
-// export const enrollUserInCourse = async (uid, courseId) => {}
 // export const updateLessonProgress = async (uid, courseId, lessonId) => {}

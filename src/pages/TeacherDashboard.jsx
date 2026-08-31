@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { UploadCloud, Plus, Video, FileText, Trash2, Edit2, Play, CheckCircle, Radio, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
-import { COURSES } from '../lib/data';
+import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
+import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { scheduleLiveSession, fetchLiveSessions } from '../lib/db';
 
 const LiveClassScheduler = () => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
   const navigate = useNavigate();
+  const { courses: COURSES } = useCourseOfferings();
   const [courseId, setCourseId] = useState(COURSES[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [startsAt, setStartsAt] = useState('');
@@ -30,6 +32,7 @@ const LiveClassScheduler = () => {
   const handleSchedule = async () => {
     if (!title || !startsAt) return addToast('Completa el título y la fecha/hora de la clase.', 'error');
     const course = COURSES.find(c => c.id.toString() === courseId.toString());
+    if (!course) return addToast('Todavía no hay cursos para asociar a la clase en vivo.', 'error');
     setSaving(true);
     try {
       await scheduleLiveSession({
@@ -56,32 +59,40 @@ const LiveClassScheduler = () => {
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)', marginBottom: '24px' }}>
         <h3 style={{ marginBottom: '20px' }}><Radio size={18} style={{ verticalAlign: '-3px', marginRight: '6px' }} />Programar clase en vivo</h3>
 
-        <div className="input-group" style={{ marginBottom: '16px' }}>
-          <label>Curso</label>
-          <select className="input" value={courseId} onChange={e => setCourseId(e.target.value)}>
-            {COURSES.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-          </select>
-        </div>
-
-        <div className="input-group" style={{ marginBottom: '16px' }}>
-          <label>Título de la sesión</label>
-          <input className="input" type="text" placeholder="Ej. Q&A en vivo: dudas del módulo 3" value={title} onChange={e => setTitle(e.target.value)} />
-        </div>
-
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
-          <div className="input-group" style={{ flex: 1 }}>
-            <label>Fecha y hora</label>
-            <input className="input" type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} />
+        {COURSES.length === 0 ? (
+          <div className="empty-state" style={{ padding: '32px 16px' }}>
+            <p>Todavía no hay cursos publicados para programar una clase en vivo.</p>
           </div>
-          <div className="input-group" style={{ width: '140px' }}>
-            <label>Duración (min)</label>
-            <input className="input" type="number" min={15} step={15} value={durationMin} onChange={e => setDurationMin(e.target.value)} />
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="input-group" style={{ marginBottom: '16px' }}>
+              <label>Curso</label>
+              <select className="input" value={courseId} onChange={e => setCourseId(e.target.value)}>
+                {COURSES.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+              </select>
+            </div>
 
-        <button className="btn btn-primary btn-full" onClick={handleSchedule} disabled={saving}>
-          <Radio size={16} /> {saving ? 'Programando...' : 'Programar clase en vivo'}
-        </button>
+            <div className="input-group" style={{ marginBottom: '16px' }}>
+              <label>Título de la sesión</label>
+              <input className="input" type="text" placeholder="Ej. Q&A en vivo: dudas del módulo 3" value={title} onChange={e => setTitle(e.target.value)} />
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>Fecha y hora</label>
+                <input className="input" type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} />
+              </div>
+              <div className="input-group" style={{ width: '140px' }}>
+                <label>Duración (min)</label>
+                <input className="input" type="number" min={15} step={15} value={durationMin} onChange={e => setDurationMin(e.target.value)} />
+              </div>
+            </div>
+
+            <button className="btn btn-primary btn-full" onClick={handleSchedule} disabled={saving}>
+              <Radio size={16} /> {saving ? 'Programando...' : 'Programar clase en vivo'}
+            </button>
+          </>
+        )}
       </div>
 
       {mySessions.length > 0 && (
@@ -111,6 +122,7 @@ const LiveClassScheduler = () => {
 const TeacherDashboard = () => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
+  const { courses: COURSES } = useCourseOfferings();
 
   const [activeTab, setActiveTab] = useState('my-courses');
   const [modules, setModules] = useState([{ id: 1, title: 'Introducción', lessons: [] }]);
@@ -186,21 +198,30 @@ const TeacherDashboard = () => {
 
       {activeTab === 'my-courses' && (
         <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
-          <div className="courses-grid">
-            <div className="course-card">
-              <div className="course-thumb">
-                <div className="course-thumb-bg">☁️</div>
-              </div>
-              <div className="course-body">
-                <div className="course-title">React Avanzado: Arquitectura Empresarial</div>
-                <div style={{ fontSize: '.85rem', color: 'var(--text2)', marginBottom: '12px' }}>Estado: <strong>Publicado</strong></div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}><Edit2 size={14} /> Editar</button>
-                  <button className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--rose)' }} onClick={() => addToast('Curso eliminado', 'success')}><Trash2 size={14} /></button>
-                </div>
-              </div>
+          {COURSES.length === 0 ? (
+            <div className="empty-state">
+              <div className="es-icon">📭</div>
+              <p>Todavía no tienes cursos publicados. Usa "Crear Nuevo Curso" para empezar.</p>
             </div>
-          </div>
+          ) : (
+            <div className="courses-grid">
+              {COURSES.map(c => (
+                <div className="course-card" key={c.id}>
+                  <div className="course-thumb">
+                    <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="course-thumb-img" />
+                  </div>
+                  <div className="course-body">
+                    <div className="course-title">{c.title}</div>
+                    <div style={{ fontSize: '.85rem', color: 'var(--text2)', marginBottom: '12px' }}>Estado: <strong>Publicado</strong></div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}><Edit2 size={14} /> Editar</button>
+                      <button className="btn btn-ghost btn-sm" style={{ padding: '8px', color: 'var(--rose)' }} onClick={() => addToast('Curso eliminado', 'success')}><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

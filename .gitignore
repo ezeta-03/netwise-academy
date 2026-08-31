@@ -15,6 +15,12 @@ dist-ssr
 serviceAccountKey.json
 .firebase
 
+# Fuentes originales pesadas de imágenes (solo los .webp optimizados que
+# realmente importa el código van al repo; los .png/.zip originales se
+# quedan en el disco local por si hace falta re-exportar otro recorte).
+src/assets/hero/*.png
+src/assets/hero/*.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

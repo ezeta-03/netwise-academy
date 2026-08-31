@@ -24,11 +24,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Apertura de cohorte: precio y fecha de inicio por taller. Público en
+    // lectura (se muestra en /catalog y /course/:id sin necesidad de login),
+    // solo el Admin decide cuándo "abrir" un taller.
+    match /courseOfferings/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Clases en vivo: cualquier usuario autenticado puede verlas y
     // programarlas (docentes/estudiantes según la UI de la app).
     match /liveSessions/{sessionId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
+    }
+
+    // Preinscripciones ("me interesa este taller"): un alumno solo puede
+    // crear/leer sus propios registros; un admin puede leerlos todos para
+    // ver quién está interesado en cada taller. No se actualizan ni borran
+    // desde el cliente -- doc id = `${uid}_${courseId}` evita duplicados.
+    match /preregistrations/{regId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // Perfiles con rol. Un usuario puede crear/leer su propio doc, pero solo

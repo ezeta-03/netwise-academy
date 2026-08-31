@@ -1,157 +1,152 @@
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Clock, Flame, Trophy, Play } from 'lucide-react';
-import { COURSES, CATEGORIES } from '../lib/data';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Play, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
+import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import CourseInfoModal from '../components/CourseInfoModal';
+
+// Fotos panorámicas del hero (ver src/assets/hero). Se sirven en .webp
+// (comprimidas desde los .png originales, ~95% menos peso, misma calidad
+// visual) para que el Inicio cargue rápido.
+import desktop1 from '../assets/hero/desktop-1.webp';
+import desktop2 from '../assets/hero/desktop-2.webp';
+import desktop3 from '../assets/hero/desktop-3.webp';
+import desktop4 from '../assets/hero/desktop-4.webp';
+import tablet1 from '../assets/hero/tablet-1.webp';
+import tablet2 from '../assets/hero/tablet-2.webp';
+import tablet3 from '../assets/hero/tablet-3.webp';
+import tablet4 from '../assets/hero/tablet-4.webp';
+import movil1 from '../assets/hero/movil-1.webp';
+import movil2 from '../assets/hero/movil-2.webp';
+import movil3 from '../assets/hero/movil-3.webp';
+import movil4 from '../assets/hero/movil-4.webp';
+
+const HERO_SLIDES = [
+  {
+    id: 1, label: 'Redes Sociales & IA',
+    description: 'Del contenido manual a la creación asistida por Inteligencia Artificial para multiplicar la productividad de marca.',
+    desktop: desktop1, tablet: tablet1, mobile: movil1,
+  },
+  {
+    id: 2, label: 'Branding & Marca',
+    description: 'Construcción de identidad de marca sólida: desde el propósito hasta el manual de aplicación para canales digitales.',
+    desktop: desktop2, tablet: tablet2, mobile: movil2,
+  },
+  {
+    id: 3, label: 'Marketing Digital',
+    description: 'Estrategia y ejecución integral: Meta/Google Ads, SEO, automatizaciones y analítica para generar resultados.',
+    desktop: desktop3, tablet: tablet3, mobile: movil3,
+  },
+  {
+    id: 4, label: 'Emprendimiento Digital',
+    description: 'De la idea al negocio validado: modelo Canvas, Producto Mínimo Viable (MVP) y plan de lanzamiento a 90 días.',
+    desktop: desktop4, tablet: tablet4, mobile: movil4,
+  },
+];
 
 const Home = () => {
   const navigate = useNavigate();
+  const { courses: COURSES } = useCourseOfferings();
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [infoSlide, setInfoSlide] = useState(null);
+  const rowRef = useRef(null);
 
-  const continuingCourses = COURSES.filter(c => c.enrolled && c.progress < 100).slice(0, 4);
-  const recommendedCourses = COURSES.filter(c => !c.enrolled).slice(0, 6);
-  const trendingCourses = [...COURSES].sort((a, b) => b.students - a.students).slice(0, 4);
+  useEffect(() => {
+    const id = setInterval(() => setActiveSlide((s) => (s + 1) % HERO_SLIDES.length), 5500);
+    return () => clearInterval(id);
+  }, []);
 
-  const getPriceBadge = (price, enrolled) => {
-    if (price === 0) return { text: 'Gratis', className: 'course-price free' };
-    if (enrolled) return { text: '✓ Inscrito', className: 'course-price' };
-    return { text: `$${price}`, className: 'course-price' };
+  // Sólo hay 4 talleres -- se muestran los 4, una sola vez, nada más. La
+  // fila simplemente scrollea (con flechas en desktop, gesto táctil en
+  // móvil) hasta donde llegue el contenido real, sin loop ni duplicados.
+  const scrollRow = (direction) => {
+    const el = rowRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' });
   };
 
-  const renderCourseCard = (c) => {
-    const priceInfo = getPriceBadge(c.price, c.enrolled);
-    return (
-      <div className="course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
-        <div className="course-thumb" style={{ background: `linear-gradient(135deg, ${c.color})` }}>
-          <div className="course-thumb-bg">{c.emoji}</div>
-          <div className="play-overlay"><div className="play-btn-sm"><Play size={20} fill="currentColor" /></div></div>
-          <div className="course-duration">{c.duration}</div>
-        </div>
-        <div className="course-body">
-          <div className="course-meta">
-            {c.badge && <span className="badge badge-accent">{c.badge}</span>}
-            <span className="badge badge-sky" style={{ fontSize: '.65rem' }}>{c.level}</span>
-          </div>
-          <div className="course-title">{c.title}</div>
-          <div className="course-instructor">por {c.instructor}</div>
-          <div className="course-stats-row">
-            <div className="course-rating">⭐ {c.rating} <span>({(c.students/1000).toFixed(1)}k)</span></div>
-            <div className={priceInfo.className}>{priceInfo.text}</div>
-          </div>
-        </div>
-        {c.enrolled && c.progress > 0 && (
-          <div className="course-progress-wrap">
-            <div className="enrolled-badge">✓ Inscrito · {c.progress}%</div>
-            <div className="progress-bar"><div className="progress-fill" style={{ width: `${c.progress}%` }}></div></div>
-          </div>
-        )}
-      </div>
-    );
+  const slide = HERO_SLIDES[activeSlide];
+
+  const getPriceLabel = (price) => {
+    if (price == null) return 'Precio por confirmar';
+    if (price === 0) return 'Gratis';
+    return `S/ ${price}`;
   };
 
   return (
     <div className="view active">
-      <div className="home-hero anim-fade-up d1">
-        <div className="home-hero-inner">
-          <div>
-            <div className="badge badge-accent" style={{ marginBottom: '16px' }}>✨ Nueva ruta: Full-Stack 2025</div>
-            <h1>Hola, <span>Ana</span>.<br/>¿Seguimos aprendiendo?</h1>
-            <p>Tienes 3 cursos en progreso y una racha de 12 días. ¡Sigue así para completar tu certificación!</p>
-            <div className="hero-cta">
-              <button className="btn btn-primary btn-lg" onClick={() => navigate('/catalog')}>Explorar cursos</button>
-              <button className="btn btn-ghost btn-lg" onClick={() => navigate('/my-learning')}>Ver mi progreso</button>
-            </div>
+      <div className="nf-hero anim-fade-up d1">
+        <div className="nf-hero-media" key={activeSlide}>
+          <picture>
+            <source media="(min-width: 1280px)" srcSet={slide.desktop} />
+            <source media="(min-width: 768px)" srcSet={slide.tablet} />
+            <img src={slide.mobile} alt={slide.label} loading={activeSlide === 0 ? 'eager' : 'lazy'} />
+          </picture>
+          <div className="nf-hero-gradient"></div>
+        </div>
+
+        <div className="nf-hero-content">
+          <div className="nf-hero-kicker">Taller {activeSlide + 1} de {HERO_SLIDES.length}</div>
+          <h1 className="nf-hero-title">{slide.label}</h1>
+          <div className="nf-hero-tags">
+            <span>Taller práctico</span><span>3 meses</span><span>100% Online</span>
+            <span>{getPriceLabel(COURSES.find((c) => c.id === slide.id)?.price)}</span>
           </div>
-          <div className="hero-continue-card" onClick={() => navigate('/player/1/1')}>
-            <div className="hcc-label">▶ Continuar donde dejaste</div>
-            <div className="hcc-title">React Avanzado: Hooks & Patrones</div>
-            <div className="hcc-sub">Módulo 3 · Lección 8 de 24</div>
-            <div className="hcc-progress"><div className="hcc-fill" style={{ width: '65%' }}></div></div>
-            <div className="hcc-pct">65% completado</div>
+          <p className="nf-hero-desc">{slide.description}</p>
+          <div className="nf-hero-actions">
+            <button className="btn-nf btn-nf-play" onClick={() => navigate(`/course/${slide.id}`)}>
+              <Play size={18} fill="currentColor" /> Ver taller
+            </button>
+            <button className="btn-nf btn-nf-info" onClick={() => setInfoSlide(slide)}>
+              <Info size={18} /> Más información
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="stats-row anim-fade-up d2">
-        <div className="stat-card">
-          <div className="s-icon"><BookOpen size={28} /></div>
-          <div className="s-num">4</div>
-          <div className="s-label">Cursos Inscritos</div>
-          <div className="s-sub">2 en progreso</div>
-        </div>
-        <div className="stat-card">
-          <div className="s-icon"><Clock size={28} /></div>
-          <div className="s-num">38h</div>
-          <div className="s-label">Tiempo aprendido</div>
-          <div className="s-sub">+2.5h esta semana</div>
-        </div>
-        <div className="stat-card">
-          <div className="s-icon"><Flame size={28} /></div>
-          <div className="s-num">12</div>
-          <div className="s-label">Días de racha</div>
-          <div className="s-sub">Récord: 28 días</div>
-        </div>
-        <div className="stat-card">
-          <div className="s-icon"><Trophy size={28} /></div>
-          <div className="s-num">3</div>
-          <div className="s-label">Certificados</div>
-          <div className="s-sub">1 en curso</div>
-        </div>
-      </div>
-
-      <div className="home-section" style={{ paddingTop: '40px' }}>
-        <div className="section-header anim-fade-up d2">
-          <div className="section-title-text">Continuar aprendiendo <span>({continuingCourses.length})</span></div>
-          <button className="view-all" onClick={() => navigate('/my-learning')}>Ver todos →</button>
-        </div>
-        <div className="courses-grid">
-          {continuingCourses.map(renderCourseCard)}
-        </div>
-      </div>
-
-      <div className="home-section">
-        <div className="section-header anim-fade-up d3">
-          <div className="section-title-text">Explorar por categoría</div>
-        </div>
-        <div className="cat-chips">
-          {CATEGORIES.map(c => (
-            <div key={c.id} className="cat-chip" onClick={() => navigate(`/catalog?cat=${c.id}`)}>
-              {c.label} <span style={{ color: 'var(--text3)', fontSize: '.75rem' }}>{c.count}</span>
-            </div>
+        <div className="nf-hero-dots">
+          {HERO_SLIDES.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`nf-dot ${i === activeSlide ? 'active' : ''}`}
+              aria-label={`Ver ${s.label}`}
+              onClick={() => setActiveSlide(i)}
+            />
           ))}
         </div>
       </div>
 
-      <div className="home-section">
-        <div className="section-header anim-fade-up d3">
-          <div className="section-title-text">Recomendados para ti <span>(basado en tu historial)</span></div>
-          <button className="view-all" onClick={() => navigate('/catalog')}>Ver catálogo →</button>
+      <div className="nf-row">
+        <div className="nf-row-header">
+          <h2 className="nf-row-title">Nuestros talleres</h2>
         </div>
-        <div className="reco-grid">
-          {recommendedCourses.map(c => (
-            <div key={c.id} className="reco-card" onClick={() => navigate(`/course/${c.id}`)}>
-              <div className="reco-thumb" style={{ background: `linear-gradient(135deg, ${c.color})` }}>{c.emoji}</div>
-              <div className="reco-body">
-                <div className="reco-title">{c.title}</div>
-                <div className="reco-meta">
-                  <span>⭐ {c.rating}</span>
-                  <span>{c.duration}</span>
-                  <span dangerouslySetInnerHTML={{ __html: c.price === 0 ? '<span style="color:var(--green)">Gratis</span>' : `$${c.price}` }}></span>
+        <div className="nf-row-wrap">
+          <button className="nf-row-arrow nf-row-arrow-left" aria-label="Ver talleres anteriores" onClick={() => scrollRow(-1)}>
+            <ChevronLeft size={22} />
+          </button>
+          <div className="nf-row-scroll" ref={rowRef}>
+            {COURSES.map((c) => (
+              <div className="nf-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
+                <div className="nf-card-thumb">
+                  <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="nf-card-img" />
+                  {c.badge && <span className="badge badge-accent nf-card-badge">{c.badge}</span>}
+                </div>
+                <div className="nf-card-body">
+                  <div className="nf-card-title">{c.title}</div>
+                  <div className="nf-card-meta">por {c.instructor} · {getPriceLabel(c.price)}</div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="home-section">
-        <div className="section-header anim-fade-up d4">
-          <div className="section-title-text">🔥 Trending esta semana</div>
-        </div>
-        <div className="courses-grid">
-          {trendingCourses.map(renderCourseCard)}
+            ))}
+          </div>
+          <button className="nf-row-arrow nf-row-arrow-right" aria-label="Ver más talleres" onClick={() => scrollRow(1)}>
+            <ChevronRight size={22} />
+          </button>
         </div>
       </div>
 
       <div style={{ height: '48px' }}></div>
+
+      {infoSlide && <CourseInfoModal slide={infoSlide} onClose={() => setInfoSlide(null)} />}
     </div>
   );
 };

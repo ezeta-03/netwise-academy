@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Palette, Check } from 'lucide-react';
+import { useTheme } from '../context/ThemeContext';
+import { Sun, Moon, Check } from 'lucide-react';
 
 const StudentProfile = () => {
   const { currentUser } = useAuth();
-  const [activeTheme, setActiveTheme] = useState('dark');
+  const { theme, toggleTheme } = useTheme();
   const [interests, setInterests] = useState(['Desarrollo Web', 'React']);
-  
+
   const ALL_INTERESTS = ['Desarrollo Web', 'Diseño UX/UI', 'Marketing Digital', 'Data Science', 'React', 'NodeJS', 'Python'];
 
   const toggleInterest = (interest) => {
@@ -14,33 +15,6 @@ const StudentProfile = () => {
       setInterests(interests.filter(i => i !== interest));
     } else {
       setInterests([...interests, interest]);
-    }
-  };
-
-  const changeTheme = (themeType) => {
-    setActiveTheme(themeType);
-    const root = document.documentElement;
-    if (themeType === 'dark') {
-      root.style.setProperty('--bg', '#0B0D17');
-      root.style.setProperty('--surface', '#131627');
-      root.style.setProperty('--border', 'rgba(255,255,255,0.08)');
-      root.style.setProperty('--text', '#f8fafc');
-      root.style.setProperty('--text2', '#94a3b8');
-      root.style.setProperty('--accent', '#673de6'); // default brand
-    } else if (themeType === 'light') {
-      root.style.setProperty('--bg', '#f8fafc');
-      root.style.setProperty('--surface', '#ffffff');
-      root.style.setProperty('--border', 'rgba(0,0,0,0.1)');
-      root.style.setProperty('--text', '#0f172a');
-      root.style.setProperty('--text2', '#475569');
-      root.style.setProperty('--accent', '#4f46e5'); // indigo for light mode
-    } else if (themeType === 'neon') {
-      root.style.setProperty('--bg', '#050510');
-      root.style.setProperty('--surface', '#0a0a1a');
-      root.style.setProperty('--border', 'rgba(203, 255, 46, 0.2)');
-      root.style.setProperty('--text', '#ffffff');
-      root.style.setProperty('--text2', '#a0a0b0');
-      root.style.setProperty('--accent', '#cbff2e'); // green accent
     }
   };
 
@@ -116,15 +90,14 @@ const StudentProfile = () => {
 
       <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '24px', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <Palette size={20} color="var(--accent)" />
-          <h3>Personalizar Entorno Visual</h3>
+          {theme === 'dark' ? <Moon size={20} color="var(--accent)" /> : <Sun size={20} color="var(--accent)" />}
+          <h3>Apariencia</h3>
         </div>
-        <p style={{ fontSize: '.9rem', color: 'var(--text2)', marginBottom: '20px' }}>Ponte cómodo. Cambia los colores de tu interfaz Netwise Academy.</p>
-        
+        <p style={{ fontSize: '.9rem', color: 'var(--text2)', marginBottom: '20px' }}>Ponte cómodo. Este mismo interruptor está disponible en la barra de navegación.</p>
+
         <div className="my-learning-tabs" style={{ borderBottom: 'none' }}>
-          <button className={`ml-tab ${activeTheme === 'dark' ? 'active' : ''}`} onClick={() => changeTheme('dark')}>🌙 Tema Oscuro (Por defecto)</button>
-          <button className={`ml-tab ${activeTheme === 'light' ? 'active' : ''}`} onClick={() => changeTheme('light')}>☀️ Tema Claro</button>
-          <button className={`ml-tab ${activeTheme === 'neon' ? 'active' : ''}`} onClick={() => changeTheme('neon')}>⚡ Tema Hacker</button>
+          <button className={`ml-tab ${theme === 'dark' ? 'active' : ''}`} onClick={() => theme !== 'dark' && toggleTheme()}>🌙 Tema Oscuro</button>
+          <button className={`ml-tab ${theme === 'light' ? 'active' : ''}`} onClick={() => theme !== 'light' && toggleTheme()}>☀️ Tema Claro</button>
         </div>
       </div>
 

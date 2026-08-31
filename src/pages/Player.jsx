@@ -1,19 +1,33 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { COURSES, CURRICULUM_DATA } from '../lib/data';
+import { CURRICULUM_DATA } from '../lib/data';
+import { useCourseOfferings } from '../context/CourseOfferingsContext';
 
 const Player = () => {
   const { courseId, lessonId } = useParams();
   const navigate = useNavigate();
-  
+  const { courses: COURSES } = useCourseOfferings();
+
   const [activeTab, setActiveTab] = useState('overview');
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Derive lesson details from URL
   const [modIdx, lessIdx] = (lessonId || '1-1').split('-').map(n => parseInt(n) - 1);
-  const course = COURSES.find(c => c.id.toString() === courseId) || COURSES[0];
+  const course = COURSES.find(c => c.id.toString() === courseId);
   const module = CURRICULUM_DATA[modIdx] || CURRICULUM_DATA[0];
-  const lesson = module.lessons[lessIdx] || module.lessons[0];
+  const lesson = module?.lessons[lessIdx] || module?.lessons[0];
+
+  if (!course) {
+    return (
+      <div className="view active">
+        <div className="empty-state" style={{ padding: '96px 24px' }}>
+          <div className="es-icon">📭</div>
+          <p>Este curso no existe o todavía no está disponible.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => navigate('/catalog')}>Ver catálogo</button>
+        </div>
+      </div>
+    );
+  }
 
   const goNext = () => {
     let nextLess = lessIdx + 1;

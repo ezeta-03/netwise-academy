@@ -1,7 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useUI } from '../context/UIContext';
-import { Search, CheckCircle, XCircle } from 'lucide-react';
-import { fetchAllUsers, updateUserRole } from '../lib/db';
+import { useAuth } from '../context/AuthContext';
+import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { Search, CheckCircle, XCircle, Rocket } from 'lucide-react';
+import { fetchAllUsers, updateUserRole, updateCourseOffering } from '../lib/db';
+import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 
 // Lista de demo: se reemplaza automáticamente por los docs reales de
 // Firestore (`users`) en cuanto hay un proyecto Firebase conectado.
@@ -21,8 +24,57 @@ const formatJoined = (iso) => {
   }
 };
 
+const WorkshopOfferingRow = ({ course, adminUid, onSaved }) => {
+  const { addToast } = useUI();
+  const [price, setPrice] = useState(course.price ?? '');
+  const [startDate, setStartDate] = useState(course.startDate ?? '');
+  const [saving, setSaving] = useState(false);
+
+  const isOpen = course.price != null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateCourseOffering(course.id, { price, startDate }, adminUid);
+      addToast(`"${course.title}" actualizado.`, 'success');
+      onSaved();
+    } catch {
+      addToast('No se pudo guardar. Intenta de nuevo.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="reco-card" style={{ alignItems: 'center', padding: '16px 24px', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="reco-thumb" style={{ width: '56px', height: '56px', borderRadius: '8px' }}>
+        <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+      <div className="reco-body" style={{ minWidth: '180px' }}>
+        <div className="reco-title" style={{ fontSize: '1rem' }}>{course.title}</div>
+        <div className="reco-meta" style={{ marginTop: '4px' }}>
+          <span className={`badge ${isOpen ? 'badge-green' : 'badge-amber'}`}>{isOpen ? 'Abierto' : 'Por confirmar'}</span>
+        </div>
+      </div>
+      <div className="input-group" style={{ width: '140px' }}>
+        <label style={{ fontSize: '.75rem' }}>Precio (S/)</label>
+        <input className="input" type="number" min="0" placeholder="Ej. 150" value={price} onChange={(e) => setPrice(e.target.value)} />
+      </div>
+      <div className="input-group" style={{ width: '170px' }}>
+        <label style={{ fontSize: '.75rem' }}>Fecha de inicio</label>
+        <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      </div>
+      <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving} style={{ alignSelf: 'flex-end' }}>
+        <Rocket size={14} /> {saving ? 'Guardando...' : 'Guardar'}
+      </button>
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   const { addToast } = useUI();
+  const { currentUser } = useAuth();
+  const { courses: COURSES, refresh: refreshOfferings } = useCourseOfferings();
   const [activeTab, setActiveTab] = useState('users');
 
   // User State & Filters
@@ -80,10 +132,27 @@ const AdminDashboard = () => {
       <p style={{ color: 'var(--text2)', marginBottom: '30px' }}>Gestiona la plataforma, usuarios y configuración global.</p>
 
       <div className="my-learning-tabs">
+        <button className={`ml-tab ${activeTab === 'workshops' ? 'active' : ''}`} onClick={() => setActiveTab('workshops')}>Talleres</button>
         <button className={`ml-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Usuarios</button>
         <button className={`ml-tab ${activeTab === 'courses' ? 'active' : ''}`} onClick={() => setActiveTab('courses')}>Auditoría de Cursos</button>
         <button className={`ml-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>Configuración Global</button>
       </div>
+
+      {activeTab === 'workshops' && (
+        <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)' }}>
+            <h3 style={{ marginBottom: '8px' }}>Apertura de Cohorte</h3>
+            <p style={{ color: 'var(--text2)', marginBottom: '24px' }}>
+              Define precio y fecha de inicio de cada taller. Mientras un taller no tenga precio, los alumnos solo pueden preinscribirse; al guardarlo acá queda "Abierto" en Inicio, Catálogo y el detalle del curso al instante.
+            </p>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {COURSES.map((course) => (
+                <WorkshopOfferingRow key={course.id} course={course} adminUid={currentUser?.uid} onSaved={refreshOfferings} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'users' && (
         <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>

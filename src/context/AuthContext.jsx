@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { auth, googleProvider, githubProvider, db } from '../lib/firebase';
 import {
   signInWithEmailAndPassword,
@@ -48,6 +48,15 @@ export const AuthProvider = ({ children }) => {
   // Check if we are using the placeholder Firebase config
   const isMockEnv = auth.app.options.apiKey.includes('DummyKey');
 
+  // UID de una cuenta que se está registrando en este momento. onAuthStateChanged
+  // dispara casi de inmediato al crear la cuenta -- antes de que updateProfile()
+  // y el setDoc() de register() terminen de escribir el nombre real -- así que
+  // si lo dejamos correr, crea el perfil de Firestore con displayName = email
+  // (carrera de datos) y currentUser se queda con el correo en vez del nombre
+  // hasta el próximo refresh. Mientras este uid coincide, el listener no toca
+  // currentUser: register() es quien lo fija, ya con el nombre correcto.
+  const registeringUid = useRef(null);
+
   useEffect(() => {
     if (isMockEnv) {
       // Load mock session from localStorage
@@ -63,6 +72,11 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         setCurrentUser(null);
+        setLoading(false);
+        return;
+      }
+
+      if (registeringUid.current === user.uid) {
         setLoading(false);
         return;
       }
@@ -116,18 +130,25 @@ export const AuthProvider = ({ children }) => {
     
     // Proper Firebase Register
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    if (displayName) {
-      await updateProfile(credential.user, { displayName });
+    registeringUid.current = credential.user.uid;
+    try {
+      if (displayName) {
+        await updateProfile(credential.user, { displayName });
+      }
+      // Crea el perfil explícitamente (con el displayName ya definido) en vez de
+      // depender del timing de onAuthStateChanged; role siempre 'student' al
+      // auto-registrarse.
+      const profile = {
+        email,
+        displayName: displayName || email,
+        role: 'student',
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'users', credential.user.uid), profile);
+      setCurrentUser({ uid: credential.user.uid, email, displayName: profile.displayName, role: profile.role });
+    } finally {
+      registeringUid.current = null;
     }
-    // Crea el perfil explícitamente (con el displayName ya definido) en vez de
-    // depender del timing de onAuthStateChanged; role siempre 'student' al
-    // auto-registrarse.
-    await setDoc(doc(db, 'users', credential.user.uid), {
-      email,
-      displayName: displayName || email,
-      role: 'student',
-      createdAt: new Date().toISOString(),
-    });
     return credential;
   };
 

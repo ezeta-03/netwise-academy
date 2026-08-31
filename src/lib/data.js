@@ -1,27 +1,96 @@
+// Los 4 talleres del Pitch Deck (Propuesta de Valor). Los "count" quedan en 0
+// hasta que se den de alta los cursos reales en COURSES.
 export const CATEGORIES = [
-  { id:'web',    label:'🌐 Desarrollo Web',       count:140 },
-  { id:'data',   label:'📊 Data Science',          count:85  },
-  { id:'design', label:'🎨 Diseño UX/UI',          count:72  },
-  { id:'mobile', label:'📱 Mobile Dev',            count:60  },
-  { id:'cloud',  label:'☁️ Cloud & DevOps',        count:54  },
-  { id:'ai',     label:'🤖 IA & Machine Learning', count:98  },
-  { id:'biz',    label:'💼 Negocios',              count:66  },
-  { id:'cyber',  label:'🔐 Ciberseguridad',        count:41  },
+  { id:'redes-ia',       label:'📱 Redes Sociales & IA',     count:0 },
+  { id:'branding',       label:'🎨 Branding & Marca',        count:0 },
+  { id:'marketing',      label:'📈 Marketing Digital',       count:0 },
+  { id:'emprendimiento', label:'🚀 Emprendimiento Digital',  count:0 },
 ];
 
+// Los 4 talleres reales del Pitch Deck. "price" y "duration" quedan en null
+// (aún no definidos) hasta que se confirme el precio y el cronograma de cada
+// cohorte; la UI muestra "por confirmar" en su lugar.
 export const COURSES = [
-  { id:1,  title:'React Avanzado: Hooks, Context y Patrones',  cat:'web',    emoji:'⚛️', color:'#1a1035,#0d1628', instructor:'Carlos Mendoza',  rating:4.9, students:12540, price:29.99, oldPrice:89.99,  duration:'24h', level:'intermedio',   enrolled:true,  progress:65, badge:'Más vendido',  video:'https://www.youtube.com/embed/TNhaISOUy6Q?autoplay=1' },
-  { id:2,  title:'Python para Data Science & Machine Learning', cat:'data',   emoji:'🐍', color:'#1a2810,#0d1a0d', instructor:'Laura Jiménez',   rating:4.8, students:9820,  price:24.99, oldPrice:79.99,  duration:'36h', level:'principiante', enrolled:true,  progress:32, badge:'Nuevo',        video:'https://www.youtube.com/embed/LHBE0uHiMZo?autoplay=1' },
-  { id:3,  title:'UI/UX Design con Figma: De cero a experto',  cat:'design', emoji:'🎨', color:'#1a0d28,#28103a', instructor:'Sofía Torres',    rating:4.7, students:7340,  price:0,     oldPrice:0,      duration:'18h', level:'principiante', enrolled:false, progress:0,  badge:'Gratis',       video:'https://www.youtube.com/embed/FTFaQWZBqQ8?autoplay=1' },
-  { id:4,  title:'Node.js & Express: APIs REST Profesionales', cat:'web',    emoji:'🟩', color:'#0d1a10,#102015', instructor:'Miguel Santos',   rating:4.9, students:15200, price:34.99, oldPrice:99.99,  duration:'28h', level:'intermedio',   enrolled:true,  progress:18, badge:'Bestseller',   video:'https://www.youtube.com/embed/Oe421EPjeBE?autoplay=1' },
-  { id:5,  title:'Flutter: Apps Móviles iOS & Android',        cat:'mobile', emoji:'💙', color:'#0d1428,#0d1a35', instructor:'Ana Gómez',       rating:4.6, students:5680,  price:19.99, oldPrice:59.99,  duration:'22h', level:'intermedio',   enrolled:false, progress:0,  badge:'',             video:'https://www.youtube.com/embed/VPvVD8t02U8?autoplay=1' },
-  { id:6,  title:'Machine Learning con TensorFlow & PyTorch',  cat:'ai',     emoji:'🧠', color:'#28100d,#3a1a10', instructor:'Roberto Kim',     rating:4.8, students:8900,  price:39.99, oldPrice:119.99, duration:'40h', level:'avanzado',     enrolled:false, progress:0,  badge:'Premium',      video:'https://www.youtube.com/embed/tPYj3fFJGjk?autoplay=1' },
-  { id:7,  title:'AWS Cloud Practitioner: Certificación',      cat:'cloud',  emoji:'☁️', color:'#1a1010,#281510', instructor:'Diana Ruiz',      rating:4.7, students:11200, price:29.99, oldPrice:89.99,  duration:'32h', level:'principiante', enrolled:true,  progress:75, badge:'Certificación', video:'https://www.youtube.com/embed/3hLmDS179YE?autoplay=1' },
-  { id:8,  title:'TypeScript Completo: De JS a TS Profesional',cat:'web',    emoji:'🔷', color:'#0d1428,#102040', instructor:'Andrés Vargas',   rating:4.8, students:6700,  price:0,     oldPrice:0,      duration:'15h', level:'intermedio',   enrolled:false, progress:0,  badge:'Gratis',       video:'https://www.youtube.com/embed/BwuLxPH8IDs?autoplay=1' },
-  { id:9,  title:'SQL & PostgreSQL: Bases de Datos Pro',       cat:'data',   emoji:'🐘', color:'#0d1828,#102030', instructor:'Marta León',      rating:4.6, students:4520,  price:22.99, oldPrice:69.99,  duration:'20h', level:'principiante', enrolled:false, progress:0,  badge:'',             video:'https://www.youtube.com/embed/qw--VYLpxG4?autoplay=1' },
-  { id:10, title:'Ciberseguridad: Ethical Hacking',            cat:'cyber',  emoji:'🔐', color:'#0d1a10,#0f200f', instructor:'Pedro Castillo',  rating:4.9, students:3200,  price:49.99, oldPrice:149.99, duration:'45h', level:'avanzado',     enrolled:false, progress:0,  badge:'Hot 🔥',       video:'https://www.youtube.com/embed/3Kq1MIfTWCE?autoplay=1' },
-  { id:11, title:'Marketing Digital & Growth Hacking',         cat:'biz',    emoji:'📈', color:'#1a1420,#201528', instructor:'Valeria Moreno',  rating:4.5, students:8900,  price:0,     oldPrice:0,      duration:'14h', level:'principiante', enrolled:false, progress:0,  badge:'Gratis',       video:'https://www.youtube.com/embed/bixR-KIJKYM?autoplay=1' },
-  { id:12, title:'Docker & Kubernetes: DevOps Moderno',        cat:'cloud',  emoji:'🐳', color:'#0d1a28,#102035', instructor:'Luis Chen',       rating:4.8, students:7100,  price:34.99, oldPrice:109.99, duration:'30h', level:'avanzado',     enrolled:false, progress:0,  badge:'',             video:'https://www.youtube.com/embed/3c-iBn73dDE?autoplay=1' },
+  {
+    id: 1,
+    title: 'Redes Sociales & IA',
+    cat: 'redes-ia',
+    emoji: '📱',
+    color: '#1a1035,#0d1628',
+    instructor: 'Netwise Agencia',
+    summary: 'Del contenido manual a la creación asistida por Inteligencia Artificial para multiplicar la productividad de marca.',
+    description: 'Aprende a planificar, crear y optimizar contenido usando las últimas herramientas de Inteligencia Artificial sin perder la identidad de tu marca.',
+    highlights: [
+      'Estrategia y prompts: flujo continuo de copys y gráficos',
+      'Automatización de publicación y respuesta en redes',
+      'Proyecto final: calendario de 30 días activado con IA',
+    ],
+    badge: 'Nuevo',
+    price: null,
+    duration: null,
+    enrolled: false,
+    progress: 0,
+  },
+  {
+    id: 2,
+    title: 'Branding & Marca',
+    cat: 'branding',
+    emoji: '🎨',
+    color: '#1a0d28,#28103a',
+    instructor: 'Netwise Agencia',
+    summary: 'Construcción de identidad de marca sólida: desde el propósito hasta el manual de aplicación para canales digitales.',
+    description: 'Construye una identidad de marca sólida y coherente en todos tus canales digitales, desde el propósito hasta las aplicaciones visuales.',
+    highlights: [
+      'Propósito y territorio de marca',
+      'Identidad visual y tono de comunicación',
+      'Manual de marca para canales digitales',
+    ],
+    badge: 'Nuevo',
+    price: null,
+    duration: null,
+    enrolled: false,
+    progress: 0,
+  },
+  {
+    id: 3,
+    title: 'Marketing Digital',
+    cat: 'marketing',
+    emoji: '📈',
+    color: '#0d1a10,#102015',
+    instructor: 'Netwise Agencia',
+    summary: 'Estrategia y ejecución integral: Meta/Google Ads, SEO, automatizaciones y analítica para generar resultados.',
+    description: 'Estrategia y ejecución integral de marketing digital: pauta en Meta y Google Ads, SEO, automatizaciones y analítica orientada a resultados.',
+    highlights: [
+      'Meta Ads y Google Ads de principio a fin',
+      'SEO y automatizaciones de marketing',
+      'Analítica y reportes con KPIs medibles',
+    ],
+    badge: 'Nuevo',
+    price: null,
+    duration: null,
+    enrolled: false,
+    progress: 0,
+  },
+  {
+    id: 4,
+    title: 'Emprendimiento Digital',
+    cat: 'emprendimiento',
+    emoji: '🚀',
+    color: '#28100d,#3a1a10',
+    instructor: 'Netwise Agencia',
+    summary: 'De la idea al negocio validado: modelo Canvas, Producto Mínimo Viable (MVP) y plan de lanzamiento a 90 días.',
+    description: 'Lleva tu idea a un negocio validado: modelo Canvas, Producto Mínimo Viable (MVP) y un plan de lanzamiento a 90 días.',
+    highlights: [
+      'Modelo de negocio Canvas',
+      'Producto Mínimo Viable (MVP) validado en mercado',
+      'Plan de lanzamiento a 90 días',
+    ],
+    badge: 'Nuevo',
+    price: null,
+    duration: null,
+    enrolled: false,
+    progress: 0,
+  },
 ];
 
 export const CURRICULUM_DATA = [
@@ -56,15 +125,7 @@ export const CURRICULUM_DATA = [
   ]},
 ];
 
-// Clases en vivo (mock). En producción cada doc vive en la colección Firestore `liveSessions`.
-export const LIVE_SESSIONS = [
-  { id:'ls1', courseId:1, courseTitle:'React Avanzado: Hooks, Context y Patrones', title:'Sesión en vivo: Q&A de Hooks avanzados', instructor:'Carlos Mendoza', startsAt:'2026-08-28T18:00:00', durationMin:60, roomName:'netwise-academy-react-avanzado-q1', status:'upcoming' },
-  { id:'ls2', courseId:2, courseTitle:'Python para Data Science & Machine Learning', title:'Taller en vivo: Limpieza de datos con Pandas', instructor:'Laura Jiménez', startsAt:'2026-08-27T20:00:00', durationMin:90, roomName:'netwise-academy-python-ds-w1', status:'live' },
-  { id:'ls3', courseId:7, courseTitle:'AWS Cloud Practitioner: Certificación', title:'Repaso en vivo antes del examen de certificación', instructor:'Diana Ruiz', startsAt:'2026-08-20T17:00:00', durationMin:45, roomName:'netwise-academy-aws-repaso', status:'ended', recordingUrl:'' },
-];
-
-export const REVIEWS = [
-  { name:'María G.', stars:5, date:'hace 2 días',    text:'El mejor curso de React que he tomado. Carlos explica con una claridad increíble y los proyectos son muy prácticos.' },
-  { name:'Juan P.',  stars:5, date:'hace 1 semana',  text:'Increíble. Después de este curso conseguí trabajo como Frontend Developer. Vale cada centavo.' },
-  { name:'Sara M.',  stars:4, date:'hace 2 semanas', text:'Muy completo. Algunos videos podrían ser más cortos, pero el contenido es excelente y está muy actualizado.' },
-];
+// Clases en vivo: se programan desde el panel de Docente (ver
+// scheduleLiveSession en lib/db.js). En producción cada doc vive en la
+// colección Firestore `liveSessions`.
+export const LIVE_SESSIONS = [];

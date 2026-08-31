@@ -1,66 +1,51 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Play } from 'lucide-react';
-import { COURSES, CATEGORIES } from '../lib/data';
+import { CATEGORIES } from '../lib/data';
+import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
+import { useCourseOfferings } from '../context/CourseOfferingsContext';
 
 const Catalog = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { courses: COURSES } = useCourseOfferings();
   const queryParams = new URLSearchParams(location.search);
   const filterCat = queryParams.get('cat') || '';
   
   const chips = [{ id:'', label:'Todos' }, ...CATEGORIES];
 
   // Active filter states
-  const [activeLevel, setActiveLevel] = useState('todos');
-  const [filters, setFilters] = useState({
-    free: false, paid: false, short: false, medium: false, long: false
-  });
+  const [filters, setFilters] = useState({ free: false, paid: false });
 
   const toggleFilter = (key) => setFilters(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Computed Functional Filter Logic
   const filteredCourses = useMemo(() => {
     let result = COURSES;
-    
+
     // Categoría
     if (filterCat) result = result.filter(c => c.cat === filterCat);
-    
-    // Nivel
-    if (activeLevel !== 'todos') {
-      result = result.filter(c => c.level.toLowerCase() === activeLevel.toLowerCase());
-    }
-    
+
     // Precio
     if (filters.free && !filters.paid) result = result.filter(c => c.price === 0);
     if (filters.paid && !filters.free) result = result.filter(c => c.price > 0);
-    
-    // Duración (short: < 3h, medium: 3-10h, long: > 10h)
-    if (filters.short || filters.medium || filters.long) {
-      result = result.filter(c => {
-        const hoursMatch = c.duration.match(/(\d+)/);
-        const hours = hoursMatch ? parseInt(hoursMatch[1]) : 0;
-        
-        if (filters.short && hours < 3) return true;
-        if (filters.medium && hours >= 3 && hours <= 10) return true;
-        if (filters.long && hours > 10) return true;
-        return false;
-      });
-    }
 
     return result;
-  }, [filterCat, activeLevel, filters]);
+  }, [COURSES, filterCat, filters]);
 
   const courses = filteredCourses;
+  const freeCount = COURSES.filter(c => c.price === 0).length;
+  const paidCount = COURSES.filter(c => c.price > 0).length;
 
   const getPriceBadge = (price, enrolled) => {
+    if (price == null) return { text: 'Por confirmar', className: 'course-price' };
     if (price === 0) return { text: 'Gratis', className: 'course-price free' };
     if (enrolled) return { text: '✓ Inscrito', className: 'course-price' };
-    return { text: `$${price}`, className: 'course-price' };
+    return { text: `S/ ${price}`, className: 'course-price' };
   };
 
   const clearFilters = () => {
-    setActiveLevel('todos');
+    setFilters({ free: false, paid: false });
     navigate('/catalog');
   };
 
@@ -72,10 +57,8 @@ const Catalog = () => {
             <div className="filter-section-title">Categorías</div>
             <div id="filter-cats">
               {CATEGORIES.map(c => (
-                <div key={c.id} className="filter-option checked" onClick={() => navigate(`/catalog?cat=${c.id}`)}>
-                  <div className="filter-checkbox" style={filterCat === c.id ? { background: 'var(--accent)', borderColor: 'var(--accent)' } : {}}>
-                    {filterCat === c.id && <span style={{ color: '#fff', fontSize: '.7rem', fontWeight: 700, margin: 'auto' }}>✓</span>}
-                  </div>
+                <div key={c.id} className={`filter-option ${filterCat === c.id ? 'checked' : ''}`} onClick={() => navigate(`/catalog?cat=${c.id}`)}>
+                  <div className="filter-checkbox"></div>
                   <span className="filter-label">{c.label}</span>
                   <span className="filter-count">{c.count}</span>
                 </div>
@@ -83,38 +66,16 @@ const Catalog = () => {
             </div>
           </div>
           <div className="filter-section">
-            <div className="filter-section-title">Nivel</div>
-            <button className={`level-btn ${activeLevel === 'todos' ? 'active' : ''}`} onClick={() => setActiveLevel('todos')}>Todos los niveles</button>
-            <button className={`level-btn ${activeLevel === 'principiante' ? 'active' : ''}`} onClick={() => setActiveLevel('principiante')}>🌱 Principiante</button>
-            <button className={`level-btn ${activeLevel === 'intermedio' ? 'active' : ''}`} onClick={() => setActiveLevel('intermedio')}>🚀 Intermedio</button>
-            <button className={`level-btn ${activeLevel === 'avanzado' ? 'active' : ''}`} onClick={() => setActiveLevel('avanzado')}>⚡ Avanzado</button>
-          </div>
-          <div className="filter-section">
             <div className="filter-section-title">Precio</div>
             <div className={`filter-option ${filters.free ? 'checked' : ''}`} onClick={() => toggleFilter('free')}>
               <div className="filter-checkbox"></div>
               <span className="filter-label">Gratuitos</span>
-              <span className="filter-count">12</span>
+              <span className="filter-count">{freeCount}</span>
             </div>
             <div className={`filter-option ${filters.paid ? 'checked' : ''}`} onClick={() => toggleFilter('paid')}>
               <div className="filter-checkbox"></div>
               <span className="filter-label">De pago</span>
-              <span className="filter-count">48</span>
-            </div>
-          </div>
-          <div className="filter-section">
-            <div className="filter-section-title">Duración</div>
-            <div className={`filter-option ${filters.short ? 'checked' : ''}`} onClick={() => toggleFilter('short')}>
-              <div className="filter-checkbox"></div>
-              <span className="filter-label">Menos de 3h</span>
-            </div>
-            <div className={`filter-option ${filters.medium ? 'checked' : ''}`} onClick={() => toggleFilter('medium')}>
-              <div className="filter-checkbox"></div>
-              <span className="filter-label">3 – 10 horas</span>
-            </div>
-            <div className={`filter-option ${filters.long ? 'checked' : ''}`} onClick={() => toggleFilter('long')}>
-              <div className="filter-checkbox"></div>
-              <span className="filter-label">Más de 10 horas</span>
+              <span className="filter-count">{paidCount}</span>
             </div>
           </div>
           <button className="btn btn-ghost btn-full btn-sm" onClick={clearFilters}>Limpiar filtros</button>
@@ -138,26 +99,28 @@ const Catalog = () => {
             </select>
           </div>
           
+          {courses.length === 0 ? (
+            <div className="empty-state">
+              <div className="es-icon">🚧</div>
+              <p>Estamos preparando nuestro catálogo de talleres. ¡Vuelve pronto!</p>
+            </div>
+          ) : (
           <div className="courses-grid">
             {courses.map(c => {
               const priceInfo = getPriceBadge(c.price, c.enrolled);
               return (
                 <div className="course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
-                  <div className="course-thumb" style={{ background: `linear-gradient(135deg, ${c.color})` }}>
-                    <div className="course-thumb-bg">{c.emoji}</div>
+                  <div className="course-thumb">
+                    <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="course-thumb-img" />
                     <div className="play-overlay"><div className="play-btn-sm"><Play size={20} fill="currentColor" /></div></div>
-                    <div className="course-duration">{c.duration}</div>
+                    {c.duration && <div className="course-duration">{c.duration}</div>}
                   </div>
                   <div className="course-body">
-                    <div className="course-meta">
-                      {c.badge && <span className="badge badge-accent">{c.badge}</span>}
-                      <span className="badge badge-sky" style={{ fontSize: '.65rem' }}>{c.level}</span>
-                    </div>
+                    {c.badge && <div className="course-meta"><span className="badge badge-accent">{c.badge}</span></div>}
                     <div className="course-title">{c.title}</div>
                     <div className="course-instructor">por {c.instructor}</div>
                     <div className="course-stats-row">
-                      <div className="course-rating">⭐ {c.rating} <span>({(c.students/1000).toFixed(1)}k)</span></div>
-                      <div className={priceInfo.className}>{priceInfo.text}</div>
+                      <span className={priceInfo.className}>{priceInfo.text}</span>
                     </div>
                   </div>
                   {c.enrolled && c.progress > 0 && (
@@ -170,6 +133,7 @@ const Catalog = () => {
               );
             })}
           </div>
+          )}
         </div>
       </div>
     </div>

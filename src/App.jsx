@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
 
 // Pages
 import Home from './pages/Home';
@@ -30,15 +32,28 @@ const ProtectedRoute = ({ children }) => {
 // Role-based Route protection
 const RoleRoute = ({ children, allowedRoles }) => {
   const { currentUser } = useAuth();
-  
+
   if (!currentUser) return <Navigate to="/login" replace />;
   if (!allowedRoles.includes(currentUser.role)) return <Navigate to="/" replace />;
-  
+
   return children;
+};
+
+// "/" es el catálogo de talleres pensado para estudiantes. Un docente o
+// admin que aterriza ahí no tiene nada que hacer en esa vista -- su propio
+// panel (con lo que sí gestionan) ya vive en /teacher y /admin.
+const RoleHome = () => {
+  const { currentUser } = useAuth();
+
+  if (currentUser?.role === 'admin') return <Navigate to="/admin" replace />;
+  if (currentUser?.role === 'teacher') return <Navigate to="/teacher" replace />;
+  return <Home />;
 };
 
 function App() {
   return (
+    <ThemeProvider>
+    <CourseOfferingsProvider>
     <AuthProvider>
       <UIProvider>
         <BrowserRouter>
@@ -52,7 +67,7 @@ function App() {
           <Route path="/course/:id" element={<CourseDetail />} />
 
           {/* Protected Routes */}
-          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
           <Route path="/my-learning" element={<ProtectedRoute><MyLearning /></ProtectedRoute>} />
           <Route path="/live" element={<ProtectedRoute><LiveClasses /></ProtectedRoute>} />
@@ -70,6 +85,8 @@ function App() {
         </BrowserRouter>
       </UIProvider>
     </AuthProvider>
+    </CourseOfferingsProvider>
+    </ThemeProvider>
   );
 }
 
