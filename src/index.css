@@ -884,6 +884,7 @@ body::before {
 .notif-item.unread .notif-dot { opacity: 1; }
 .notif-title { font-size: .9rem; font-weight: 500; margin-bottom: 4px; line-height: 1.4; color: var(--text); }
 .notif-time { font-size: .75rem; color: var(--text3); }
+.notif-empty { padding: 56px 24px; text-align: center; color: var(--text3); font-size: .9rem; }
 
 /* ═══════════════════════════════════════════════════
    RESPONSIVE
@@ -891,6 +892,9 @@ body::before {
 @media (max-width: 480px) {
   #view-login.active { padding: 16px; align-items: flex-start; padding-top: 48px; }
   .login-card { border-radius: var(--r-lg); }
+  /* Antes el sidebar quedaba fijo en 340px, más ancho que la pantalla en
+     teléfonos chicos (320-360px) -- se salía del viewport. */
+  .notification-sidebar { width: 100vw; }
 }
 
 @media (max-width: 900px) {
