@@ -1,10 +1,126 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUI } from '../context/UIContext';
 import { useAuth } from '../context/AuthContext';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import { Search, Rocket } from 'lucide-react';
-import { fetchAllUsers, updateUserRole, updateCourseOffering } from '../lib/db';
+import { Search, Rocket, Radio, LogIn, XCircle, Trash2 } from 'lucide-react';
+import { fetchAllUsers, updateUserRole, updateCourseOffering, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent } from '../lib/db';
+import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
+
+const LIVE_STATUS_BADGE = {
+  live:      { label: '🔴 En vivo', className: 'badge badge-rose' },
+  upcoming:  { label: '📅 Próxima', className: 'badge badge-sky' },
+  ended:     { label: '✔ Finalizada', className: 'badge badge-accent' },
+  cancelled: { label: '❌ Cancelada', className: 'badge badge-rose' },
+};
+
+// Visibilidad del Admin sobre lo que hacen los docentes: cuánto contenido
+// real tiene armado cada curso, y todas las clases en vivo de la
+// plataforma (de cualquier docente, no solo las propias) con su estado
+// real y la posibilidad de cancelarlas/eliminarlas si hace falta.
+const ActivityTab = () => {
+  const { addToast } = useUI();
+  const navigate = useNavigate();
+  const { courses: COURSES } = useCourseOfferings();
+  const [sessions, setSessions] = useState([]);
+  const [contentCounts, setContentCounts] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    Promise.all([
+      fetchLiveSessions(),
+      Promise.all(COURSES.map((c) =>
+        fetchCourseContent(c.id).then((data) => [c.id, (data.modules || []).reduce((sum, m) => sum + m.lessons.length, 0)])
+      )),
+    ]).then(([allSessions, counts]) => {
+      setSessions(allSessions);
+      setContentCounts(Object.fromEntries(counts));
+      setLoading(false);
+    });
+  }, [COURSES]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleCancel = async (session) => {
+    if (!confirm(`¿Cancelar "${session.title}"? Los estudiantes verán la clase marcada como cancelada.`)) return;
+    await cancelLiveSession(session.id);
+    addToast('Clase cancelada.', 'success');
+    load();
+  };
+
+  const handleDelete = async (session) => {
+    if (!confirm(`¿Eliminar "${session.title}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    await deleteLiveSession(session.id);
+    addToast('Clase eliminada.', 'success');
+    load();
+  };
+
+  if (loading) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)' }}>Cargando actividad...</div>;
+  }
+
+  const sortedSessions = [...sessions].sort((a, b) => new Date(b.startsAt) - new Date(a.startsAt));
+
+  return (
+    <div className="anim-fade-up d1" style={{ paddingTop: '32px' }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+        <h3 style={{ marginBottom: '8px' }}>Contenido publicado por curso</h3>
+        <p style={{ color: 'var(--text2)', marginBottom: '20px' }}>Cuántas lecciones tiene armadas cada docente en "Contenido del Curso".</p>
+        <div style={{ display: 'grid', gap: '10px' }}>
+          {COURSES.map((c) => {
+            const count = contentCounts[c.id] || 0;
+            return (
+              <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'var(--bg)', borderRadius: 'var(--r-sm)', border: '1px solid var(--border)' }}>
+                <span style={{ fontWeight: 500 }}>{c.title}</span>
+                <span className={`badge ${count > 0 ? 'badge-green' : 'badge-amber'}`}>
+                  {count > 0 ? `${count} lección${count === 1 ? '' : 'es'}` : 'Sin contenido'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '30px', border: '1px solid var(--border)' }}>
+        <h3 style={{ marginBottom: '8px' }}><Radio size={18} style={{ verticalAlign: '-3px', marginRight: '6px' }} />Clases en vivo</h3>
+        <p style={{ color: 'var(--text2)', marginBottom: '20px' }}>De todos los docentes: programadas, en vivo, finalizadas o canceladas.</p>
+
+        {sortedSessions.length === 0 ? (
+          <div className="empty-state" style={{ padding: '24px' }}><p>Todavía no se ha programado ninguna clase en vivo.</p></div>
+        ) : (
+          sortedSessions.map((s) => {
+            const liveStatus = getLiveSessionStatus(s);
+            const status = LIVE_STATUS_BADGE[liveStatus] || LIVE_STATUS_BADGE.upcoming;
+            const joinable = liveStatus === 'live' || liveStatus === 'upcoming';
+            const canCancel = liveStatus === 'upcoming' || liveStatus === 'live';
+            return (
+              <div key={s.id} style={{ padding: '14px 16px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 'var(--r-sm)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div>
+                  <span className={status.className} style={{ marginBottom: '6px', display: 'inline-block' }}>{status.label}</span>
+                  <div style={{ fontWeight: 600, fontSize: '.92rem' }}>{s.title}</div>
+                  <div style={{ fontSize: '.8rem', color: 'var(--text2)' }}>{s.courseTitle} · {s.instructor}</div>
+                  <div style={{ fontSize: '.78rem', color: 'var(--text3)' }}>{new Date(s.startsAt).toLocaleString('es-PE')}</div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {joinable && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/live/${s.id}`)}><LogIn size={14} /> Ver sala</button>
+                  )}
+                  {canCancel && (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => handleCancel(s)}><XCircle size={14} /> Cancelar</button>
+                  )}
+                  {!canCancel && (
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--rose)' }} onClick={() => handleDelete(s)}><Trash2 size={14} /> Eliminar</button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
 
 // Lista de demo: se reemplaza automáticamente por los docs reales de
 // Firestore (`users`) en cuanto hay un proyecto Firebase conectado.
@@ -114,11 +230,12 @@ const AdminDashboard = () => {
   return (
     <div className="view active" style={{ padding: '40px', maxWidth: '1200px', margin: '0 auto' }}>
       <h1 style={{ marginBottom: '8px' }}>Panel de Administrador</h1>
-      <p style={{ color: 'var(--text2)', marginBottom: '30px' }}>Gestiona los talleres y los usuarios de la plataforma.</p>
+      <p style={{ color: 'var(--text2)', marginBottom: '30px' }}>Gestiona los talleres, los usuarios y la actividad de la plataforma.</p>
 
       <div className="my-learning-tabs">
         <button className={`ml-tab ${activeTab === 'workshops' ? 'active' : ''}`} onClick={() => setActiveTab('workshops')}>Talleres</button>
         <button className={`ml-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Usuarios</button>
+        <button className={`ml-tab ${activeTab === 'activity' ? 'active' : ''}`} onClick={() => setActiveTab('activity')}>Actividad</button>
       </div>
 
       {activeTab === 'workshops' && (
@@ -203,6 +320,8 @@ const AdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {activeTab === 'activity' && <ActivityTab />}
 
     </div>
   );
