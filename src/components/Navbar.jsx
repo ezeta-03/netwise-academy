@@ -1,47 +1,23 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Bell, LogOut, Menu, X, Sun, Moon } from 'lucide-react';
+import { Bell, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
-import { useTheme } from '../context/ThemeContext';
-import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
+import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
-  const { theme, toggleTheme } = useTheme();
-  const { courses: COURSES } = useCourseOfferings();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchResults = searchQuery.trim()
-    ? COURSES.filter(c =>
-        c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.summary.toLowerCase().includes(searchQuery.toLowerCase())
-      ).slice(0, 5)
-    : [];
 
   // Cerrar sesión debe llevar al Inicio público (no logueado), no dejar que
   // la ruta protegida en la que estabas te rebote sola a /login.
   const handleLogout = async () => {
     await logout();
     navigate('/', { replace: true });
-  };
-
-  const goToSearchResult = (courseId) => {
-    setSearchQuery('');
-    setSearchOpen(false);
-    navigate(`/course/${courseId}`);
-  };
-
-  const handleSearchKeyDown = (e) => {
-    if (e.key === 'Enter' && searchResults.length > 0) goToSearchResult(searchResults[0].id);
-    if (e.key === 'Escape') { setSearchOpen(false); e.target.blur(); }
   };
 
   // Hide Navbar on Login, Player and active live-class room pages (similar to original design behavior)
@@ -56,24 +32,28 @@ const Navbar = () => {
     return parts[0].substring(0, 2).toUpperCase();
   };
 
-  // "Mi Aprendizaje" es el dashboard de progreso del estudiante -- no aplica
-  // a un docente o admin. "En Vivo" (la lista para unirse a una clase) tiene
-  // sentido para estudiante y docente, pero no para admin: su propia
-  // pestaña "Actividad" ya le muestra todas las clases con más control
-  // (cancelar/eliminar), así que mostrarle también la vista de estudiante
-  // sería redundante.
-  const navItems = [
-    { to: '/', label: 'Inicio' },
-    { to: '/catalog', label: 'Explorar' },
-    ...(currentUser?.role === 'student' ? [{ to: '/my-learning', label: 'Mi Aprendizaje' }] : []),
-    ...(currentUser?.role === 'student' || currentUser?.role === 'teacher' ? [{ to: '/live', label: 'En Vivo' }] : []),
-  ];
+  // Visitante (sin sesión): solo Cursos + Nuestra Metodología, como en el
+  // Figma. "Mi Aprendizaje" / "En Vivo" son navegación real de producto y
+  // solo tienen sentido una vez logueado -- ver nota de roles más abajo.
+  const navItems = currentUser
+    ? [
+        { to: '/catalog', label: 'Explorar' },
+        ...(currentUser.role === 'student' ? [{ to: '/my-learning', label: 'Mi Aprendizaje' }] : []),
+        ...(currentUser.role === 'student' || currentUser.role === 'teacher' ? [{ to: '/live', label: 'En Vivo' }] : []),
+      ]
+    : [
+        { to: '/catalog', label: 'Cursos' },
+        { to: '/', label: 'Nuestra Metodología' },
+      ];
 
   return (
     <>
+      {location.pathname === '/' && (
+        <div className="home-promo">Promociones y descuentos disponibles hasta el 30/09</div>
+      )}
       <nav className="navbar" id="navbar">
         <Link to="/" className="nav-logo">
-          <span className="logo-dot"></span> Netwise Academy
+          <img src={logoNetwise} alt="Netwise Academy" className="nav-logo-img" />
         </Link>
 
         <div className="nav-links">
@@ -83,41 +63,6 @@ const Navbar = () => {
         </div>
 
         <div className="nav-right">
-          <div className="search-bar" style={{ position: 'relative' }}>
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              placeholder="Buscar cursos..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
-              onFocus={() => setSearchOpen(true)}
-              onBlur={() => setTimeout(() => setSearchOpen(false), 150)}
-              onKeyDown={handleSearchKeyDown}
-            />
-            {searchOpen && searchQuery.trim() && (
-              <div className="search-dropdown">
-                {searchResults.length > 0 ? searchResults.map(c => (
-                  <div key={c.id} className="search-dropdown-item" onMouseDown={() => goToSearchResult(c.id)}>
-                    <img src={COURSE_THUMBNAILS[c.id]} alt="" />
-                    <div>
-                      <div className="search-dropdown-title">{c.title}</div>
-                      <div className="search-dropdown-meta">{c.instructor}</div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="search-dropdown-empty">Sin resultados para "{searchQuery}"</div>
-                )}
-              </div>
-            )}
-          </div>
-          <button className="btn-icon" title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} onClick={toggleTheme}>
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-          <button className="btn-icon" title="Notificaciones" onClick={toggleSidebar} style={{ position: 'relative' }}>
-            <Bell size={18} />
-            {unreadCount > 0 && <span style={{ position: 'absolute', top: -2, right: -2, background: 'var(--rose)', width: 10, height: 10, borderRadius: '50%' }}></span>}
-          </button>
-
           {currentUser ? (
             <div className="nav-right-user nav-desktop-only">
               {currentUser.role === 'admin' && (
@@ -126,6 +71,11 @@ const Navbar = () => {
               {currentUser.role === 'teacher' && (
                 <Link to="/teacher" className="nav-link" style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--amber)' }}>Mis Cursos</Link>
               )}
+
+              <button className="btn-icon" title="Notificaciones" onClick={toggleSidebar} style={{ position: 'relative' }}>
+                <Bell size={18} />
+                {unreadCount > 0 && <span style={{ position: 'absolute', top: -2, right: -2, background: 'var(--rose)', width: 10, height: 10, borderRadius: '50%' }}></span>}
+              </button>
 
               <Link to="/profile" className="nav-avatar" title="Mi Perfil" style={{ textDecoration: 'none' }}>
                 {currentUser.displayName ? getInitials(currentUser.displayName) : getInitials(currentUser.email)}
@@ -136,7 +86,10 @@ const Navbar = () => {
               </button>
             </div>
           ) : (
-            <Link to="/login" className="btn btn-primary btn-sm nav-desktop-only">Iniciar sesión</Link>
+            <div className="nav-right-guest nav-desktop-only">
+              <Link to="/login" className="btn btn-ghost btn-sm">Plataforma</Link>
+              <Link to="/login" className="btn btn-primary btn-sm nav-cta">Inscribirme</Link>
+            </div>
           )}
 
           <button className="hamburger-btn" title="Menú" onClick={() => setIsMenuOpen(true)}>
@@ -149,7 +102,7 @@ const Navbar = () => {
 
       <div className={`mobile-menu ${isMenuOpen ? 'open' : ''}`}>
         <div className="mm-header">
-          <span className="nav-logo"><span className="logo-dot"></span> Netwise Academy</span>
+          <img src={logoNetwise} alt="Netwise Academy" className="nav-logo-img" />
           <button className="btn-icon" onClick={() => setIsMenuOpen(false)}><X size={18} /></button>
         </div>
 
@@ -174,18 +127,13 @@ const Navbar = () => {
           {currentUser && <Link to="/profile" className="mm-link" onClick={closeMenu}>Mi Perfil</Link>}
         </div>
 
-        <button className="mm-theme-toggle" onClick={toggleTheme}>
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-          {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
-        </button>
-
         <div className="mm-footer">
           {currentUser ? (
             <button className="btn btn-ghost btn-full" onClick={() => { closeMenu(); handleLogout(); }}>
               <LogOut size={16} /> Cerrar sesión
             </button>
           ) : (
-            <Link to="/login" className="btn btn-primary btn-full" onClick={closeMenu}>Iniciar sesión</Link>
+            <Link to="/login" className="btn btn-primary btn-full" onClick={closeMenu}>Inscribirme</Link>
           )}
         </div>
       </div>

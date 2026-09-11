@@ -1,152 +1,214 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ChevronDown, Video, Clock3, MessageSquare, FolderOpen, Target, Sparkles } from 'lucide-react';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import CourseInfoModal from '../components/CourseInfoModal';
 
-// Fotos panorámicas del hero (ver src/assets/hero). Se sirven en .webp
-// (comprimidas desde los .png originales, ~95% menos peso, misma calidad
-// visual) para que el Inicio cargue rápido.
-import desktop1 from '../assets/hero/desktop-1.webp';
-import desktop2 from '../assets/hero/desktop-2.webp';
-import desktop3 from '../assets/hero/desktop-3.webp';
-import desktop4 from '../assets/hero/desktop-4.webp';
-import tablet1 from '../assets/hero/tablet-1.webp';
-import tablet2 from '../assets/hero/tablet-2.webp';
-import tablet3 from '../assets/hero/tablet-3.webp';
-import tablet4 from '../assets/hero/tablet-4.webp';
-import movil1 from '../assets/hero/movil-1.webp';
-import movil2 from '../assets/hero/movil-2.webp';
-import movil3 from '../assets/hero/movil-3.webp';
-import movil4 from '../assets/hero/movil-4.webp';
+import heroImg from '../assets/NETWISE ACADEMY WEB/hero_principal.webp';
+import aprendeImg from '../assets/NETWISE ACADEMY WEB/aprende.webp';
+import aplicaImg from '../assets/NETWISE ACADEMY WEB/aplica.webp';
+import creceImg from '../assets/NETWISE ACADEMY WEB/crece.webp';
+import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
+import zoozmagoLogo from '../assets/NETWISE ACADEMY WEB/zoozmago_logo.webp';
+import videoFuturo from '../assets/NETWISE ACADEMY WEB/videos/video_futuro.mp4';
 
-const HERO_SLIDES = [
+const METHOD_STEPS = [
   {
-    id: 1, label: 'Redes Sociales & IA',
-    description: 'Del contenido manual a la creación asistida por Inteligencia Artificial para multiplicar la productividad de marca.',
-    desktop: desktop1, tablet: tablet1, mobile: movil1,
+    id: 'aprende',
+    title: 'Aprende',
+    image: aprendeImg,
+    desc: 'Conoce herramientas actuales en clases en vivo. Pregunta, comparte y aprende junto a personas que también quieren avanzar.',
   },
   {
-    id: 2, label: 'Branding & Marca',
-    description: 'Construcción de identidad de marca sólida: desde el propósito hasta el manual de aplicación para canales digitales.',
-    desktop: desktop2, tablet: tablet2, mobile: movil2,
+    id: 'aplica',
+    title: 'Aplica',
+    image: aplicaImg,
+    desc: 'Trabaja sobre tu negocio, tu marca o una idea propia. Cada clase se convierte en un avance que recibe feedback.',
   },
   {
-    id: 3, label: 'Marketing Digital',
-    description: 'Estrategia y ejecución integral: Meta/Google Ads, SEO, automatizaciones y analítica para generar resultados.',
-    desktop: desktop3, tablet: tablet3, mobile: movil3,
+    id: 'crece',
+    title: 'Crece',
+    image: creceImg,
+    desc: 'Termina con un resultado que puedes mostrar y utilizar. Convierte lo aprendido en el siguiente paso de tu carrera o negocio.',
   },
-  {
-    id: 4, label: 'Emprendimiento Digital',
-    description: 'De la idea al negocio validado: modelo Canvas, Producto Mínimo Viable (MVP) y plan de lanzamiento a 90 días.',
-    desktop: desktop4, tablet: tablet4, mobile: movil4,
-  },
+];
+
+const FEATURES = [
+  { icon: Video, title: 'Clases en vivo', desc: 'Dos sesiones de 2 horas por semana, con espacio para preguntar y aprender junto al docente.', tag: '4 horas por semana' },
+  { icon: MessageSquare, title: 'Feedback docente', desc: 'Revisión de tus entregables y comentarios concretos para mejorar cada avance.', tag: 'Acompañamiento' },
+  { icon: FolderOpen, title: 'Recursos de consulta', desc: 'Materiales de apoyo para repasar lo trabajado y practicar entre sesiones.', tag: 'A tu propio ritmo' },
+  { icon: Target, title: 'Proyecto aplicado', desc: 'Un entregable por módulo y un proyecto final desarrollado sobre tu marca, negocio o idea.', tag: 'Resultado final' },
 ];
 
 const Home = () => {
   const navigate = useNavigate();
   const { courses: COURSES } = useCourseOfferings();
-  const [activeSlide, setActiveSlide] = useState(0);
-  const [infoSlide, setInfoSlide] = useState(null);
-  const rowRef = useRef(null);
+  const [activeStep, setActiveStep] = useState(METHOD_STEPS[0].id);
 
-  useEffect(() => {
-    const id = setInterval(() => setActiveSlide((s) => (s + 1) % HERO_SLIDES.length), 5500);
-    return () => clearInterval(id);
-  }, []);
-
-  // Sólo hay 4 talleres -- se muestran los 4, una sola vez, nada más. La
-  // fila simplemente scrollea (con flechas en desktop, gesto táctil en
-  // móvil) hasta donde llegue el contenido real, sin loop ni duplicados.
-  const scrollRow = (direction) => {
-    const el = rowRef.current;
-    if (!el) return;
-    el.scrollBy({ left: direction * el.clientWidth * 0.8, behavior: 'smooth' });
+  const scrollToCourses = () => {
+    document.getElementById('talleres')?.scrollIntoView({ behavior: 'smooth' });
   };
-
-  const slide = HERO_SLIDES[activeSlide];
-
-  const getPriceLabel = (price) => {
-    if (price == null) return 'Precio por confirmar';
-    if (price === 0) return 'Gratis';
-    return `S/ ${price}`;
+  const scrollToMethod = () => {
+    document.getElementById('metodologia')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
     <div className="view active">
-      <div className="nf-hero anim-fade-up d1">
-        <div className="nf-hero-media" key={activeSlide}>
-          <picture>
-            <source media="(min-width: 1280px)" srcSet={slide.desktop} />
-            <source media="(min-width: 768px)" srcSet={slide.tablet} />
-            <img src={slide.mobile} alt={slide.label} loading={activeSlide === 0 ? 'eager' : 'lazy'} />
-          </picture>
-          <div className="nf-hero-gradient"></div>
-        </div>
-
-        <div className="nf-hero-content">
-          <div className="nf-hero-kicker">Taller {activeSlide + 1} de {HERO_SLIDES.length}</div>
-          <h1 className="nf-hero-title">{slide.label}</h1>
-          <div className="nf-hero-tags">
-            <span>Taller práctico</span><span>3 meses</span><span>100% Online</span>
-            <span>{getPriceLabel(COURSES.find((c) => c.id === slide.id)?.price)}</span>
-          </div>
-          <p className="nf-hero-desc">{slide.description}</p>
-          <div className="nf-hero-actions">
-            <button className="btn-nf btn-nf-play" onClick={() => navigate(`/course/${slide.id}`)}>
-              <Play size={18} fill="currentColor" /> Ver taller
+      {/* HERO */}
+      <section className="home-hero anim-fade-up d1">
+        <div className="home-hero-left">
+          <h1 className="home-hero-title">
+            <span>Aprende.</span>
+            <span>Aplica.</span>
+            <em>Crece.</em>
+          </h1>
+          <p className="home-hero-desc">
+            Talleres de IA, marketing y negocios para convertir lo que sabes en lo que ya eres capaz de hacer.
+          </p>
+          <div className="home-hero-actions">
+            <button className="btn btn-primary btn-lg" onClick={scrollToCourses}>
+              Encuentra tu taller <ArrowRight size={18} />
             </button>
-            <button className="btn-nf btn-nf-info" onClick={() => setInfoSlide(slide)}>
-              <Info size={18} /> Más información
+            <button className="btn btn-ghost btn-lg" onClick={scrollToMethod}>
+              Cómo es el método <ChevronDown size={18} />
             </button>
           </div>
         </div>
-
-        <div className="nf-hero-dots">
-          {HERO_SLIDES.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              className={`nf-dot ${i === activeSlide ? 'active' : ''}`}
-              aria-label={`Ver ${s.label}`}
-              onClick={() => setActiveSlide(i)}
-            />
-          ))}
+        <div className="home-hero-right">
+          <div className="home-hero-media">
+            <img src={heroImg} alt="Estudiante de Netwise Academy" />
+          </div>
+          <span className="home-hero-tag home-hero-tag-top"><Sparkles size={14} /> Clases en vivo</span>
+          <span className="home-hero-tag home-hero-tag-bottom"><Sparkles size={14} /> Talleres 100% prácticos</span>
         </div>
-      </div>
+      </section>
 
-      <div className="nf-row">
-        <div className="nf-row-header">
-          <h2 className="nf-row-title">Nuestros talleres</h2>
-        </div>
-        <div className="nf-row-wrap">
-          <button className="nf-row-arrow nf-row-arrow-left" aria-label="Ver talleres anteriores" onClick={() => scrollRow(-1)}>
-            <ChevronLeft size={22} />
-          </button>
-          <div className="nf-row-scroll" ref={rowRef}>
+      {/* TALLERES + MÉTODO — bloque claro fijo (ver nota en index.css) */}
+      <div className="home-light-block">
+        <div className="home-section" id="talleres">
+          <div className="home-section-head">
+            <h2 className="home-section-title">Tu próximo paso<br />empieza <em>aquí.</em></h2>
+            <p className="home-section-sub">No necesitas saberlo todo. <br />Solo elegir por dónde empezar.</p>
+          </div>
+          <div className="home-courses-grid">
             {COURSES.map((c) => (
-              <div className="nf-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
-                <div className="nf-card-thumb">
-                  <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="nf-card-img" />
-                  {c.badge && <span className="badge badge-accent nf-card-badge">{c.badge}</span>}
+              <div className="home-course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
+                <div className="home-course-thumb">
+                  <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} />
                 </div>
-                <div className="nf-card-body">
-                  <div className="nf-card-title">{c.title}</div>
-                  <div className="nf-card-meta">por {c.instructor} · {getPriceLabel(c.price)}</div>
+                <div className="home-course-body">
+                  <div className="home-course-meta-row">
+                    <span className="home-course-tag">{c.cardTag}</span>
+                    <span className="home-course-live"><Video size={13} /> En vivo</span>
+                  </div>
+                  <div className="home-course-title">
+                    <span>{c.cardTitle[0]}</span>
+                    <span className="accent">{c.cardTitle[1]}</span>
+                  </div>
+                  <p className="home-course-desc">{c.cardDesc}</p>
+                  <div className="home-course-info">
+                    <Clock3 size={14} /> {c.duration} <span className="home-course-info-dot" /> {c.level}
+                  </div>
+                  <span className="home-course-link">Ver curso <ArrowUpRight size={16} /></span>
                 </div>
               </div>
             ))}
           </div>
-          <button className="nf-row-arrow nf-row-arrow-right" aria-label="Ver más talleres" onClick={() => scrollRow(1)}>
-            <ChevronRight size={22} />
-          </button>
+        </div>
+
+        <div className="home-section" id="metodologia">
+          <div className="home-section-head">
+            <h2 className="home-section-title">El mejor momento para<br />comenzar es <em>ahora.</em></h2>
+            <p className="home-section-sub">Una metodología que conecta lo que aprendes<br />con lo que de verdad quieres lograr.</p>
+          </div>
+          <div className="home-method">
+            <div className="home-method-steps">
+              {METHOD_STEPS.map((step, i) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  className={`home-method-step ${activeStep === step.id ? 'active' : ''}`}
+                  onClick={() => setActiveStep(step.id)}
+                >
+                  <span className="home-method-step-num">0{i + 1}</span>
+                  <div>
+                    <div className="home-method-step-title">{step.title} <ArrowUpRight size={16} /></div>
+                    <p className="home-method-step-desc">{step.desc}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="home-method-media">
+              {METHOD_STEPS.map((step) => (
+                <img
+                  key={step.id}
+                  src={step.image}
+                  alt={step.title}
+                  className={activeStep === step.id ? 'is-active' : ''}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style={{ height: '48px' }}></div>
+      {/* CÓMO APRENDES + CTA + FOOTER — un solo bloque oscuro (#141223) */}
+      <div className="home-dark-block">
+        <section>
+          <div className="home-section">
+            <div className="home-section-head home-section-head-center">
+              <h2 className="home-section-title">Una forma de aprender<br />que te ayuda a <em>avanzar.</em></h2>
+            </div>
+            <div className="home-features-grid">
+              {FEATURES.map((f) => (
+                <div key={f.title}>
+                  <f.icon className="home-feature-icon" size={26} />
+                  <div className="home-feature-title">{f.title}</div>
+                  <p className="home-feature-desc">{f.desc}</p>
+                  <span className="home-feature-tag">{f.tag} <ArrowUpRight size={14} /></span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
-      {infoSlide && <CourseInfoModal slide={infoSlide} onClose={() => setInfoSlide(null)} />}
+        {/* CTA */}
+        <section className="home-section home-cta-section">
+          <div className="home-cta">
+            <video className="home-cta-video" autoPlay loop muted playsInline>
+              <source src={videoFuturo} type="video/mp4" />
+            </video>
+            <div className="home-cta-overlay"></div>
+            <div className="home-cta-content">
+              <h2 className="home-cta-title">Empieza a formar tu<br />futuro <em>ahora.</em></h2>
+              <button className="btn btn-primary btn-lg" onClick={scrollToCourses}>
+                Encuentra tu taller <ArrowRight size={18} />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* FOOTER */}
+        <footer className="home-footer">
+          <div className="home-footer-inner">
+            <div>
+              <img src={logoNetwise} alt="Netwise Academy" className="home-footer-logo-img" />
+              <p className="home-footer-tagline">Talleres prácticos de IA, marketing y negocios digitales.</p>
+            </div>
+            <div>
+              <div className="home-footer-col-title">Navegación</div>
+              <div className="home-footer-links">
+                <button type="button" className="home-footer-link-btn" onClick={scrollToCourses}>Cursos</button>
+                <button type="button" className="home-footer-link-btn" onClick={scrollToMethod}>Nuestra metodología</button>
+              </div>
+            </div>
+          </div>
+          <div className="home-footer-bottom">
+            <span>© {new Date().getFullYear()} Netwise Academy</span>
+            <span className="home-footer-zoozmago">Una empresa de <img src={zoozmagoLogo} alt="Zoozmago Holding Group" /></span>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 };
