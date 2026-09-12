@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
 import { fetchMyPreregistrations, fetchMyEnrollments, fetchLiveSessions } from '../lib/db';
 import { buildStudentNotifications } from '../lib/notifications';
+import LoginModal from '../components/LoginModal';
 
 const UIContext = createContext();
 
@@ -15,6 +16,7 @@ export const UIProvider = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [readIds, setReadIds] = useState(new Set());
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const readStorageKey = currentUser ? `netwise_notifications_read_${currentUser.uid}` : null;
 
@@ -86,6 +88,9 @@ export const UIProvider = ({ children }) => {
   const notificationsWithRead = notifications.map((n) => ({ ...n, read: readIds.has(n.id) }));
   const unreadCount = notificationsWithRead.filter((n) => !n.read).length;
 
+  const openLoginModal = useCallback(() => setLoginModalOpen(true), []);
+  const closeLoginModal = useCallback(() => setLoginModalOpen(false), []);
+
   return (
     <UIContext.Provider value={{
       addToast,
@@ -94,7 +99,10 @@ export const UIProvider = ({ children }) => {
       closeSidebar,
       notifications: notificationsWithRead,
       unreadCount,
-      markAllRead
+      markAllRead,
+      loginModalOpen,
+      openLoginModal,
+      closeLoginModal,
     }}>
       {children}
 
@@ -138,6 +146,8 @@ export const UIProvider = ({ children }) => {
           )}
         </div>
       </div>
+
+      {loginModalOpen && <LoginModal onClose={closeLoginModal} />}
     </UIContext.Provider>
   );
 };

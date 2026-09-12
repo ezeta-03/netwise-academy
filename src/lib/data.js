@@ -7,9 +7,8 @@ export const CATEGORIES = [
   { id:'emprendimiento', label:'🚀 Emprendimiento Digital' },
 ];
 
-// Los 4 talleres reales del Pitch Deck. "price" y "duration" quedan en null
-// (aún no definidos) hasta que se confirme el precio y el cronograma de cada
-// cohorte; la UI muestra "por confirmar" en su lugar.
+// Los 4 talleres reales del Pitch Deck, ya con precio, descuento y horario de
+// clase confirmados (antes quedaban en null "hasta que se confirme").
 export const COURSES = [
   {
     id: 1,
@@ -26,7 +25,22 @@ export const COURSES = [
       'Proyecto final: calendario de 30 días activado con IA',
     ],
     badge: 'Nuevo',
-    price: null,
+    icon: 'sparkles',
+    outcomeHeadline: 'Crear una estrategia de redes que conecte con tu audiencia y medir qué contenido funciona.',
+    longDescription: [
+      'Descubre como darle dirección a la presencia digital de tu marca. En este curso recorrerás la auditoría de tus canales, la creación de contenidos con apoyo de IA y las estrategias de social selling, con clases online en vivo y trabajo sobre tu propio proyecto.',
+      'A lo largo de ocho semanas, conectarás lo que publicas con una audiencia y un objetivo. Desarrollarás un plan de contenidos, organizarás un recorrido de conversión y aprenderás a interpretar métricas para decidir qué mantener, probar o mejorar.',
+    ],
+    doableList: [
+      'Analizar tus canales y tu competencia para identificar oportunidades de comunicación.',
+      'Planificar contenidos y desarrollar guiones y piezas con apoyo de IA.',
+      'Organizar un embudo en WhatsApp Business y medir el desempeño de tu estrategia.',
+    ],
+    scheduleDays: ['Lunes', 'Miércoles'],
+    scheduleTime: '19:00-21:00',
+    projectFinal: 'Plan de contenidos, funnel y dashboard social',
+    price: 300,
+    promoPercent: 25,
     duration: '8 semanas',
     level: 'Nivel básico',
     cardTag: 'Contenido & IA',
@@ -48,7 +62,22 @@ export const COURSES = [
       'Manual de marca para canales digitales',
     ],
     badge: 'Nuevo',
-    price: null,
+    icon: 'fingerprint',
+    outcomeHeadline: 'Construir una marca con identidad propia y una experiencia coherente en cada punto de contacto.',
+    longDescription: [
+      'Construye una marca desde su estrategia hasta la forma en que se expresa y se vive. Trabajarás el propósito, la personalidad y el posicionamiento de tu proyecto, conectándolos con una identidad verbal y visual coherente.',
+      'Durante ocho semanas de clases en vivo, avanzarás en tu plataforma y manual de marca. También explorarás sus puntos de contacto y prepararás un plan de lanzamiento para presentar una propuesta reconocible y consistente.',
+    ],
+    doableList: [
+      'Definir el propósito, la personalidad y la propuesta de valor de tu marca.',
+      'Organizar su identidad visual y tono de voz en un manual de marca.',
+      'Diseñar sus puntos de contacto y preparar una estrategia de lanzamiento.',
+    ],
+    scheduleDays: ['Martes', 'Jueves'],
+    scheduleTime: '19:00-21:00',
+    projectFinal: 'Plataforma, manual y plan de lanzamiento de marca',
+    price: 360,
+    promoPercent: 25,
     duration: '8 semanas',
     level: 'Nivel básico',
     cardTag: 'Identidad & Diseño',
@@ -70,7 +99,22 @@ export const COURSES = [
       'Analítica y reportes con KPIs medibles',
     ],
     badge: 'Nuevo',
-    price: null,
+    icon: 'trending-up',
+    outcomeHeadline: 'Planificar campañas digitales y usar los datos para mejorar tus resultados.',
+    longDescription: [
+      'Aprende a conectar estrategia, captación y medición en un plan de marketing digital. El curso reúne fundamentos de growth e inbound, posicionamiento en buscadores, publicidad digital y analítica para trabajar cada etapa del recorrido de tus clientes.',
+      'En ocho semanas de clases en vivo, desarrollarás un embudo de conversión, propuestas de campañas y una página de captación. Usarás indicadores y tableros para analizar resultados y orientar la mejora de tus acciones.',
+    ],
+    doableList: [
+      'Diseñar un embudo de captación con objetivos e indicadores definidos.',
+      'Plantear acciones de SEO y campañas de búsqueda, conectadas con una página de captación.',
+      'Construir un tablero de métricas para evaluar y optimizar tus campañas.',
+    ],
+    scheduleDays: ['Lunes', 'Miércoles'],
+    scheduleTime: '21:00-23:00',
+    projectFinal: 'Embudo, campañas y dashboard de marketing',
+    price: 450,
+    promoPercent: 25,
     duration: '8 semanas',
     level: 'Nivel básico',
     cardTag: 'Growth & Performance',
@@ -92,7 +136,22 @@ export const COURSES = [
       'Plan de lanzamiento a 90 días',
     ],
     badge: 'Nuevo',
-    price: null,
+    icon: 'rocket',
+    outcomeHeadline: 'Validar tu idea, construir un MVP y preparar el lanzamiento de tu negocio digital.',
+    longDescription: [
+      'Transforma una idea en una propuesta de negocio que puedas poner a prueba. Aprenderás a investigar el problema que quieres resolver, definir tu modelo de negocio y construir una primera versión de tu producto digital con herramientas no-code y apoyo de IA.',
+      'Durante ocho semanas de clases en vivo, trabajarás la validación, el desarrollo de tu producto mínimo viable y la preparación de su salida al mercado. Organizarás tu propuesta en un pitch con proyección financiera para comunicar cómo funcionaría tu negocio.',
+    ],
+    doableList: [
+      'Validar el problema y la propuesta de valor de tu idea de negocio.',
+      'Construir un producto mínimo viable con herramientas no-code.',
+      'Preparar un plan de lanzamiento y un pitch con proyección financiera.',
+    ],
+    scheduleDays: ['Martes', 'Jueves'],
+    scheduleTime: '21:00-23:00',
+    projectFinal: 'MVP y pitch deck con proyección financiera',
+    price: 480,
+    promoPercent: 25,
     duration: '8 semanas',
     level: 'Nivel básico',
     cardTag: 'Negocios & Estrategia',

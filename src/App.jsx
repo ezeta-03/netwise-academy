@@ -8,18 +8,57 @@ import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
 
 // Pages
 import Home from './pages/Home';
+import Metodologia from './pages/Metodologia';
 import Login from './pages/Login';
 import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
+import Checkout from './pages/Checkout';
 import Player from './pages/Player';
-import MyLearning from './pages/MyLearning';
 import LiveClasses from './pages/LiveClasses';
 import LiveClassRoom from './pages/LiveClassRoom';
 
+// Alumno (panel propio con su sidebar, ver src/pages/student/StudentLayout.jsx)
+import StudentLayout from './pages/student/StudentLayout';
+import StudentInicio from './pages/student/StudentInicio';
+import StudentAgenda from './pages/student/StudentAgenda';
+import StudentCursos from './pages/student/StudentCursos';
+import StudentEntregas from './pages/student/StudentEntregas';
+import StudentSoporte from './pages/student/StudentSoporte';
+import StudentCourseLayout from './pages/student/StudentCourseLayout';
+import StudentCourseContenido from './pages/student/StudentCourseContenido';
+import StudentCourseSala from './pages/student/StudentCourseSala';
+import StudentCourseMateriales from './pages/student/StudentCourseMateriales';
+import StudentCourseProyecto from './pages/student/StudentCourseProyecto';
+import StudentCourseComunidad from './pages/student/StudentCourseComunidad';
+import StudentCourseIA from './pages/student/StudentCourseIA';
+
 // Phase 3 Dashboards
-import AdminDashboard from './pages/AdminDashboard';
-import TeacherDashboard from './pages/TeacherDashboard';
+// Docente (panel propio con su sidebar, ver src/pages/teacher/TeacherLayout.jsx)
+import TeacherLayout from './pages/teacher/TeacherLayout';
+import TeacherInicio from './pages/teacher/TeacherInicio';
+import TeacherAgenda from './pages/teacher/TeacherAgenda';
+import TeacherCursos from './pages/teacher/TeacherCursos';
+import TeacherSoporte from './pages/teacher/TeacherSoporte';
+import TeacherCourseLayout from './pages/teacher/TeacherCourseLayout';
+import TeacherCourseContenido from './pages/teacher/TeacherCourseContenido';
+import TeacherCourseSala from './pages/teacher/TeacherCourseSala';
+import TeacherCourseMateriales from './pages/teacher/TeacherCourseMateriales';
+import TeacherCourseProyecto from './pages/teacher/TeacherCourseProyecto';
+import TeacherCourseComunidad from './pages/teacher/TeacherCourseComunidad';
+import TeacherCourseIA from './pages/teacher/TeacherCourseIA';
 import Profile from './pages/Profile';
+
+// Admin (panel propio con su sidebar, ver src/pages/admin/AdminLayout.jsx)
+import AdminLayout from './pages/admin/AdminLayout';
+import AdminResumen from './pages/admin/AdminResumen';
+import AdminCursos from './pages/admin/AdminCursos';
+import AdminPromociones from './pages/admin/AdminPromociones';
+import AdminGrupos from './pages/admin/AdminGrupos';
+import AdminAlumnos from './pages/admin/AdminAlumnos';
+import AdminVentas from './pages/admin/AdminVentas';
+import AdminEquipo from './pages/admin/AdminEquipo';
+import AdminHistorial from './pages/admin/AdminHistorial';
+import AdminConfiguracion from './pages/admin/AdminConfiguracion';
 
 // Sin sesión, mandamos a "/" (Inicio público) y no a "/login": así el
 // usuario cae en una página navegable con un botón bien visible para
@@ -52,16 +91,17 @@ const RoleHome = () => {
 
   if (currentUser?.role === 'admin') return <Navigate to="/admin" replace />;
   if (currentUser?.role === 'teacher') return <Navigate to="/teacher" replace />;
+  if (currentUser?.role === 'student') return <Navigate to="/student" replace />;
   return <Home />;
 };
 
 function App() {
   return (
+    <BrowserRouter>
     <ThemeProvider>
     <CourseOfferingsProvider>
     <AuthProvider>
       <UIProvider>
-        <BrowserRouter>
           {/* Navbar hides itself on login/player routes internally via useLocation */}
           <Navbar />
         <div className="main-content">
@@ -70,28 +110,72 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RoleHome />} />
           <Route path="/catalog" element={<Catalog />} />
+          <Route path="/metodologia" element={<Metodologia />} />
           <Route path="/course/:id" element={<CourseDetail />} />
+          <Route path="/checkout/:courseId" element={<Checkout />} />
 
           {/* Protected Routes */}
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
-          <Route path="/my-learning" element={<ProtectedRoute><MyLearning /></ProtectedRoute>} />
           <Route path="/live" element={<ProtectedRoute><LiveClasses /></ProtectedRoute>} />
           <Route path="/live/:sessionId" element={<ProtectedRoute><LiveClassRoom /></ProtectedRoute>} />
 
           {/* Role-Specific Dashboards */}
-          <Route path="/admin" element={<RoleRoute allowedRoles={['admin']}><AdminDashboard /></RoleRoute>} />
-          <Route path="/teacher" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherDashboard /></RoleRoute>} />
+          <Route path="/admin" element={<RoleRoute allowedRoles={['admin']}><AdminLayout /></RoleRoute>}>
+            <Route index element={<Navigate to="resumen" replace />} />
+            <Route path="resumen" element={<AdminResumen />} />
+            <Route path="cursos" element={<AdminCursos />} />
+            <Route path="promociones" element={<AdminPromociones />} />
+            <Route path="grupos" element={<AdminGrupos />} />
+            <Route path="alumnos" element={<AdminAlumnos />} />
+            <Route path="ventas" element={<AdminVentas />} />
+            <Route path="equipo" element={<AdminEquipo />} />
+            <Route path="historial" element={<AdminHistorial />} />
+            <Route path="configuracion" element={<AdminConfiguracion />} />
+          </Route>
+          <Route path="/teacher" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherLayout /></RoleRoute>}>
+            <Route index element={<Navigate to="inicio" replace />} />
+            <Route path="inicio" element={<TeacherInicio />} />
+            <Route path="agenda" element={<TeacherAgenda />} />
+            <Route path="cursos" element={<TeacherCursos />} />
+            <Route path="soporte" element={<TeacherSoporte />} />
+          </Route>
+          <Route path="/teacher/curso/:courseId" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherCourseLayout /></RoleRoute>}>
+            <Route index element={<Navigate to="contenido" replace />} />
+            <Route path="contenido" element={<TeacherCourseContenido />} />
+            <Route path="sala" element={<TeacherCourseSala />} />
+            <Route path="materiales" element={<TeacherCourseMateriales />} />
+            <Route path="proyecto" element={<TeacherCourseProyecto />} />
+            <Route path="comunidad" element={<TeacherCourseComunidad />} />
+            <Route path="ia" element={<TeacherCourseIA />} />
+          </Route>
+          <Route path="/student" element={<RoleRoute allowedRoles={['student']}><StudentLayout /></RoleRoute>}>
+            <Route index element={<Navigate to="inicio" replace />} />
+            <Route path="inicio" element={<StudentInicio />} />
+            <Route path="agenda" element={<StudentAgenda />} />
+            <Route path="cursos" element={<StudentCursos />} />
+            <Route path="entregas" element={<StudentEntregas />} />
+            <Route path="soporte" element={<StudentSoporte />} />
+          </Route>
+          <Route path="/student/curso/:courseId" element={<RoleRoute allowedRoles={['student']}><StudentCourseLayout /></RoleRoute>}>
+            <Route index element={<Navigate to="contenido" replace />} />
+            <Route path="contenido" element={<StudentCourseContenido />} />
+            <Route path="sala" element={<StudentCourseSala />} />
+            <Route path="materiales" element={<StudentCourseMateriales />} />
+            <Route path="proyecto" element={<StudentCourseProyecto />} />
+            <Route path="comunidad" element={<StudentCourseComunidad />} />
+            <Route path="ia" element={<StudentCourseIA />} />
+          </Route>
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </div>
-        </BrowserRouter>
       </UIProvider>
     </AuthProvider>
     </CourseOfferingsProvider>
     </ThemeProvider>
+    </BrowserRouter>
   );
 }
 

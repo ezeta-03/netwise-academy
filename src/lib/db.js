@@ -215,17 +215,27 @@ export const updateCourseOffering = async (courseId, { price, startDate }, admin
     updatedAt: new Date().toISOString(),
     updatedBy: adminUid,
   };
+  return patchCourseOffering(courseId, payload);
+};
 
+// Visibilidad en la web, apertura de inscripciones y promoción -- controles
+// de "Cursos y precios" en el Admin. Un patch parcial: cada toggle solo
+// manda el campo que cambió, sin pisar el resto de la oferta.
+export const updateCourseVisibility = (courseId, visible) => patchCourseOffering(courseId, { visible });
+export const updateCourseEnrollmentsOpen = (courseId, enrollmentsOpen) => patchCourseOffering(courseId, { enrollmentsOpen });
+export const updateCoursePromo = (courseId, promoPercent) => patchCourseOffering(courseId, { promoPercent: promoPercent === '' || promoPercent == null ? null : Number(promoPercent) });
+
+const patchCourseOffering = async (courseId, patch) => {
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_course_offerings');
     const map = raw ? JSON.parse(raw) : {};
-    map[courseId] = payload;
+    map[courseId] = { ...map[courseId], ...patch };
     localStorage.setItem('mock_course_offerings', JSON.stringify(map));
-    return payload;
+    return map[courseId];
   }
 
-  await setDoc(doc(db, 'courseOfferings', courseId.toString()), payload, { merge: true });
-  return payload;
+  await setDoc(doc(db, 'courseOfferings', courseId.toString()), patch, { merge: true });
+  return patch;
 };
 
 // --- Contenido real de cada taller (colección Firestore `courseContent`) ---
@@ -305,6 +315,69 @@ export const enrollInCourse = async (uid, course) => {
   await setDoc(ref, payload);
 };
 
+// --- Todas las inscripciones, para el Admin (colección `enrollments`) ---
+// A diferencia de fetchMyEnrollments (filtrado por uid), esto trae TODOS
+// los registros de todos los alumnos, para "Alumnos y accesos".
+
+export const fetchAllEnrollments = async () => {
+  if (!isConfigValid) {
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('mock_enrollments_')) {
+        const map = JSON.parse(localStorage.getItem(key) || '{}');
+        Object.values(map).forEach((e) => rows.push(e));
+      }
+    }
+    return rows;
+  }
+
+  const snapshot = await getDocs(collection(db, 'enrollments'));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// Alta manual de matrícula desde el Admin (ej. pago fuera de línea) --
+// separado de enrollInCourse (que es el alumno inscribiéndose a sí mismo)
+// porque acá el admin puede dejarla "pending" para validar luego.
+export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, courseId, courseTitle, groupId, groupName, status, reason }) => {
+  const payload = {
+    uid: uid || `manual-${Date.now()}`,
+    studentName, studentEmail, courseId, courseTitle,
+    groupId: groupId || null, groupName: groupName || null,
+    status: status || 'active', reason: reason || 'Matrícula manual',
+    completedLessonIds: [], progress: 0,
+    enrolledAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const key = `mock_enrollments_${payload.uid}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    map[courseId] = payload;
+    localStorage.setItem(key, JSON.stringify(map));
+    return payload;
+  }
+
+  const ref = doc(collection(db, 'enrollments'));
+  await setDoc(ref, payload);
+  return { id: ref.id, ...payload };
+};
+
+export const updateEnrollmentAccess = async (enrollmentId, uid, courseId, { status, groupId, groupName, reason }) => {
+  const patch = { status, groupId: groupId || null, groupName: groupName || null, reason };
+
+  if (!isConfigValid) {
+    const key = `mock_enrollments_${uid}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    if (map[courseId]) {
+      map[courseId] = { ...map[courseId], ...patch };
+      localStorage.setItem(key, JSON.stringify(map));
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, 'enrollments', enrollmentId), patch);
+};
+
 export const markLessonComplete = async (uid, courseId, lessonId, totalLessons) => {
   if (!isConfigValid) {
     const key = `mock_enrollments_${uid}`;
@@ -329,4 +402,487 @@ export const markLessonComplete = async (uid, courseId, lessonId, totalLessons) 
   const payload = { uid, courseId, completedLessonIds, progress, updatedAt: new Date().toISOString() };
   await setDoc(ref, payload, { merge: true });
   return payload;
+};
+
+// --- Historial de cambios (colección Firestore `auditLog`) ---
+// Un registro simple de "quién hizo qué" en el Admin -- no es un sistema de
+// auditoría con antes/después, solo una bitácora legible para el equipo.
+
+export const fetchAuditLog = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_audit_log');
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'auditLog'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const logChange = async (actor, message) => {
+  const payload = { actor: actor || 'Admin', message, createdAt: new Date().toISOString() };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_audit_log');
+    const list = raw ? JSON.parse(raw) : [];
+    list.unshift({ id: `mock-${Date.now()}`, ...payload });
+    localStorage.setItem('mock_audit_log', JSON.stringify(list.slice(0, 200)));
+    return;
+  }
+
+  await addDoc(collection(db, 'auditLog'), payload);
+};
+
+// --- Cupones (colección Firestore `coupons`) ---
+
+export const fetchCoupons = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_coupons');
+    return raw ? JSON.parse(raw) : [];
+  }
+  const snapshot = await getDocs(collection(db, 'coupons'));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createCoupon = async (coupon) => {
+  const payload = { usedCount: 0, active: true, createdAt: new Date().toISOString(), ...coupon };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_coupons');
+    const list = raw ? JSON.parse(raw) : [];
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.push(withId);
+    localStorage.setItem('mock_coupons', JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'coupons'), payload);
+  return { id: ref.id, ...payload };
+};
+
+export const updateCoupon = async (couponId, patch) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_coupons');
+    const list = raw ? JSON.parse(raw) : [];
+    const next = list.map((c) => (c.id === couponId ? { ...c, ...patch } : c));
+    localStorage.setItem('mock_coupons', JSON.stringify(next));
+    return;
+  }
+  await updateDoc(doc(db, 'coupons', couponId), patch);
+};
+
+// --- Aulas / grupos (colección Firestore `groups`) ---
+// Una "aula" es una edición concreta de un curso: fechas, horario, docente y
+// cupo. Un mismo curso puede tener varias aulas abiertas a la vez.
+
+export const fetchGroups = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_groups');
+    return raw ? JSON.parse(raw) : [];
+  }
+  const snapshot = await getDocs(collection(db, 'groups'));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createGroup = async (group) => {
+  const payload = { enrolledCount: 0, status: 'open', createdAt: new Date().toISOString(), ...group };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_groups');
+    const list = raw ? JSON.parse(raw) : [];
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.push(withId);
+    localStorage.setItem('mock_groups', JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'groups'), payload);
+  return { id: ref.id, ...payload };
+};
+
+export const updateGroup = async (groupId, patch) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_groups');
+    const list = raw ? JSON.parse(raw) : [];
+    const next = list.map((g) => (g.id === groupId ? { ...g, ...patch } : g));
+    localStorage.setItem('mock_groups', JSON.stringify(next));
+    return;
+  }
+  await updateDoc(doc(db, 'groups', groupId), patch);
+};
+
+// --- Pedidos (colección Firestore `orders`) ---
+// Un registro por cada pago cobrado (Culqi u otro medio). Las matrículas
+// gratuitas o preinscripciones no generan pedido -- solo lo que sí cobra.
+
+export const fetchOrders = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_orders');
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createOrder = async ({ uid, studentName, courseId, courseTitle, amount, status }) => {
+  const existing = await fetchOrders();
+  const code = `NW-${String(existing.length + 1).padStart(4, '0')}`;
+  const payload = {
+    code, uid, studentName, courseId, courseTitle, amount,
+    status: status || 'paid',
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_orders');
+    const list = raw ? JSON.parse(raw) : [];
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.push(withId);
+    localStorage.setItem('mock_orders', JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'orders'), payload);
+  return { id: ref.id, ...payload };
+};
+
+// --- Equipo de la academia (colección Firestore `teamMembers`) ---
+// Directorio de quién participa y qué módulos podría administrar -- es una
+// propuesta de alcance, no un sistema de permisos que bloquea acciones. El
+// cambio de rol real (student/teacher/admin) sigue viviendo en `users`
+// (ver fetchAllUsers/updateUserRole), porque de ahí depende el acceso real
+// a rutas protegidas de la plataforma.
+
+export const fetchTeamMembers = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_team_members');
+    return raw ? JSON.parse(raw) : [];
+  }
+  const snapshot = await getDocs(collection(db, 'teamMembers'));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createTeamMember = async (member) => {
+  const payload = { status: 'active', createdAt: new Date().toISOString(), ...member };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_team_members');
+    const list = raw ? JSON.parse(raw) : [];
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.push(withId);
+    localStorage.setItem('mock_team_members', JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'teamMembers'), payload);
+  return { id: ref.id, ...payload };
+};
+
+export const updateTeamMember = async (memberId, patch) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_team_members');
+    const list = raw ? JSON.parse(raw) : [];
+    const next = list.map((m) => (m.id === memberId ? { ...m, ...patch } : m));
+    localStorage.setItem('mock_team_members', JSON.stringify(next));
+    return;
+  }
+  await updateDoc(doc(db, 'teamMembers', memberId), patch);
+};
+
+// --- Configuración de la academia (doc único Firestore `settings/academy`) ---
+
+const DEFAULT_ACADEMY_SETTINGS = {
+  name: 'Netwise Academy',
+  supportEmail: 'hola@netwiseacademy.com',
+  currency: 'PEN',
+  timezone: 'America/Lima',
+};
+
+export const fetchAcademySettings = async () => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_academy_settings');
+    return raw ? { ...DEFAULT_ACADEMY_SETTINGS, ...JSON.parse(raw) } : DEFAULT_ACADEMY_SETTINGS;
+  }
+  const docSnap = await getDoc(doc(db, 'settings', 'academy'));
+  return docSnap.exists() ? { ...DEFAULT_ACADEMY_SETTINGS, ...docSnap.data() } : DEFAULT_ACADEMY_SETTINGS;
+};
+
+export const saveAcademySettings = async (settings) => {
+  if (!isConfigValid) {
+    localStorage.setItem('mock_academy_settings', JSON.stringify(settings));
+    return settings;
+  }
+  await setDoc(doc(db, 'settings', 'academy'), settings, { merge: true });
+  return settings;
+};
+
+// --- Entregas de un módulo (colección Firestore `submissions`) ---
+// Un doc por alumno+módulo. No hay todavía un flujo real de "subir mi
+// entregable" del lado del alumno -- esto es lo que el docente usa para
+// llevar registro de a quién ya le revisó el entregable de cada módulo.
+
+export const fetchSubmissions = async (courseId, moduleId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_submissions_${courseId}_${moduleId}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'submissions'), where('courseId', '==', courseId), where('moduleId', '==', moduleId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note }) => {
+  const docId = `${uid}_${courseId}_${moduleId}`;
+  const payload = { courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note: note || '', updatedAt: new Date().toISOString() };
+
+  if (!isConfigValid) {
+    const key = `mock_submissions_${courseId}_${moduleId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = list.findIndex((s) => s.uid === uid);
+    if (idx >= 0) list[idx] = { ...list[idx], ...payload }; else list.push({ id: docId, ...payload });
+    localStorage.setItem(key, JSON.stringify(list));
+    return payload;
+  }
+
+  await setDoc(doc(db, 'submissions', docId), payload, { merge: true });
+  return payload;
+};
+
+// --- Seguimiento de un alumno en un curso (extiende `enrollments`) ---
+
+export const updateEnrollmentFollowUp = async (enrollmentId, uid, courseId, followUp) => {
+  if (!isConfigValid) {
+    const key = `mock_enrollments_${uid}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    if (map[courseId]) {
+      map[courseId] = { ...map[courseId], followUp };
+      localStorage.setItem(key, JSON.stringify(map));
+    }
+    return;
+  }
+  await updateDoc(doc(db, 'enrollments', enrollmentId), { followUp });
+};
+
+// --- Comunidad de un curso/grupo (colección Firestore `communityPosts`) ---
+
+export const fetchCommunityPosts = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_community_${courseId}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'communityPosts'), where('courseId', '==', courseId), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createCommunityPost = async ({ courseId, groupName, authorName, authorRole, isAnnouncement, title, body }) => {
+  const payload = { courseId, groupName, authorName, authorRole, isAnnouncement: !!isAnnouncement, title, body, comments: [], createdAt: new Date().toISOString() };
+
+  if (!isConfigValid) {
+    const key = `mock_community_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.unshift(withId);
+    localStorage.setItem(key, JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'communityPosts'), payload);
+  return { id: ref.id, ...payload };
+};
+
+export const addCommunityComment = async (courseId, postId, comment) => {
+  if (!isConfigValid) {
+    const key = `mock_community_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const next = list.map((p) => (p.id === postId ? { ...p, comments: [...(p.comments || []), comment] } : p));
+    localStorage.setItem(key, JSON.stringify(next));
+    return;
+  }
+  const ref = doc(db, 'communityPosts', postId);
+  const snap = await getDoc(ref);
+  const comments = snap.exists() ? (snap.data().comments || []) : [];
+  await updateDoc(ref, { comments: [...comments, comment] });
+};
+
+// --- Soporte y tutorías (colección Firestore `supportRequests`) ---
+
+export const fetchSupportRequests = async (requesterUid) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_support_${requesterUid}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'supportRequests'), where('requesterUid', '==', requesterUid), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createSupportRequest = async ({ requesterUid, requesterName, requesterRole, type, courseTitle, groupName, message }) => {
+  const payload = {
+    requesterUid, requesterName, requesterRole, type, courseTitle: courseTitle || null, groupName: groupName || null,
+    message: message || '', status: 'pending', createdAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const key = `mock_support_${requesterUid}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.unshift(withId);
+    localStorage.setItem(key, JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'supportRequests'), payload);
+  return { id: ref.id, ...payload };
+};
+
+// --- Leads del programa descargable (colección `programLeads`) ---
+// Captura de contacto antes de descargar el programa de un curso -- no
+// requiere cuenta, solo deja el interés registrado para seguimiento comercial.
+
+export const captureProgramLead = async ({ courseId, courseTitle, name, email, phone, marketingConsent }) => {
+  const payload = {
+    courseId, courseTitle, name, email, phone: phone || null,
+    marketingConsent: !!marketingConsent, createdAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_program_leads');
+    const list = raw ? JSON.parse(raw) : [];
+    list.push({ id: `mock-${Date.now()}`, ...payload });
+    localStorage.setItem('mock_program_leads', JSON.stringify(list));
+    return payload;
+  }
+
+  await addDoc(collection(db, 'programLeads'), payload);
+  return payload;
+};
+
+// --- Teléfono del usuario (extiende `users/{uid}`) ---
+// El registro base (AuthContext) solo pide nombre/correo; el checkout de un
+// curso también pide WhatsApp, así que se guarda aparte en vez de tocar el
+// flujo de registro genérico.
+
+export const saveUserPhone = async (uid, phone) => {
+  if (!isConfigValid) {
+    localStorage.setItem(`mock_user_phone_${uid}`, phone);
+    return;
+  }
+  await setDoc(doc(db, 'users', uid), { phone }, { merge: true });
+};
+
+// --- Canje de un cupón (extiende `coupons`) ---
+// Incrementa el contador de usos justo cuando se confirma un pago, no al
+// solo validarlo -- así un cupón consultado pero no usado no cuenta.
+
+export const redeemCoupon = async (couponId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_coupons');
+    const list = raw ? JSON.parse(raw) : [];
+    const next = list.map((c) => (c.id === couponId ? { ...c, usedCount: (c.usedCount || 0) + 1 } : c));
+    localStorage.setItem('mock_coupons', JSON.stringify(next));
+    return;
+  }
+  const ref = doc(db, 'coupons', couponId);
+  const snap = await getDoc(ref);
+  const current = snap.exists() ? (snap.data().usedCount || 0) : 0;
+  await updateDoc(ref, { usedCount: current + 1 });
+};
+
+// --- Perfil de negocio del proyecto del alumno (colección `projectProfiles`) ---
+// Un doc por alumno+curso: la empresa/marca/idea sobre la que trabaja durante
+// todo el curso (se define una sola vez, ver "Mi proyecto" del estudiante).
+
+export const fetchProjectProfile = async (uid, courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_project_profile_${uid}_${courseId}`);
+    return raw ? JSON.parse(raw) : null;
+  }
+  const docSnap = await getDoc(doc(db, 'projectProfiles', `${uid}_${courseId}`));
+  return docSnap.exists() ? docSnap.data() : null;
+};
+
+export const saveProjectProfile = async ({ uid, courseId, courseTitle, name, activity, sector, audience, description }) => {
+  const payload = { uid, courseId, courseTitle, name, activity, sector, audience, description, updatedAt: new Date().toISOString() };
+
+  if (!isConfigValid) {
+    localStorage.setItem(`mock_project_profile_${uid}_${courseId}`, JSON.stringify(payload));
+    return payload;
+  }
+
+  await setDoc(doc(db, 'projectProfiles', `${uid}_${courseId}`), payload);
+  return payload;
+};
+
+// --- Avances de práctica del proyecto (colección `projectAdvances`) ---
+// Qué puntos de "Contenidos y práctica" de cada módulo ya marcó el alumno
+// como aplicados a su proyecto -- independiente de si el docente ya validó
+// el módulo (eso sigue viviendo en `courseContent` -> deliverable.open).
+
+export const fetchProjectAdvances = async (uid, courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_project_advances_${uid}_${courseId}`);
+    return raw ? JSON.parse(raw) : {};
+  }
+  const q = query(collection(db, 'projectAdvances'), where('uid', '==', uid), where('courseId', '==', courseId));
+  const snapshot = await getDocs(q);
+  const map = {};
+  snapshot.forEach((d) => { map[d.data().moduleId] = d.data().checkedIndexes || []; });
+  return map;
+};
+
+export const toggleProjectAdvance = async (uid, courseId, moduleId, bulletIndex) => {
+  const docId = `${uid}_${courseId}_${moduleId}`;
+
+  if (!isConfigValid) {
+    const key = `mock_project_advances_${uid}_${courseId}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    const current = map[moduleId] || [];
+    map[moduleId] = current.includes(bulletIndex) ? current.filter((i) => i !== bulletIndex) : [...current, bulletIndex];
+    localStorage.setItem(key, JSON.stringify(map));
+    return map[moduleId];
+  }
+
+  const ref = doc(db, 'projectAdvances', docId);
+  const snap = await getDoc(ref);
+  const current = snap.exists() ? (snap.data().checkedIndexes || []) : [];
+  const checkedIndexes = current.includes(bulletIndex) ? current.filter((i) => i !== bulletIndex) : [...current, bulletIndex];
+  await setDoc(ref, { uid, courseId, moduleId, checkedIndexes }, { merge: true });
+  return checkedIndexes;
+};
+
+// --- Salas privadas de estudio (colección `privateRooms`) ---
+// Espacios de videollamada ad-hoc que un alumno arma con compañeros de su
+// mismo curso/grupo -- misma sala real de Jitsi que las clases en vivo, pero
+// sin necesitar programación del docente.
+
+export const fetchPrivateRooms = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_private_rooms_${courseId}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'privateRooms'), where('courseId', '==', courseId), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createPrivateRoom = async ({ courseId, courseTitle, groupName, name, createdByUid, createdByName, memberUids, memberNames }) => {
+  const roomName = `netwise-academy-private-${courseId}-${Date.now()}`;
+  const payload = {
+    courseId, courseTitle, groupName: groupName || null, name, roomName,
+    createdByUid, createdByName, memberUids: memberUids || [], memberNames: memberNames || [],
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const key = `mock_private_rooms_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.unshift(withId);
+    localStorage.setItem(key, JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'privateRooms'), payload);
+  return { id: ref.id, ...payload };
 };

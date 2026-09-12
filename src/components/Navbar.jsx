@@ -9,7 +9,7 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
-  const { toggleSidebar, unreadCount } = useUI();
+  const { toggleSidebar, unreadCount, openLoginModal } = useUI();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
 
@@ -21,7 +21,7 @@ const Navbar = () => {
   };
 
   // Hide Navbar on Login, Player and active live-class room pages (similar to original design behavior)
-  if (location.pathname === '/login' || location.pathname.startsWith('/player') || location.pathname.startsWith('/live/')) {
+  if (location.pathname === '/login' || location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout')) {
     return null;
   }
 
@@ -38,17 +38,16 @@ const Navbar = () => {
   const navItems = currentUser
     ? [
         { to: '/catalog', label: 'Explorar' },
-        ...(currentUser.role === 'student' ? [{ to: '/my-learning', label: 'Mi Aprendizaje' }] : []),
-        ...(currentUser.role === 'student' || currentUser.role === 'teacher' ? [{ to: '/live', label: 'En Vivo' }] : []),
+        ...(currentUser.role === 'student' ? [{ to: '/student', label: 'Mi Campus' }] : []),
       ]
     : [
         { to: '/catalog', label: 'Cursos' },
-        { to: '/', label: 'Nuestra Metodología' },
+        { to: '/metodologia', label: 'Nuestra Metodología' },
       ];
 
   return (
     <>
-      {location.pathname === '/' && (
+      {(location.pathname === '/' || location.pathname === '/metodologia') && (
         <div className="home-promo">Promociones y descuentos disponibles hasta el 30/09</div>
       )}
       <nav className="navbar" id="navbar">
@@ -87,8 +86,8 @@ const Navbar = () => {
             </div>
           ) : (
             <div className="nav-right-guest nav-desktop-only">
-              <Link to="/login" className="btn btn-ghost btn-sm">Plataforma</Link>
-              <Link to="/login" className="btn btn-primary btn-sm nav-cta">Inscribirme</Link>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={openLoginModal}>Plataforma</button>
+              <button type="button" className="btn btn-primary btn-sm nav-cta" onClick={openLoginModal}>Inscribirme</button>
             </div>
           )}
 
@@ -133,7 +132,7 @@ const Navbar = () => {
               <LogOut size={16} /> Cerrar sesión
             </button>
           ) : (
-            <Link to="/login" className="btn btn-primary btn-full" onClick={closeMenu}>Inscribirme</Link>
+            <button type="button" className="btn btn-primary btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Inscribirme</button>
           )}
         </div>
       </div>

@@ -1,0 +1,99 @@
+import React, { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { useUI } from '../../context/UIContext';
+import { useCourseOfferings } from '../../context/CourseOfferingsContext';
+import { fetchMyEnrollments } from '../../lib/db';
+import { fetchMyDeliverables } from '../../lib/studentDeliverables';
+import logoNetwise from '../../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
+
+const NAV_ITEMS = [
+  { to: '/student/inicio', label: 'Inicio', icon: Home },
+  { to: '/student/agenda', label: 'Agenda', icon: Calendar },
+  { to: '/student/cursos', label: 'Cursos', icon: BookOpen },
+  { to: '/student/entregas', label: 'Mis entregas', icon: CheckSquare },
+  { to: '/student/soporte', label: 'Soporte', icon: Headphones },
+];
+
+const PAGE_LABELS = {
+  '/student/inicio': 'Inicio', '/student/agenda': 'Agenda', '/student/cursos': 'Cursos',
+  '/student/entregas': 'Mis entregas', '/student/soporte': 'Soporte',
+};
+
+const getInitials = (name) => {
+  if (!name) return '??';
+  const parts = name.split(' ');
+  if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return parts[0].substring(0, 2).toUpperCase();
+};
+
+const StudentLayout = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
+  const { currentUser } = useAuth();
+  const { toggleSidebar, unreadCount } = useUI();
+  const { courses } = useCourseOfferings();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const currentLabel = PAGE_LABELS[location.pathname] || 'Mi campus';
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchMyEnrollments(currentUser.uid).then((enrollments) => {
+      const enrolledCourses = courses.filter((c) => enrollments[c.id]);
+      fetchMyDeliverables(currentUser.uid, enrolledCourses).then((items) => {
+        setPendingCount(items.filter((i) => i.status === 'pending').length);
+      });
+    });
+  }, [currentUser, courses]);
+
+  return (
+    <div className="admin-shell">
+      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}>
+        <div className="admin-sidebar-header">
+          <img src={logoNetwise} alt="Netwise Academy" className="admin-sidebar-logo-img" />
+          <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expandir' : 'Colapsar'}>
+            <ChevronLeft size={16} />
+          </button>
+        </div>
+
+        <nav className="admin-nav">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink key={item.to} to={item.to} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
+                <Icon size={17} />
+                <span className="admin-nav-label">{item.label}</span>
+                {item.to === '/student/entregas' && pendingCount > 0 && (
+                  <span className="admin-status admin-status-amber" style={{ marginLeft: 'auto' }}>{pendingCount}</span>
+                )}
+              </NavLink>
+            );
+          })}
+        </nav>
+      </aside>
+
+      <div className="admin-main">
+        <div className="admin-topbar">
+          <div className="admin-breadcrumb">Mi campus / <strong>{currentLabel}</strong></div>
+          <div className="admin-topbar-right">
+            <button className="admin-topbar-bell" title="Notificaciones" onClick={toggleSidebar}>
+              <Bell size={18} />
+              {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
+            </button>
+            <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>
+              {getInitials(currentUser?.displayName || currentUser?.email)}
+            </div>
+          </div>
+        </div>
+
+        <div className="admin-content">
+          <Outlet />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default StudentLayout;

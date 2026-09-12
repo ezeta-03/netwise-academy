@@ -1,32 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { fetchLiveSessionById } from '../lib/db';
 import { useAuth } from '../context/AuthContext';
+import LiveRoom from '../components/LiveRoom';
 
-// Sala embebida vía la IFrame API oficial de Jitsi Meet (meet.jit.si): no
-// requiere cuenta ni API key. A diferencia de un <iframe src="..."> crudo,
-// esta API evita el interstitial de "abrir en la app / descargar Jitsi Meet"
-// que Jitsi muestra cuando detecta que se está navegando a la página completa.
-// Para producción con marca propia / grabación en la nube, cambiar
-// `JITSI_DOMAIN` por un servidor Jitsi self-hosted, o reemplazar este
-// componente por el SDK de LiveKit / Daily.co usando el mismo
-// `session.roomName` como identificador de sala.
-const JITSI_DOMAIN = 'meet.jit.si';
+const ROLE_LABELS = { admin: 'Administrador', teacher: 'Docente', student: 'Estudiante' };
 
-const loadJitsiScript = () => {
-  if (window.JitsiMeetExternalAPI) return Promise.resolve();
-  if (window.__jitsiScriptPromise) return window.__jitsiScriptPromise;
-
-  window.__jitsiScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = `https://${JITSI_DOMAIN}/external_api.js`;
-    script.async = true;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.body.appendChild(script);
-  });
-  return window.__jitsiScriptPromise;
+const scheduleLineFor = (s) => {
+  const start = new Date(s.startsAt);
+  const end = new Date(start.getTime() + s.durationMin * 60000);
+  const day = start.toLocaleDateString('es-PE', { weekday: 'long', day: '2-digit', month: 'short' });
+  const fmt = (d) => d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  return `${day} · ${fmt(start)} – ${fmt(end)}`;
 };
 
 const LiveClassRoom = () => {
@@ -35,8 +21,6 @@ const LiveClassRoom = () => {
   const { currentUser } = useAuth();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const containerRef = useRef(null);
-  const apiRef = useRef(null);
 
   useEffect(() => {
     fetchLiveSessionById(sessionId).then((data) => {
@@ -44,36 +28,6 @@ const LiveClassRoom = () => {
       setLoading(false);
     });
   }, [sessionId]);
-
-  useEffect(() => {
-    if (!session || session.status === 'cancelled' || !containerRef.current) return;
-
-    let cancelled = false;
-
-    loadJitsiScript().then(() => {
-      if (cancelled || !containerRef.current) return;
-      apiRef.current = new window.JitsiMeetExternalAPI(JITSI_DOMAIN, {
-        roomName: session.roomName,
-        parentNode: containerRef.current,
-        width: '100%',
-        height: '100%',
-        userInfo: { displayName: currentUser?.displayName || 'Invitado' },
-        configOverwrite: {
-          prejoinPageEnabled: false,
-          disableDeepLinking: true, // evita el prompt de "abrir en la app"
-        },
-        interfaceConfigOverwrite: {
-          MOBILE_APP_PROMO: false,
-        },
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      apiRef.current?.dispose();
-      apiRef.current = null;
-    };
-  }, [session, currentUser]);
 
   if (loading) {
     return <div className="view active" style={{ padding: '40px', textAlign: 'center', color: 'var(--text2)' }}>Cargando sala...</div>;
@@ -100,15 +54,17 @@ const LiveClassRoom = () => {
 
   return (
     <div className="view active live-room">
-      <div className="live-room-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 24px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-        <div>
-          <div style={{ fontWeight: 600 }}>{session.title}</div>
-          <div style={{ fontSize: '.8rem', color: 'var(--text3)' }}>{session.courseTitle} · {session.instructor}</div>
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/live')}><X size={14} /> Salir</button>
+      <div className="live-room-header" style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 16px', background: 'var(--bg)' }}>
+        <button className="btn-icon" title="Salir" onClick={() => navigate('/live')}><X size={16} /></button>
       </div>
-      <div className="live-room-stage">
-        <div ref={containerRef}></div>
+      <div className="live-room-stage" style={{ padding: '0 20px 20px', background: 'var(--bg)' }}>
+        <LiveRoom
+          session={session}
+          currentUser={currentUser}
+          roleLabel={ROLE_LABELS[currentUser?.role] || 'Invitado'}
+          scheduleLine={scheduleLineFor(session)}
+          onExit={() => navigate('/live')}
+        />
       </div>
     </div>
   );

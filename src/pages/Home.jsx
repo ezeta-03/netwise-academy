@@ -1,44 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight, ChevronDown, Video, Clock3, MessageSquare, FolderOpen, Target, Sparkles } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, ChevronDown, Video, Clock3, Sparkles } from 'lucide-react';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
+import { METHOD_STEPS, FEATURES } from '../lib/methodologyData';
+import Footer from '../components/Footer';
 
 import heroImg from '../assets/NETWISE ACADEMY WEB/hero_principal.webp';
-import aprendeImg from '../assets/NETWISE ACADEMY WEB/aprende.webp';
-import aplicaImg from '../assets/NETWISE ACADEMY WEB/aplica.webp';
-import creceImg from '../assets/NETWISE ACADEMY WEB/crece.webp';
-import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
-import zoozmagoLogo from '../assets/NETWISE ACADEMY WEB/zoozmago_logo.webp';
 import videoFuturo from '../assets/NETWISE ACADEMY WEB/videos/video_futuro.mp4';
-
-const METHOD_STEPS = [
-  {
-    id: 'aprende',
-    title: 'Aprende',
-    image: aprendeImg,
-    desc: 'Conoce herramientas actuales en clases en vivo. Pregunta, comparte y aprende junto a personas que también quieren avanzar.',
-  },
-  {
-    id: 'aplica',
-    title: 'Aplica',
-    image: aplicaImg,
-    desc: 'Trabaja sobre tu negocio, tu marca o una idea propia. Cada clase se convierte en un avance que recibe feedback.',
-  },
-  {
-    id: 'crece',
-    title: 'Crece',
-    image: creceImg,
-    desc: 'Termina con un resultado que puedes mostrar y utilizar. Convierte lo aprendido en el siguiente paso de tu carrera o negocio.',
-  },
-];
-
-const FEATURES = [
-  { icon: Video, title: 'Clases en vivo', desc: 'Dos sesiones de 2 horas por semana, con espacio para preguntar y aprender junto al docente.', tag: '4 horas por semana' },
-  { icon: MessageSquare, title: 'Feedback docente', desc: 'Revisión de tus entregables y comentarios concretos para mejorar cada avance.', tag: 'Acompañamiento' },
-  { icon: FolderOpen, title: 'Recursos de consulta', desc: 'Materiales de apoyo para repasar lo trabajado y practicar entre sesiones.', tag: 'A tu propio ritmo' },
-  { icon: Target, title: 'Proyecto aplicado', desc: 'Un entregable por módulo y un proyecto final desarrollado sobre tu marca, negocio o idea.', tag: 'Resultado final' },
-];
 
 const Home = () => {
   const navigate = useNavigate();
@@ -91,7 +60,7 @@ const Home = () => {
             <p className="home-section-sub">No necesitas saberlo todo. <br />Solo elegir por dónde empezar.</p>
           </div>
           <div className="home-courses-grid">
-            {COURSES.map((c) => (
+            {COURSES.filter((c) => c.visible !== false).map((c) => (
               <div className="home-course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
                 <div className="home-course-thumb">
                   <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} />
@@ -188,26 +157,7 @@ const Home = () => {
           </div>
         </section>
 
-        {/* FOOTER */}
-        <footer className="home-footer">
-          <div className="home-footer-inner">
-            <div>
-              <img src={logoNetwise} alt="Netwise Academy" className="home-footer-logo-img" />
-              <p className="home-footer-tagline">Talleres prácticos de IA, marketing y negocios digitales.</p>
-            </div>
-            <div>
-              <div className="home-footer-col-title">Navegación</div>
-              <div className="home-footer-links">
-                <button type="button" className="home-footer-link-btn" onClick={scrollToCourses}>Cursos</button>
-                <button type="button" className="home-footer-link-btn" onClick={scrollToMethod}>Nuestra metodología</button>
-              </div>
-            </div>
-          </div>
-          <div className="home-footer-bottom">
-            <span>© {new Date().getFullYear()} Netwise Academy</span>
-            <span className="home-footer-zoozmago">Una empresa de <img src={zoozmagoLogo} alt="Zoozmago Holding Group" /></span>
-          </div>
-        </footer>
+        <Footer onCoursesClick={scrollToCourses} onMethodologyClick={scrollToMethod} />
       </div>
     </div>
   );

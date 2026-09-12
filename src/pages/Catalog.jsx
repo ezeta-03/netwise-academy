@@ -39,7 +39,7 @@ const Catalog = () => {
 
   // Computed Functional Filter Logic
   const filteredCourses = useMemo(() => {
-    let result = COURSES;
+    let result = COURSES.filter(c => c.visible !== false);
 
     // Categoría
     if (filterCat) result = result.filter(c => c.cat === filterCat);
