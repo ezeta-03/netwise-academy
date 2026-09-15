@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Home, Calendar, BookOpen, Headphones, ChevronLeft, Bell } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Calendar, BookOpen, Headphones, ChevronLeft, Bell, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import logoNetwise from '../../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
@@ -29,10 +29,16 @@ const getInitials = (name) => {
 const TeacherLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  const { currentUser } = useAuth();
+  const navigate = useNavigate();
+  const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
 
   const currentLabel = PAGE_LABELS[location.pathname] || 'Mi campus';
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/', { replace: true });
+  };
 
   return (
     <div className="admin-shell">
@@ -55,6 +61,13 @@ const TeacherLayout = () => {
             );
           })}
         </nav>
+
+        <div className="admin-sidebar-footer">
+          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
+            <LogOut size={17} />
+            <span className="admin-nav-label">Cerrar sesión</span>
+          </button>
+        </div>
       </aside>
 
       <div className="admin-main">

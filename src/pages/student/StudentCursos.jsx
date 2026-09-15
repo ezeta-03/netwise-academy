@@ -67,7 +67,10 @@ const StudentCursos = () => {
       {preregisteredCourses.length > 0 && (
         <>
           <div className="admin-page-head">
-            <h2 className="admin-page-title" style={{ fontSize: '1.15rem', marginBottom: 0 }}>Preinscripciones</h2>
+            <div>
+              <span className="dash-eyebrow">Te sugerimos</span>
+              <h2 className="admin-page-title" style={{ fontSize: '1.15rem', marginBottom: 0 }}>Complementa con los siguientes cursos</h2>
+            </div>
           </div>
           <div className="admin-panel">
             {preregisteredCourses.map((c) => (

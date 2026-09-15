@@ -20,8 +20,8 @@ const Navbar = () => {
     navigate('/', { replace: true });
   };
 
-  // Hide Navbar on Login, Player and active live-class room pages (similar to original design behavior)
-  if (location.pathname === '/login' || location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout')) {
+  // Hide Navbar on Player and active live-class room pages (similar to original design behavior)
+  if (location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout')) {
     return null;
   }
 

@@ -9,7 +9,6 @@ import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
 // Pages
 import Home from './pages/Home';
 import Metodologia from './pages/Metodologia';
-import Login from './pages/Login';
 import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
@@ -107,7 +106,6 @@ function App() {
         <div className="main-content">
         <Routes>
           {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
           <Route path="/" element={<RoleHome />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/metodologia" element={<Metodologia />} />

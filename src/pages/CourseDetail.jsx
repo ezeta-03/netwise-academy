@@ -84,7 +84,7 @@ const CourseDetail = () => {
   const originalPrice = course.price != null && course.promoPercent ? Math.round(course.price / (1 - course.promoPercent / 100)) : null;
 
   const goToMyArea = () => {
-    if (!currentUser) { navigate('/login'); return; }
+    if (!currentUser) { openLoginModal(); return; }
     if (currentUser.role === 'admin') navigate('/admin');
     else if (currentUser.role === 'teacher') navigate('/teacher');
     else navigate('/student');

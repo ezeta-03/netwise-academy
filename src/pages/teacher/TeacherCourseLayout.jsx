@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, Users, Sparkles, Bell } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, Users, Sparkles, Bell, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -31,11 +31,16 @@ const TeacherCourseLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
   const { courses } = useCourseOfferings();
   const [group, setGroup] = useState(null);
   const [avgProgress, setAvgProgress] = useState(0);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/', { replace: true });
+  };
 
   const course = courses.find((c) => c.id.toString() === courseId?.toString());
 
@@ -89,6 +94,13 @@ const TeacherCourseLayout = () => {
             );
           })}
         </nav>
+
+        <div className="admin-sidebar-footer">
+          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
+            <LogOut size={17} />
+            <span className="admin-nav-label">Cerrar sesión</span>
+          </button>
+        </div>
       </aside>
 
       <div className="admin-main">
