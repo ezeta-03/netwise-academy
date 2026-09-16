@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, CreditCard, Smartphone, Landmark, Lock } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, CreditCard, Smartphone, Landmark, Lock, UserCircle2 } from 'lucide-react';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
@@ -281,6 +281,12 @@ const Checkout = () => {
 
                 {step === 2 && (
                   <>
+                    {currentUser && (
+                      <div className="checkout-session-chip">
+                        <UserCircle2 size={16} />
+                        Conectado como <strong>{currentUser.displayName || currentUser.email}</strong>
+                      </div>
+                    )}
                     <div className="admin-panel-head" style={{ marginBottom: 4 }}>
                       <span className="admin-panel-title">2 · Método de pago</span>
                     </div>

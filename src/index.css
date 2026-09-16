@@ -757,6 +757,12 @@ body::before {
 .checkout-divider::before { left: 0; }
 .checkout-divider::after { right: 0; }
 .checkout-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.checkout-session-chip {
+  display: flex; align-items: center; gap: 8px; width: fit-content;
+  background: #F0EEF6; color: #4A4860; border-radius: 999px; padding: 7px 14px;
+  font-size: .8rem; margin-bottom: 16px;
+}
+.checkout-session-chip strong { color: #14141F; }
 .checkout-terms-row { display: flex; align-items: flex-start; gap: 10px; font-size: .82rem; color: #6B6980; margin: 6px 0 22px; }
 .checkout-terms-row input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; }
 .checkout-terms-row a { color: var(--accent); font-weight: 600; cursor: pointer; }
