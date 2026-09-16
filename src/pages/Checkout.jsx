@@ -1,27 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, CreditCard, Smartphone, Landmark, Lock, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, Lock, UserCircle2 } from 'lucide-react';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useEnrollment } from '../hooks/useEnrollment';
 import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
+import { PAYMENT_METHODS, buildPaymentInstructions } from '../lib/paymentMethods';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 
 const STEPS = [
   { id: 1, label: 'Tus datos' },
   { id: 2, label: 'Pago' },
   { id: 3, label: 'Confirmación' },
-];
-
-// El admin decide en Admin > Métodos de pago cuáles de estos están
-// activos y, para los manuales (todos menos "card"), qué instrucciones
-// mostrarle al comprador -- ver fetchAcademySettings().paymentMethods.
-const PAYMENT_METHODS = [
-  { id: 'yape', label: 'Yape Empresas / Plin Negocios', icon: Smartphone },
-  { id: 'card', label: 'Tarjeta de crédito/débito', icon: CreditCard },
-  { id: 'transfer', label: 'Transferencia', icon: Landmark },
 ];
 
 const fmtMoney = (n) => `S/ ${n.toFixed(2)}`;
@@ -334,7 +326,7 @@ const Checkout = () => {
                             <p className="checkout-pay-note"><Lock size={13} /> Tu información está protegida y encriptada.</p>
                           </>
                         ) : (
-                          <div className="checkout-pay-placeholder">{paymentSettings?.[paymentMethod]?.instructions || 'Nuestro equipo te contactará para completar tu pago.'}</div>
+                          <div className="checkout-pay-placeholder">{buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}</div>
                         )}
 
                         <button

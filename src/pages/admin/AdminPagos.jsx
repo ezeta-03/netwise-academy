@@ -1,14 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CreditCard, Smartphone, Landmark } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchAcademySettings, saveAcademySettings, logChange } from '../../lib/db';
-
-const METHODS = [
-  { id: 'yape', label: 'Yape Empresas / Plin Negocios', icon: Smartphone, manual: true },
-  { id: 'card', label: 'Tarjeta de crédito/débito', icon: CreditCard, manual: false },
-  { id: 'transfer', label: 'Transferencia bancaria', icon: Landmark, manual: true },
-];
+import { PAYMENT_METHODS as METHODS } from '../../lib/paymentMethods';
 
 const AdminPagos = () => {
   const { currentUser } = useAuth();
@@ -30,14 +24,19 @@ const AdminPagos = () => {
     }));
   };
 
-  const updateInstructions = (id, text) => {
+  const updateField = (id, field, value) => {
     setSettings((s) => ({
       ...s,
-      paymentMethods: { ...s.paymentMethods, [id]: { ...s.paymentMethods?.[id], instructions: text } },
+      paymentMethods: { ...s.paymentMethods, [id]: { ...s.paymentMethods?.[id], [field]: value } },
     }));
   };
 
   const handleSave = async () => {
+    const missing = METHODS.filter((m) => m.manual && settings.paymentMethods?.[m.id]?.enabled && !settings.paymentMethods[m.id]?.number?.trim());
+    if (missing.length > 0) {
+      addToast(`Falta el número de ${missing.map((m) => m.label).join(' y ')} para poder activarlo.`, 'error');
+      return;
+    }
     setSaving(true);
     try {
       await saveAcademySettings(settings);
@@ -60,7 +59,7 @@ const AdminPagos = () => {
       <div className="admin-page-head">
         <div>
           <h1 className="admin-page-title">Métodos de pago</h1>
-          <p className="admin-page-sub">Activa o desactiva cómo te pueden pagar tus alumnos en el checkout.</p>
+          <p className="admin-page-sub">Activa o desactiva cómo te pueden pagar tus alumnos, y con qué número y nombre.</p>
         </div>
       </div>
 
@@ -86,15 +85,25 @@ const AdminPagos = () => {
               </div>
               {m.manual ? (
                 cfg.enabled && (
-                  <div className="admin-field" style={{ marginTop: 10, marginBottom: 0 }}>
-                    <label>Instrucciones para el comprador</label>
-                    <textarea
-                      rows={3}
-                      value={cfg.instructions || ''}
-                      onChange={(e) => updateInstructions(m.id, e.target.value)}
-                      placeholder="Ej. Yapea o plinea S/ [monto] al 987 654 321 - Netwise Academy SAC y envía tu comprobante por WhatsApp."
-                    />
-                  </div>
+                  <>
+                    <div className="admin-field-row">
+                      <div className="admin-field">
+                        <label>{m.numberLabel}</label>
+                        <input value={cfg.number || ''} onChange={(e) => updateField(m.id, 'number', e.target.value)} placeholder={m.numberPlaceholder} />
+                      </div>
+                      <div className="admin-field">
+                        <label>Nombre del titular</label>
+                        <input value={cfg.accountName || ''} onChange={(e) => updateField(m.id, 'accountName', e.target.value)} placeholder="Ej. Netwise Academy SAC" />
+                      </div>
+                    </div>
+                    <div className="admin-field" style={{ marginBottom: 0 }}>
+                      <label>Nota adicional · opcional</label>
+                      <input value={cfg.note || ''} onChange={(e) => updateField(m.id, 'note', e.target.value)} placeholder={m.notePlaceholder} />
+                    </div>
+                    <p className="admin-panel-caption" style={{ marginBottom: 0 }}>
+                      El comprador verá: "{m.verb} [monto] al {cfg.number || '...'}{cfg.accountName ? ` (${cfg.accountName})` : ''}".
+                    </p>
+                  </>
                 )
               ) : (
                 <p className="admin-panel-caption" style={{ marginTop: 8, marginBottom: 0 }}>

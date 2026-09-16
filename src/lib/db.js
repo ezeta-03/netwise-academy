@@ -597,12 +597,14 @@ const DEFAULT_ACADEMY_SETTINGS = {
   currency: 'PEN',
   timezone: 'America/Lima',
   // Métodos de pago del checkout -- "yape" y "transfer" son manuales (el
-  // comprador paga afuera y el equipo confirma), por eso llevan un texto de
-  // instrucciones editable; "card" es el único con formulario propio.
+  // comprador paga afuera y el equipo confirma), por eso llevan el número y
+  // nombre de cuenta donde debe pagar (con eso el checkout arma el mensaje
+  // solo, ya con el monto exacto) más una nota libre opcional; "card" es el
+  // único con formulario propio.
   paymentMethods: {
-    yape: { enabled: true, instructions: 'Al confirmar, nuestro equipo te contactará por WhatsApp con los datos para completar tu pago por Yape o Plin.' },
+    yape: { enabled: true, number: '', accountName: '', note: '' },
     card: { enabled: true },
-    transfer: { enabled: false, instructions: 'Al confirmar, nuestro equipo te contactará por correo con los datos bancarios para completar tu transferencia.' },
+    transfer: { enabled: false, number: '', accountName: '', note: '' },
   },
 };
 
