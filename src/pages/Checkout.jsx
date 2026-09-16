@@ -16,9 +16,9 @@ const STEPS = [
 ];
 
 const PAYMENT_METHODS = [
+  { id: 'yape', label: 'Yape Empresas / Plin Negocios', icon: Smartphone, soon: false },
   { id: 'card', label: 'Tarjeta de crédito/débito', icon: CreditCard, soon: false },
-  { id: 'yape', label: 'Yape / Plin', icon: Smartphone, soon: true },
-  { id: 'transfer', label: 'Transferencia', icon: Landmark, soon: true },
+  { id: 'transfer', label: 'Transferencia', icon: Landmark, soon: true, hidden: true },
 ];
 
 const fmtMoney = (n) => `S/ ${n.toFixed(2)}`;
@@ -55,7 +55,7 @@ const Checkout = () => {
   const [couponError, setCouponError] = useState('');
   const [couponChecking, setCouponChecking] = useState(false);
 
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [paymentMethod, setPaymentMethod] = useState('yape');
   const [cardNumber, setCardNumber] = useState('');
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
@@ -293,7 +293,7 @@ const Checkout = () => {
                     <p className="admin-cell-sub" style={{ marginBottom: 18 }}>Todos los pagos son procesados de forma segura.</p>
 
                     <div className="checkout-pay-methods">
-                      {PAYMENT_METHODS.map((m) => (
+                      {PAYMENT_METHODS.filter((m) => !m.hidden).map((m) => (
                         <label key={m.id} className={`checkout-pay-method ${paymentMethod === m.id ? 'selected' : ''}`}>
                           <input type="radio" name="pay" checked={paymentMethod === m.id} onChange={() => setPaymentMethod(m.id)} />
                           <m.icon size={16} /> {m.label}
@@ -311,14 +311,16 @@ const Checkout = () => {
                         </div>
                         <p className="checkout-pay-note"><Lock size={13} /> Tu información está protegida y encriptada.</p>
                       </>
+                    ) : paymentMethod === 'yape' ? (
+                      <div className="checkout-pay-placeholder">Al confirmar, nuestro equipo te contactará por WhatsApp con los datos para completar tu pago por Yape o Plin.</div>
                     ) : (
-                      <div className="checkout-pay-placeholder">Estamos habilitando este método de pago. Por ahora, continúa con tarjeta de crédito o débito.</div>
+                      <div className="checkout-pay-placeholder">Estamos habilitando este método de pago. Por ahora, continúa con Yape/Plin o tarjeta.</div>
                     )}
 
                     <button
                       className="checkout-submit-btn"
                       style={{ marginTop: 20 }}
-                      disabled={paymentMethod !== 'card' || processing || !cardNumber || !cardExpiry || !cardCvv}
+                      disabled={processing || (paymentMethod === 'card' && (!cardNumber || !cardExpiry || !cardCvv)) || (PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.soon)}
                       onClick={handlePay}
                     >
                       {processing ? <Loader2 size={16} className="spin" /> : `Confirmar y pagar ${fmtMoney(finalPrice)} →`}
