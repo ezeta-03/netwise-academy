@@ -68,17 +68,22 @@ service cloud.firestore {
     }
 
     // Inscripciones y progreso reales: un alumno solo puede crear/leer/
-    // actualizar su propia inscripción (progreso, lecciones completadas); un
-    // admin puede leerlas todas. No se borran desde el cliente.
+    // actualizar su propia inscripción (progreso, lecciones completadas);
+    // un docente/admin puede leerlas todas (dashboards de curso/grupo); un
+    // admin además puede crearlas manualmente para otro alumno (matrícula
+    // manual, ver adminCreateEnrollment) con un uid sintético. No se borran
+    // desde el cliente.
     // `resource == null` cubre el `get()` que hace enrollInCourse/
     // markLessonComplete para revisar si el doc ya existe antes de crearlo --
     // sin ese permiso, leer un doc que todavía no existe da permission-denied
     // en vez de "no existe", porque `resource` es null y no tiene `.data`.
     match /enrollments/{enrollmentId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.uid == request.auth.uid
-                    && request.resource.data.uid == request.auth.uid;
+      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+      allow create: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && (
+                      (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid) ||
+                      isTeacherOrAdmin()
+                    );
       allow delete: if false;
     }
 
@@ -99,6 +104,115 @@ service cloud.firestore {
                     (isSignedIn() && request.auth.uid == userId
                      && request.resource.data.role == resource.data.role);
       allow delete: if false;
+    }
+
+    // Directorio interno del equipo (Admin > Equipo y permisos). Es una
+    // propuesta de alcance, no el rol real (ver `users`) -- solo el admin la
+    // ve y la edita.
+    match /teamMembers/{memberId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Cupones de descuento. Lectura pública porque el checkout valida un
+    // cupón antes de que el comprador tenga sesión iniciada; solo el admin
+    // los crea/edita. El canje (contador de usos) también es una escritura
+    // de "cupones", así que cualquier usuario logueado puede incrementarla
+    // al confirmar su compra.
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow update: if isSignedIn();
+      allow create, delete: if isAdmin();
+    }
+
+    // Aulas / grupos: fechas, cupos y docente de cada edición de un curso.
+    // Cualquier usuario logueado las lee (docentes/alumnos ven su aula);
+    // solo el admin las crea/edita.
+    match /groups/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Pedidos (pagos). Un alumno crea y lee sus propios pedidos; el admin
+    // los lee todos (Ventas e inscripciones). No se editan desde el cliente.
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Bitácora de cambios del panel de Admin. Solo el admin la ve y escribe
+    // en ella.
+    match /auditLog/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // Entregas de un módulo: un alumno crea/actualiza su propia entrega
+    // (uid propio); un docente/admin puede marcarla revisada. Se lee por
+    // ambos roles (el alumno ve su estado en "Mis entregas", el docente ve
+    // la lista completa para calificar).
+    match /submissions/{submissionId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+    }
+
+    // Comunidad de un curso/grupo. Cualquier alumno/docente del curso lee;
+    // solo el docente/admin publica anuncios; los comentarios (append al
+    // array `comments` vía update) los agrega cualquier usuario logueado.
+    match /communityPosts/{postId} {
+      allow read: if isSignedIn();
+      allow create: if isTeacherOrAdmin();
+      allow update: if isSignedIn();
+      allow delete: if false;
+    }
+
+    // Soporte y tutorías. Un usuario crea/lee sus propias solicitudes; el
+    // admin puede leerlas todas.
+    match /supportRequests/{requestId} {
+      allow read: if isSignedIn() && (resource.data.requesterUid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Leads del programa descargable: captura de contacto antes de crear
+    // cuenta, así que no requiere sesión. Solo el admin los consulta.
+    match /programLeads/{leadId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    // Perfil de negocio del proyecto de un alumno (una empresa/marca/idea
+    // por alumno+curso). El dueño lee/escribe el suyo; el docente/admin del
+    // curso puede leerlo para dar seguimiento.
+    // `resource == null` cubre el `get()` que hace fetchProjectProfile antes
+    // de que el alumno haya definido su proyecto todavía.
+    match /projectProfiles/{profileId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+      allow write: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Avances de práctica del proyecto (qué puntos de un módulo ya aplicó
+    // el alumno a su proyecto). Mismo dueño único que projectProfiles.
+    // `resource == null` cubre el `get()` que hace toggleProjectAdvance
+    // antes de que exista el doc.
+    match /projectAdvances/{advanceId} {
+      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+      allow write: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Salas privadas de estudio armadas por un alumno. Cualquier usuario
+    // logueado las ve (para unirse); solo quien la crea puede registrarla.
+    match /privateRooms/{roomId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.createdByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // Configuración general de la academia (doc único `settings/academy`).
+    // Solo el admin la lee y la edita.
+    match /settings/{settingId} {
+      allow read, write: if isAdmin();
     }
   }
 }
