@@ -48,13 +48,18 @@ service cloud.firestore {
     }
 
     // Clases en vivo: cualquier usuario autenticado puede verlas. Solo
-    // docentes/admin pueden programarlas, y solo quien la creó (o un admin)
-    // puede editarla/cancelarla/borrarla -- antes CUALQUIER usuario logueado,
-    // incluyendo estudiantes, podía modificar o borrar la clase de otro.
+    // docentes/admin pueden programarlas (la que crea queda como dueña vía
+    // instructorUid); cualquier docente/admin puede editarla/cancelarla/
+    // borrarla -- igual que el contenido de un curso (courseContent), ningún
+    // docente está limitado a "sus" cursos en esta app, así que restringir
+    // la edición al creador original solo generaba permission-denied cuando
+    // otro docente entraba a gestionar el mismo curso -- antes CUALQUIER
+    // usuario logueado, incluyendo estudiantes, podía modificar o borrar la
+    // clase de otro, que sí seguimos evitando.
     match /liveSessions/{sessionId} {
       allow read: if isSignedIn();
       allow create: if isTeacherOrAdmin() && request.resource.data.instructorUid == request.auth.uid;
-      allow update, delete: if isSignedIn() && (resource.data.instructorUid == request.auth.uid || isAdmin());
+      allow update, delete: if isTeacherOrAdmin();
     }
 
     // Preinscripciones ("me interesa este taller"): un alumno solo puede
@@ -77,8 +82,22 @@ service cloud.firestore {
     // markLessonComplete para revisar si el doc ya existe antes de crearlo --
     // sin ese permiso, leer un doc que todavía no existe da permission-denied
     // en vez de "no existe", porque `resource` es null y no tiene `.data`.
+    // El `exists(...)` cubre a un alumno viendo a sus compañeros del mismo
+    // curso (ej. para armar una sala privada, ver fetchCourseClassmates):
+    // puede leer la matrícula de OTRO alumno solo si él mismo tiene una
+    // propia matrícula para ese mismo courseId -- el id determinístico
+    // `${uid}_${courseId}` que usa enrollInCourse/markLessonComplete es lo
+    // que permite comprobar eso sin necesitar una query aparte. Una
+    // matrícula manual del admin (id autogenerado, ver adminCreateEnrollment)
+    // no matchea ese id, así que ese alumno en particular no vería
+    // compañeros por esta vía -- sigue viendo la suya propia igual.
     match /enrollments/{enrollmentId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+      allow read: if isSignedIn() && (
+                    resource == null ||
+                    resource.data.uid == request.auth.uid ||
+                    isTeacherOrAdmin() ||
+                    exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + string(resource.data.courseId)))
+                  );
       allow create: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isAdmin());
       allow update: if isSignedIn() && (
                       (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid) ||

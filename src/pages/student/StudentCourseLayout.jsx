@@ -48,8 +48,13 @@ const StudentCourseLayout = () => {
   useEffect(() => {
     if (!currentUser) return;
     Promise.all([fetchGroups(), fetchMyEnrollments(currentUser.uid)]).then(([groups, enrollments]) => {
-      setGroup(groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
-      setEnrollment(enrollments[courseId] || null);
+      const enr = enrollments[courseId] || null;
+      // Un curso puede tener varias aulas abiertas a la vez -- usar el
+      // groupId de la matrícula del alumno (si el admin ya se lo asignó) en
+      // vez de tomar la primera aula que coincida por curso, que le mostraba
+      // el horario/grupo equivocado apenas había más de un aula.
+      setGroup(groups.find((g) => g.id === enr?.groupId) || groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
+      setEnrollment(enr);
       setLoading(false);
     });
   }, [courseId, currentUser]);

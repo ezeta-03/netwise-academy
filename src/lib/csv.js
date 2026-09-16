@@ -1,0 +1,24 @@
+// Arma un CSV escapando cada celda -- sin esto, cualquier texto libre que el
+// admin escribe (ej. "Motivo" de una matrícula, "Motivo, verificado por
+// WhatsApp") corre las columnas del archivo exportado porque la coma se
+// interpreta como separador.
+const escapeCsvCell = (value) => {
+  const str = String(value ?? '');
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+};
+
+export const buildCsv = (header, rows) => {
+  const lines = rows.map((row) => row.map(escapeCsvCell).join(','));
+  return [header.map(escapeCsvCell).join(','), ...lines].join('\n');
+};
+
+export const downloadCsv = (filename, header, rows) => {
+  const csv = buildCsv(header, rows);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};

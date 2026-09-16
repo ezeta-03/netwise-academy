@@ -157,15 +157,23 @@ const LiveClassesPanel = ({ courses }) => {
 
   const handleCancel = async (session) => {
     if (!confirm(`¿Cancelar "${session.title}"? Los estudiantes verán la clase marcada como cancelada.`)) return;
-    await cancelLiveSession(session.id);
-    addToast('Clase cancelada.', 'success');
-    load();
+    try {
+      await cancelLiveSession(session.id);
+      addToast('Clase cancelada.', 'success');
+      load();
+    } catch {
+      addToast('No se pudo cancelar la clase.', 'error');
+    }
   };
   const handleDelete = async (session) => {
     if (!confirm(`¿Eliminar "${session.title}" definitivamente? Esta acción no se puede deshacer.`)) return;
-    await deleteLiveSession(session.id);
-    addToast('Clase eliminada.', 'success');
-    load();
+    try {
+      await deleteLiveSession(session.id);
+      addToast('Clase eliminada.', 'success');
+      load();
+    } catch {
+      addToast('No se pudo eliminar la clase.', 'error');
+    }
   };
 
   if (loading) return <div className="admin-empty-hint">Cargando actividad en vivo...</div>;

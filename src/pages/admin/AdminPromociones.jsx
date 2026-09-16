@@ -7,7 +7,10 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchCoupons, createCoupon, updateCoupon, logChange } from '../../lib/db';
 
 const couponStatus = (c) => {
-  if (c.endDate && new Date(c.endDate) < new Date()) return { label: 'Vencido', cls: 'admin-status-gray' };
+  // "Hasta [fecha]" (ver vigenciaLabel) es inclusivo -- el cupón vale hasta
+  // el final de ese día en hora local, no desde su medianoche UTC (eso lo
+  // mostraba "Vencido" hasta 5 horas antes de tiempo en Perú).
+  if (c.endDate && new Date(`${c.endDate}T23:59:59`) < new Date()) return { label: 'Vencido', cls: 'admin-status-gray' };
   if (c.maxUses && c.usedCount >= c.maxUses) return { label: 'Agotado', cls: 'admin-status-amber' };
   if (c.active === false) return { label: 'Pausado', cls: 'admin-status-gray' };
   return { label: 'Disponible', cls: 'admin-status-green' };

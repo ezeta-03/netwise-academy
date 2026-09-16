@@ -188,16 +188,22 @@ const TeacherCourseContenido = () => {
       const fromQuery = searchParams.get('modulo');
       setSelectedId(fromQuery && mods.some((m) => m.id === fromQuery) ? fromQuery : mods[0]?.id || null);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id]);
 
   useEffect(() => { load(); }, [load]);
 
   const persist = async (nextModules, successMsg) => {
+    const previous = modules;
     setModules(nextModules);
-    await saveCourseContent(course.id, nextModules, currentUser?.uid);
-    if (successMsg) addToast(successMsg, 'success');
+    try {
+      await saveCourseContent(course.id, nextModules, currentUser?.uid);
+      if (successMsg) addToast(successMsg, 'success');
+    } catch {
+      setModules(previous);
+      addToast('No se pudo guardar el cambio. Intenta de nuevo.', 'error');
+    }
   };
 
   const selected = modules.find((m) => m.id === selectedId);

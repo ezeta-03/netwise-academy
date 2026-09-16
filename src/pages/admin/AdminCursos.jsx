@@ -95,18 +95,31 @@ const AdminCursos = () => {
   };
 
   const toggleVisible = async (c) => {
-    await updateCourseVisibility(c.id, !(c.visible !== false));
-    await logChange(adminName, `${c.visible !== false ? 'Ocultó' : 'Mostró'} "${c.title}" en la web.`);
-    refresh();
+    try {
+      await updateCourseVisibility(c.id, !(c.visible !== false));
+      await logChange(adminName, `${c.visible !== false ? 'Ocultó' : 'Mostró'} "${c.title}" en la web.`);
+      refresh();
+    } catch {
+      addToast('No se pudo actualizar la visibilidad. Intenta de nuevo.', 'error');
+    }
   };
   const toggleEnrollments = async (c) => {
-    await updateCourseEnrollmentsOpen(c.id, !(c.enrollmentsOpen !== false));
-    await logChange(adminName, `${c.enrollmentsOpen !== false ? 'Cerró' : 'Abrió'} inscripciones de "${c.title}".`);
-    refresh();
+    try {
+      await updateCourseEnrollmentsOpen(c.id, !(c.enrollmentsOpen !== false));
+      await logChange(adminName, `${c.enrollmentsOpen !== false ? 'Cerró' : 'Abrió'} inscripciones de "${c.title}".`);
+      refresh();
+    } catch {
+      addToast('No se pudo actualizar las inscripciones. Intenta de nuevo.', 'error');
+    }
   };
   const togglePromo = async (c) => {
-    await updateCoursePromo(c.id, c.promoPercent ? null : 25);
-    refresh();
+    try {
+      await updateCoursePromo(c.id, c.promoPercent ? null : 25);
+      await logChange(adminName, `${c.promoPercent ? 'Quitó' : 'Activó'} la promoción de "${c.title}".`);
+      refresh();
+    } catch {
+      addToast('No se pudo actualizar la promoción. Intenta de nuevo.', 'error');
+    }
   };
 
   return (

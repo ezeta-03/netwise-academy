@@ -61,8 +61,12 @@ const CourseDetail = () => {
 
   useEffect(() => {
     if (!course) return;
-    fetchCourseContent(course.id).then((data) => setModules(data.modules || []));
-  }, [course]);
+    // El temario detallado (con links de video) requiere sesión -- ver regla
+    // de `courseContent`. Un visitante sin cuenta no debe siquiera intentar
+    // el fetch (le daría permission-denied) y solo ve el resumen genérico.
+    if (!currentUser) { setModules([]); return; }
+    fetchCourseContent(course.id).then((data) => setModules(data.modules || [])).catch(() => setModules([]));
+  }, [course, currentUser]);
 
   if (!course) {
     return (
@@ -162,7 +166,11 @@ const CourseDetail = () => {
               <p className="cd-section-sub">Cuatro módulos, ocho semanas y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
 
               {modules.length === 0 ? (
-                <p className="cd-section-sub">El programa detallado de este módulo se publica muy pronto.</p>
+                <p className="cd-section-sub">
+                  {currentUser
+                    ? 'El programa detallado de este módulo se publica muy pronto.'
+                    : 'Inicia sesión para ver el programa completo de este taller.'}
+                </p>
               ) : (
                 <div className="cd-modules">
                   {modules.map((m, i) => (

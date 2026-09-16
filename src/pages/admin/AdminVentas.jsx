@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Download, Eye, X } from 'lucide-react';
 import { fetchOrders } from '../../lib/db';
+import { downloadCsv } from '../../lib/csv';
 import ModalPortal from '../../components/ModalPortal';
 
 const ORDER_STATUS = {
@@ -8,16 +9,11 @@ const ORDER_STATUS = {
   pending: { label: 'Pendiente', cls: 'admin-status-amber' },
 };
 
-const downloadCsv = (rows) => {
-  const header = ['Pedido', 'Fecha', 'Alumno', 'Curso', 'Importe', 'Estado'];
-  const lines = rows.map((r) => [r.code, r.createdAt, r.studentName, r.courseTitle, r.amount, r.status].join(','));
-  const csv = [header.join(','), ...lines].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'pedidos-y-pagos.csv'; a.click();
-  URL.revokeObjectURL(url);
-};
+const exportOrdersCsv = (rows) => downloadCsv(
+  'pedidos-y-pagos.csv',
+  ['Pedido', 'Fecha', 'Alumno', 'Curso', 'Importe', 'Estado'],
+  rows.map((r) => [r.code, r.createdAt, r.studentName, r.courseTitle, r.amount, r.status]),
+);
 
 const AdminVentas = () => {
   const [orders, setOrders] = useState([]);
@@ -26,7 +22,7 @@ const AdminVentas = () => {
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
 
-  useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }); }, []);
+  useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }).catch(() => setLoading(false)); }, []);
 
   const filtered = orders.filter((o) => {
     const matchesSearch = `${o.code} ${o.studentName} ${o.courseTitle}`.toLowerCase().includes(search.toLowerCase());
@@ -42,7 +38,7 @@ const AdminVentas = () => {
           <h1 className="admin-page-title">Pedidos y pagos</h1>
           <p className="admin-page-sub">Revisa importes y estados de pago. Las matrículas se gestionan en Alumnos y accesos.</p>
         </div>
-        <button className="admin-btn-ghost" onClick={() => downloadCsv(filtered)}><Download size={15} /> Exportar CSV</button>
+        <button className="admin-btn-ghost" onClick={() => exportOrdersCsv(filtered)}><Download size={15} /> Exportar CSV</button>
       </div>
 
       <div className="admin-toolbar">

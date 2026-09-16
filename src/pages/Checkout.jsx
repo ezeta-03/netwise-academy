@@ -83,14 +83,19 @@ const Checkout = () => {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!course) return;
+    // `liveSessions` requiere sesión iniciada -- un visitante que todavía no
+    // se registra (step 1) no puede leerlo. Antes esto se disparaba igual y
+    // fallaba en silencio, así que "Primera clase" nunca se llenaba para
+    // quien recién se registra durante el checkout; ahora se reintenta en
+    // cuanto currentUser aparece.
+    if (!course || !currentUser) return;
     fetchLiveSessions().then((list) => {
       const upcoming = list
         .filter((s) => s.courseId?.toString() === course.id.toString() && ['upcoming', 'live'].includes(getLiveSessionStatus(s)))
         .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
       setFirstClass(upcoming[0] || null);
-    });
-  }, [course]);
+    }).catch(() => {});
+  }, [course, currentUser]);
 
   if (!course) {
     return (
@@ -163,7 +168,7 @@ const Checkout = () => {
       const match = list.find((c) => c.code?.toUpperCase() === couponCode.trim().toUpperCase());
       if (!match) { setCouponError('Cupón no válido.'); setAppliedCoupon(null); return; }
       if (match.active === false) { setCouponError('Este cupón ya no está activo.'); setAppliedCoupon(null); return; }
-      if (match.endDate && new Date(match.endDate) < new Date()) { setCouponError('Este cupón ya venció.'); setAppliedCoupon(null); return; }
+      if (match.endDate && new Date(`${match.endDate}T23:59:59`) < new Date()) { setCouponError('Este cupón ya venció.'); setAppliedCoupon(null); return; }
       if (match.maxUses && (match.usedCount || 0) >= match.maxUses) { setCouponError('Este cupón alcanzó su límite de usos.'); setAppliedCoupon(null); return; }
       if (match.scope !== 'all' && match.scope?.toString() !== course.id.toString()) { setCouponError('Este cupón no aplica a este curso.'); setAppliedCoupon(null); return; }
       setAppliedCoupon(match);

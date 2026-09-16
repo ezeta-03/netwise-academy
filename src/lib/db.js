@@ -289,11 +289,13 @@ export const fetchMyEnrollments = async (uid) => {
   return map;
 };
 
-export const enrollInCourse = async (uid, course) => {
+export const enrollInCourse = async (uid, course, user) => {
   const payload = {
     uid,
     courseId: course.id,
     courseTitle: course.title,
+    studentName: user?.displayName || user?.email || null,
+    studentEmail: user?.email || null,
     enrolledAt: new Date().toISOString(),
     completedLessonIds: [],
     progress: 0,
@@ -333,6 +335,29 @@ export const fetchAllEnrollments = async () => {
   }
 
   const snapshot = await getDocs(collection(db, 'enrollments'));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// Compañeros de un mismo curso, para un ALUMNO (ej. armar una sala privada de
+// estudio) -- a diferencia de fetchAllEnrollments, esto solo trae las
+// matrículas de un curso puntual: un alumno no puede leer todas las
+// matrículas de la plataforma (ver regla de `enrollments`), pero sí las de su
+// propio curso, siempre que también esté matriculado ahí.
+export const fetchCourseClassmates = async (courseId) => {
+  if (!isConfigValid) {
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('mock_enrollments_')) {
+        const map = JSON.parse(localStorage.getItem(key) || '{}');
+        if (map[courseId]) rows.push(map[courseId]);
+      }
+    }
+    return rows;
+  }
+
+  const q = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
+  const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
@@ -608,13 +633,23 @@ const DEFAULT_ACADEMY_SETTINGS = {
   },
 };
 
+// El spread de nivel superior no alcanza para `paymentMethods`: si el doc
+// guardado ya tiene esa llave, la reemplaza entera en vez de completarla --
+// así, un método de pago agregado a DEFAULT_ACADEMY_SETTINGS más adelante
+// nunca aparecería en una academia que ya guardó su configuración una vez.
+const mergeAcademySettings = (saved) => ({
+  ...DEFAULT_ACADEMY_SETTINGS,
+  ...saved,
+  paymentMethods: { ...DEFAULT_ACADEMY_SETTINGS.paymentMethods, ...saved?.paymentMethods },
+});
+
 export const fetchAcademySettings = async () => {
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_academy_settings');
-    return raw ? { ...DEFAULT_ACADEMY_SETTINGS, ...JSON.parse(raw) } : DEFAULT_ACADEMY_SETTINGS;
+    return raw ? mergeAcademySettings(JSON.parse(raw)) : DEFAULT_ACADEMY_SETTINGS;
   }
   const docSnap = await getDoc(doc(db, 'settings', 'academy'));
-  return docSnap.exists() ? { ...DEFAULT_ACADEMY_SETTINGS, ...docSnap.data() } : DEFAULT_ACADEMY_SETTINGS;
+  return docSnap.exists() ? mergeAcademySettings(docSnap.data()) : DEFAULT_ACADEMY_SETTINGS;
 };
 
 export const saveAcademySettings = async (settings) => {

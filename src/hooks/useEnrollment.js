@@ -19,7 +19,7 @@ export const useEnrollment = (course) => {
 
   const enroll = useCallback(async () => {
     if (!course || !currentUser || isEnrolled) return;
-    await enrollInCourse(currentUser.uid, course);
+    await enrollInCourse(currentUser.uid, course, currentUser);
     setRecord({ courseId: course.id, progress: 0, completedLessonIds: [] });
   }, [course, currentUser, isEnrolled]);
 

@@ -118,10 +118,16 @@ const AdminEquipo = () => {
 
   const handleRoleChange = async (targetUser, newRole) => {
     if (targetUser.uid === currentUser?.uid) return;
+    const previousRole = targetUser.role;
     setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, role: newRole } : u)));
-    await updateUserRole(targetUser.uid, newRole);
-    await logChange(adminName, `Cambió el rol de ${targetUser.name} a "${newRole}".`);
-    addToast(`Rol de ${targetUser.name} actualizado a "${newRole}".`, 'success');
+    try {
+      await updateUserRole(targetUser.uid, newRole);
+      await logChange(adminName, `Cambió el rol de ${targetUser.name} a "${newRole}".`);
+      addToast(`Rol de ${targetUser.name} actualizado a "${newRole}".`, 'success');
+    } catch {
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, role: previousRole } : u)));
+      addToast(`No se pudo actualizar el rol de ${targetUser.name}. Intenta de nuevo.`, 'error');
+    }
   };
 
   const filteredMembers = members.filter((m) => `${m.name} ${m.email}`.toLowerCase().includes(search.toLowerCase()));

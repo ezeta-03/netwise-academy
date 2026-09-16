@@ -5,22 +5,18 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, fetchGroups, logChange } from '../../lib/db';
+import { downloadCsv } from '../../lib/csv';
 
 const ACCESS_STATUS = {
   active: { label: 'Activo', cls: 'admin-status-green' },
   pending: { label: 'Pendiente', cls: 'admin-status-amber' },
 };
 
-const downloadCsv = (rows) => {
-  const header = ['Alumno', 'Correo', 'Curso', 'Grupo', 'Acceso', 'Motivo'];
-  const lines = rows.map((r) => [r.studentName || r.uid, r.studentEmail || '', r.courseTitle, r.groupName || '', r.status || 'active', r.reason || ''].join(','));
-  const csv = [header.join(','), ...lines].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'alumnos-y-accesos.csv'; a.click();
-  URL.revokeObjectURL(url);
-};
+const exportEnrollmentsCsv = (rows) => downloadCsv(
+  'alumnos-y-accesos.csv',
+  ['Alumno', 'Correo', 'Curso', 'Grupo', 'Acceso', 'Motivo'],
+  rows.map((r) => [r.studentName || r.uid, r.studentEmail || '', r.courseTitle, r.groupName || '', r.status || 'active', r.reason || '']),
+);
 
 const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSaved }) => {
   const { addToast } = useUI();
@@ -145,7 +141,7 @@ const AdminAlumnos = () => {
           <p className="admin-page-sub">Administra la matrícula y el acceso a cada curso.</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="admin-btn-ghost" onClick={() => downloadCsv(filtered)}><Download size={15} /> Exportar CSV</button>
+          <button className="admin-btn-ghost" onClick={() => exportEnrollmentsCsv(filtered)}><Download size={15} /> Exportar CSV</button>
           <button className="admin-btn-edit" onClick={() => setModal({ mode: 'new' })}><Plus size={15} /> Nueva matrícula</button>
         </div>
       </div>

@@ -48,8 +48,26 @@ const TeacherCourseSala = () => {
     }
   };
 
-  const handleCancel = async (s) => { if (!confirm(`¿Cancelar "${s.title}"?`)) return; await cancelLiveSession(s.id); addToast('Clase cancelada.', 'success'); load(); };
-  const handleDelete = async (s) => { if (!confirm(`¿Eliminar "${s.title}" definitivamente?`)) return; await deleteLiveSession(s.id); addToast('Clase eliminada.', 'success'); load(); };
+  const handleCancel = async (s) => {
+    if (!confirm(`¿Cancelar "${s.title}"?`)) return;
+    try {
+      await cancelLiveSession(s.id);
+      addToast('Clase cancelada.', 'success');
+      load();
+    } catch {
+      addToast('No se pudo cancelar la clase.', 'error');
+    }
+  };
+  const handleDelete = async (s) => {
+    if (!confirm(`¿Eliminar "${s.title}" definitivamente?`)) return;
+    try {
+      await deleteLiveSession(s.id);
+      addToast('Clase eliminada.', 'success');
+      load();
+    } catch {
+      addToast('No se pudo eliminar la clase.', 'error');
+    }
+  };
 
   if (activeSession) {
     return (

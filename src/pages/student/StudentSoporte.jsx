@@ -57,7 +57,7 @@ const StudentSoporte = () => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
   const { courses } = useCourseOfferings();
-  const [enrolledIds, setEnrolledIds] = useState([]);
+  const [enrollments, setEnrollments] = useState({});
   const [groups, setGroups] = useState([]);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +66,7 @@ const StudentSoporte = () => {
   const requesterName = currentUser?.displayName || currentUser?.email || 'Estudiante';
 
   const load = useCallback(() => Promise.all([fetchGroups(), fetchMyEnrollments(currentUser?.uid), fetchSupportRequests(currentUser?.uid)]).then(([g, enr, r]) => {
-    setGroups(g); setEnrolledIds(Object.keys(enr)); setRequests(r); setLoading(false);
+    setGroups(g); setEnrollments(enr); setRequests(r); setLoading(false);
   }), [currentUser?.uid]);
   useEffect(() => { load(); }, [load]);
 
@@ -79,8 +79,14 @@ const StudentSoporte = () => {
     load();
   };
 
-  const enrolledCourses = courses.filter((c) => enrolledIds.includes(c.id.toString()));
-  const courseGroups = enrolledCourses.map((c) => ({ course: c, group: groups.find((g) => g.courseId?.toString() === c.id.toString()) }));
+  const enrolledCourses = courses.filter((c) => enrollments[c.id.toString()]);
+  // Un curso puede tener varias aulas -- usar el groupId de la matrícula
+  // (cuando el admin ya lo asignó) en vez de la primera aula que coincida
+  // por curso, que mostraba el grupo equivocado si había más de una.
+  const courseGroups = enrolledCourses.map((c) => ({
+    course: c,
+    group: groups.find((g) => g.id === enrollments[c.id.toString()]?.groupId) || groups.find((g) => g.courseId?.toString() === c.id.toString()),
+  }));
 
   if (loading) return <div className="admin-empty-hint">Cargando soporte...</div>;
 
