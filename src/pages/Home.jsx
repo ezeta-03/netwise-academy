@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowUpRight, ChevronDown, Video, Clock3, Sparkles } from 'lucide-react';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
@@ -11,6 +11,7 @@ import videoFuturo from '../assets/NETWISE ACADEMY WEB/videos/video_futuro.mp4';
 
 const Home = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { courses: COURSES } = useCourseOfferings();
   const [activeStep, setActiveStep] = useState(METHOD_STEPS[0].id);
 
@@ -20,6 +21,19 @@ const Home = () => {
   const scrollToMethod = () => {
     document.getElementById('metodologia')?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  // El link "Cursos" del navbar navega aquí pidiendo scroll a #talleres (ver
+  // Navbar.jsx) cuando el visitante no estaba ya en el Inicio. No limpiamos
+  // location.state después de usarlo -- hacerlo con otro navigate() disparaba
+  // un segundo render que competía con este mismo efecto (visible sobre todo
+  // en desarrollo, por el doble-invoke de StrictMode) y a veces cancelaba el
+  // scroll; en el peor caso de dejarlo, un "atrás" del navegador que vuelva
+  // a esta misma entrada del historial como mucho vuelve a hacer scroll.
+  useEffect(() => {
+    if (location.state?.scrollTo) {
+      document.getElementById(location.state.scrollTo)?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [location.state]);
 
   return (
     <div className="view active">

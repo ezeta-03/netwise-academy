@@ -32,6 +32,19 @@ const Navbar = () => {
     return parts[0].substring(0, 2).toUpperCase();
   };
 
+  // "Cursos" no es una página aparte -- son los talleres que ya se muestran
+  // en el Inicio (sección #talleres), así que en vez de un link a /catalog
+  // lleva ahí: si ya estás en el Inicio, hace scroll directo; si no, navega
+  // al Inicio y le pide que haga scroll apenas monte (ver Home.jsx).
+  const goToCourses = () => {
+    if (location.pathname === '/') {
+      document.getElementById('talleres')?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      navigate('/', { state: { scrollTo: 'talleres' } });
+    }
+    closeMenu();
+  };
+
   // Visitante (sin sesión): solo Cursos + Nuestra Metodología, como en el
   // Figma. "Mi Aprendizaje" / "En Vivo" son navegación real de producto y
   // solo tienen sentido una vez logueado -- ver nota de roles más abajo.
@@ -41,7 +54,7 @@ const Navbar = () => {
         ...(currentUser.role === 'student' ? [{ to: '/student', label: 'Mi Campus' }] : []),
       ]
     : [
-        { to: '/catalog', label: 'Cursos' },
+        { action: goToCourses, label: 'Cursos' },
         { to: '/metodologia', label: 'Nuestra Metodología' },
       ];
 
@@ -57,7 +70,11 @@ const Navbar = () => {
 
         <div className="nav-links">
           {navItems.map((item) => (
-            <Link key={item.to} to={item.to} className={`nav-link ${location.pathname === item.to ? 'active' : ''}`}>{item.label}</Link>
+            item.action ? (
+              <button key={item.label} type="button" className="nav-link nav-link-btn" onClick={item.action}>{item.label}</button>
+            ) : (
+              <Link key={item.to} to={item.to} className={`nav-link ${location.pathname === item.to ? 'active' : ''}`}>{item.label}</Link>
+            )
           ))}
         </div>
 
@@ -119,7 +136,11 @@ const Navbar = () => {
 
         <div className="mm-links">
           {navItems.map((item) => (
-            <Link key={item.to} to={item.to} className={`mm-link ${location.pathname === item.to ? 'active' : ''}`} onClick={closeMenu}>{item.label}</Link>
+            item.action ? (
+              <button key={item.label} type="button" className="mm-link mm-link-btn" onClick={item.action}>{item.label}</button>
+            ) : (
+              <Link key={item.to} to={item.to} className={`mm-link ${location.pathname === item.to ? 'active' : ''}`} onClick={closeMenu}>{item.label}</Link>
+            )
           ))}
           {currentUser?.role === 'admin' && <Link to="/admin" className="mm-link" style={{ color: 'var(--accent)' }} onClick={closeMenu}>Panel Admin</Link>}
           {currentUser?.role === 'teacher' && <Link to="/teacher" className="mm-link" style={{ color: 'var(--amber)' }} onClick={closeMenu}>Mis Cursos</Link>}

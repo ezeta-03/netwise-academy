@@ -265,6 +265,7 @@ body::before {
 .nav-link:hover { color: var(--text); }
 .nav-link.active { color: var(--text); }
 .nav-link.active::after, .nav-link:hover::after { transform: scaleX(1); }
+.nav-link-btn { font: inherit; }
 .nav-right { display: flex; align-items: center; gap: 14px; }
 .nav-cta { border-radius: 99px !important; padding-left: 22px !important; padding-right: 22px !important; }
 .nav-right-user { display: flex; align-items: center; gap: 16px; }
@@ -318,6 +319,7 @@ body::before {
 }
 .mm-link:hover, .mm-link.active { background: var(--surface); color: var(--text); }
 .mm-link.active { color: var(--accent2); }
+.mm-link-btn { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; cursor: pointer; }
 .mm-footer { margin-top: auto; padding: 16px 20px 24px; border-top: 1px solid var(--border); }
 
 .form-fields { display: flex; flex-direction: column; gap: 18px; }
