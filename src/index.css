@@ -814,7 +814,6 @@ body::before {
 .checkout-pay-method.selected { border-color: var(--accent); background: var(--accent-bg); }
 .checkout-pay-method.disabled { opacity: .5; cursor: not-allowed; }
 .checkout-pay-method input { accent-color: var(--accent); }
-.checkout-pay-soon { font-size: .68rem; font-weight: 700; color: #9795A8; text-transform: uppercase; margin-left: auto; }
 .checkout-pay-note { display: flex; align-items: center; gap: 8px; color: #8B8A9B; font-size: .78rem; margin-top: 4px; }
 .checkout-pay-placeholder { background: #F6F5FA; border-radius: 10px; padding: 20px; color: #6B6980; font-size: .86rem; text-align: center; }
 

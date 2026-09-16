@@ -209,10 +209,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Configuración general de la academia (doc único `settings/academy`).
-    // Solo el admin la lee y la edita.
+    // Configuración general de la academia (doc único `settings/academy`),
+    // incluye qué métodos de pago están activos. Lectura pública porque el
+    // checkout debe poder mostrarlos incluso antes de que el comprador
+    // inicie sesión; solo el admin la edita.
     match /settings/{settingId} {
-      allow read, write: if isAdmin();
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

@@ -55,6 +55,7 @@ import AdminPromociones from './pages/admin/AdminPromociones';
 import AdminGrupos from './pages/admin/AdminGrupos';
 import AdminAlumnos from './pages/admin/AdminAlumnos';
 import AdminVentas from './pages/admin/AdminVentas';
+import AdminPagos from './pages/admin/AdminPagos';
 import AdminEquipo from './pages/admin/AdminEquipo';
 import AdminHistorial from './pages/admin/AdminHistorial';
 import AdminConfiguracion from './pages/admin/AdminConfiguracion';
@@ -126,6 +127,7 @@ function App() {
             <Route path="grupos" element={<AdminGrupos />} />
             <Route path="alumnos" element={<AdminAlumnos />} />
             <Route path="ventas" element={<AdminVentas />} />
+            <Route path="pagos" element={<AdminPagos />} />
             <Route path="equipo" element={<AdminEquipo />} />
             <Route path="historial" element={<AdminHistorial />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />

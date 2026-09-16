@@ -596,6 +596,14 @@ const DEFAULT_ACADEMY_SETTINGS = {
   supportEmail: 'hola@netwiseacademy.com',
   currency: 'PEN',
   timezone: 'America/Lima',
+  // Métodos de pago del checkout -- "yape" y "transfer" son manuales (el
+  // comprador paga afuera y el equipo confirma), por eso llevan un texto de
+  // instrucciones editable; "card" es el único con formulario propio.
+  paymentMethods: {
+    yape: { enabled: true, instructions: 'Al confirmar, nuestro equipo te contactará por WhatsApp con los datos para completar tu pago por Yape o Plin.' },
+    card: { enabled: true },
+    transfer: { enabled: false, instructions: 'Al confirmar, nuestro equipo te contactará por correo con los datos bancarios para completar tu transferencia.' },
+  },
 };
 
 export const fetchAcademySettings = async () => {

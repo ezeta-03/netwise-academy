@@ -5,7 +5,7 @@ import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useEnrollment } from '../hooks/useEnrollment';
-import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchLiveSessions } from '../lib/db';
+import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 
@@ -15,10 +15,13 @@ const STEPS = [
   { id: 3, label: 'Confirmación' },
 ];
 
+// El admin decide en Admin > Métodos de pago cuáles de estos están
+// activos y, para los manuales (todos menos "card"), qué instrucciones
+// mostrarle al comprador -- ver fetchAcademySettings().paymentMethods.
 const PAYMENT_METHODS = [
-  { id: 'yape', label: 'Yape Empresas / Plin Negocios', icon: Smartphone, soon: false },
-  { id: 'card', label: 'Tarjeta de crédito/débito', icon: CreditCard, soon: false },
-  { id: 'transfer', label: 'Transferencia', icon: Landmark, soon: true, hidden: true },
+  { id: 'yape', label: 'Yape Empresas / Plin Negocios', icon: Smartphone },
+  { id: 'card', label: 'Tarjeta de crédito/débito', icon: CreditCard },
+  { id: 'transfer', label: 'Transferencia', icon: Landmark },
 ];
 
 const fmtMoney = (n) => `S/ ${n.toFixed(2)}`;
@@ -62,6 +65,22 @@ const Checkout = () => {
   const [processing, setProcessing] = useState(false);
 
   const [firstClass, setFirstClass] = useState(null);
+  const [paymentSettings, setPaymentSettings] = useState(null);
+
+  useEffect(() => {
+    fetchAcademySettings().then((s) => setPaymentSettings(s.paymentMethods || {}));
+  }, []);
+
+  const availableMethods = paymentSettings
+    ? PAYMENT_METHODS.filter((m) => paymentSettings[m.id]?.enabled)
+    : PAYMENT_METHODS.filter((m) => m.id === 'yape' || m.id === 'card'); // fallback mientras carga
+
+  useEffect(() => {
+    if (paymentSettings && availableMethods.length && !availableMethods.some((m) => m.id === paymentMethod)) {
+      setPaymentMethod(availableMethods[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentSettings]);
 
   useEffect(() => {
     if (currentUser && step === 1) {
@@ -292,39 +311,42 @@ const Checkout = () => {
                     </div>
                     <p className="admin-cell-sub" style={{ marginBottom: 18 }}>Todos los pagos son procesados de forma segura.</p>
 
-                    <div className="checkout-pay-methods">
-                      {PAYMENT_METHODS.filter((m) => !m.hidden).map((m) => (
-                        <label key={m.id} className={`checkout-pay-method ${paymentMethod === m.id ? 'selected' : ''}`}>
-                          <input type="radio" name="pay" checked={paymentMethod === m.id} onChange={() => setPaymentMethod(m.id)} />
-                          <m.icon size={16} /> {m.label}
-                          {m.soon && <span className="checkout-pay-soon">Próximamente</span>}
-                        </label>
-                      ))}
-                    </div>
-
-                    {paymentMethod === 'card' ? (
-                      <>
-                        <div className="admin-field"><label>Número de tarjeta</label><input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="0000 0000 0000 0000" required /></div>
-                        <div className="checkout-field-row">
-                          <div className="admin-field"><label>Vencimiento</label><input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required /></div>
-                          <div className="admin-field"><label>CVV</label><input value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required /></div>
-                        </div>
-                        <p className="checkout-pay-note"><Lock size={13} /> Tu información está protegida y encriptada.</p>
-                      </>
-                    ) : paymentMethod === 'yape' ? (
-                      <div className="checkout-pay-placeholder">Al confirmar, nuestro equipo te contactará por WhatsApp con los datos para completar tu pago por Yape o Plin.</div>
+                    {availableMethods.length === 0 ? (
+                      <div className="checkout-error">Todavía no hay un método de pago disponible. Escríbenos y te ayudamos a completar tu inscripción.</div>
                     ) : (
-                      <div className="checkout-pay-placeholder">Estamos habilitando este método de pago. Por ahora, continúa con Yape/Plin o tarjeta.</div>
-                    )}
+                      <>
+                        <div className="checkout-pay-methods">
+                          {availableMethods.map((m) => (
+                            <label key={m.id} className={`checkout-pay-method ${paymentMethod === m.id ? 'selected' : ''}`}>
+                              <input type="radio" name="pay" checked={paymentMethod === m.id} onChange={() => setPaymentMethod(m.id)} />
+                              <m.icon size={16} /> {m.label}
+                            </label>
+                          ))}
+                        </div>
 
-                    <button
-                      className="checkout-submit-btn"
-                      style={{ marginTop: 20 }}
-                      disabled={processing || (paymentMethod === 'card' && (!cardNumber || !cardExpiry || !cardCvv)) || (PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.soon)}
-                      onClick={handlePay}
-                    >
-                      {processing ? <Loader2 size={16} className="spin" /> : `Confirmar y pagar ${fmtMoney(finalPrice)} →`}
-                    </button>
+                        {paymentMethod === 'card' ? (
+                          <>
+                            <div className="admin-field"><label>Número de tarjeta</label><input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="0000 0000 0000 0000" required /></div>
+                            <div className="checkout-field-row">
+                              <div className="admin-field"><label>Vencimiento</label><input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required /></div>
+                              <div className="admin-field"><label>CVV</label><input value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required /></div>
+                            </div>
+                            <p className="checkout-pay-note"><Lock size={13} /> Tu información está protegida y encriptada.</p>
+                          </>
+                        ) : (
+                          <div className="checkout-pay-placeholder">{paymentSettings?.[paymentMethod]?.instructions || 'Nuestro equipo te contactará para completar tu pago.'}</div>
+                        )}
+
+                        <button
+                          className="checkout-submit-btn"
+                          style={{ marginTop: 20 }}
+                          disabled={processing || (paymentMethod === 'card' && (!cardNumber || !cardExpiry || !cardCvv))}
+                          onClick={handlePay}
+                        >
+                          {processing ? <Loader2 size={16} className="spin" /> : `Confirmar y pagar ${fmtMoney(finalPrice)} →`}
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
