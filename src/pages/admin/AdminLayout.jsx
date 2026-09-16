@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, BookOpen, Tag, Calendar, Users, ShoppingCart,
-  ShieldCheck, History, Settings, ChevronLeft, Bell, LogOut, Wallet,
+  ShieldCheck, History, Settings, ChevronLeft, Bell, LogOut, Wallet, Headphones,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/admin/alumnos', label: 'Alumnos y accesos', icon: Users },
   { to: '/admin/ventas', label: 'Ventas e inscripciones', icon: ShoppingCart },
   { to: '/admin/pagos', label: 'Métodos de pago', icon: Wallet },
+  { to: '/admin/soporte', label: 'Soporte', icon: Headphones },
 ];
 
 const NAV_ITEMS_ADMIN = [
@@ -33,6 +34,7 @@ const PAGE_LABELS = {
   '/admin/alumnos': 'Alumnos y accesos',
   '/admin/ventas': 'Ventas e inscripciones',
   '/admin/pagos': 'Métodos de pago',
+  '/admin/soporte': 'Soporte',
   '/admin/equipo': 'Equipo y permisos',
   '/admin/historial': 'Historial de cambios',
   '/admin/configuracion': 'Configuración',

@@ -781,6 +781,29 @@ export const createSupportRequest = async ({ requesterUid, requesterName, reques
   return { id: ref.id, ...payload };
 };
 
+// Todas las solicitudes, para el Admin (a diferencia de fetchSupportRequests,
+// que trae solo las de un alumno/docente puntual).
+export const fetchAllSupportRequests = async () => {
+  if (!isConfigValid) {
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('mock_support_')) {
+        JSON.parse(localStorage.getItem(key) || '[]').forEach((r) => rows.push(r));
+      }
+    }
+    return rows;
+  }
+  const q = query(collection(db, 'supportRequests'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const updateSupportRequestStatus = async (requestId, status) => {
+  if (!isConfigValid) return;
+  await updateDoc(doc(db, 'supportRequests', requestId), { status });
+};
+
 // --- Leads del programa descargable (colección `programLeads`) ---
 // Captura de contacto antes de descargar el programa de un curso -- no
 // requiere cuenta, solo deja el interés registrado para seguimiento comercial.

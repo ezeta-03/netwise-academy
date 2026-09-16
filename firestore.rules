@@ -186,11 +186,13 @@ service cloud.firestore {
     }
 
     // Soporte y tutorías. Un usuario crea/lee sus propias solicitudes; el
-    // admin puede leerlas todas.
+    // admin puede leerlas todas y es el único que puede actualizar su estado
+    // (ej. marcarla "resuelta") desde Admin > Soporte.
     match /supportRequests/{requestId} {
       allow read: if isSignedIn() && (resource.data.requesterUid == request.auth.uid || isAdmin());
       allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid;
-      allow update, delete: if false;
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     // Leads del programa descargable: captura de contacto antes de crear
