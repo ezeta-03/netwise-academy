@@ -66,9 +66,9 @@
   --text:      #F0EFE8;
   --text2:     #8B8A9B;
   --text3:     #5A5970;
-  --accent:    #AA79FF;
-  --accent2:   #AA79FF;
-  --accent-bg: rgba(170,121,255,.12);
+  --accent:    #7D33FF;
+  --accent2:   #7D33FF;
+  --accent-bg: rgba(125,51,255,.12);
   --green:     #34D399;
   --green-bg:  rgba(52,211,153,.1);
   --amber:     #FBBF24;
@@ -106,9 +106,9 @@
   --text:      #14141F;
   --text2:     #5D5C70;
   --text3:     #8B8A9B;
-  --accent:    #7C6AF7;
-  --accent2:   #6449E0;
-  --accent-bg: rgba(124,106,247,.10);
+  --accent:    #7D33FF;
+  --accent2:   #7D33FF;
+  --accent-bg: rgba(125,51,255,.10);
   --green:     #15803D;
   --green-bg:  rgba(21,128,61,.08);
   --amber:     #B45309;
@@ -191,9 +191,9 @@ body::before {
 }
 .btn-primary {
   background: var(--accent); color: #fff;
-  box-shadow: 0 4px 16px rgba(124,106,247,.4);
+  box-shadow: 0 4px 16px rgba(125,51,255,.4);
 }
-.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,106,247,.5); }
+.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 8px 24px rgba(125,51,255,.5); }
 .btn-ghost {
   background: transparent; color: var(--text2);
   border: 1.5px solid var(--border2);
@@ -216,7 +216,7 @@ body::before {
   font-family: var(--ff-body); font-size: .95rem; color: var(--text);
   transition: all .2s; outline: none; width: 100%;
 }
-.input:focus { border-color: var(--accent); background: var(--surface2); box-shadow: 0 0 0 3px rgba(124,106,247,.12); }
+.input:focus { border-color: var(--accent); background: var(--surface2); box-shadow: 0 0 0 3px rgba(125,51,255,.12); }
 .input::placeholder { color: var(--text3); }
 
 /* ═══════════════════════════════════════════════════
@@ -227,7 +227,7 @@ body::before {
   padding: 3px 10px; border-radius: 99px;
   font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
 }
-.badge-accent  { background: var(--accent-bg); color: var(--accent2); border: 1px solid rgba(124,106,247,.2); }
+.badge-accent  { background: var(--accent-bg); color: var(--accent2); border: 1px solid rgba(125,51,255,.2); }
 .badge-green   { background: var(--green-bg);  color: var(--green);   border: 1px solid rgba(52,211,153,.2); }
 .badge-amber   { background: var(--amber-bg);  color: var(--amber);   border: 1px solid rgba(251,191,36,.2); }
 .badge-sky     { background: rgba(56,189,248,.1); color: var(--sky);  border: 1px solid rgba(56,189,248,.2); }
@@ -283,7 +283,7 @@ body::before {
   border-radius: var(--r-sm); padding: 8px 14px; min-width: 220px;
   transition: all .2s;
 }
-.search-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124,106,247,.1); }
+.search-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(125,51,255,.1); }
 .search-bar input { background: none; border: none; outline: none; color: var(--text); font-family: var(--ff-body); font-size: .88rem; width: 100%; }
 .search-bar input::placeholder { color: var(--text3); }
 .search-icon { color: var(--text3); font-size: .9rem; flex-shrink: 0; }
@@ -969,7 +969,7 @@ body::before {
   border: 1.5px solid var(--border); background: var(--surface);
   color: var(--text2); transition: all .2s;
 }
-.cat-chip:hover, .cat-chip.active { background: var(--accent-bg); color: var(--accent2); border-color: rgba(124,106,247,.3); }
+.cat-chip:hover, .cat-chip.active { background: var(--accent-bg); color: var(--accent2); border-color: rgba(125,51,255,.3); }
 
 /* ═══════════════════════════════════════════════════
    VIEW: CATALOG
@@ -995,7 +995,7 @@ body::before {
   border-radius: var(--r-sm); margin-bottom: 6px; font-family: var(--ff-body);
   font-size: .85rem; color: var(--text2); cursor: pointer; transition: all .2s;
 }
-.level-btn:hover, .level-btn.active { background: var(--accent-bg); border-color: rgba(124,106,247,.3); color: var(--accent2); }
+.level-btn:hover, .level-btn.active { background: var(--accent-bg); border-color: rgba(125,51,255,.3); color: var(--accent2); }
 .catalog-header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
 .catalog-count { font-size: .88rem; color: var(--text3); flex: 1; }
 .sort-select {
