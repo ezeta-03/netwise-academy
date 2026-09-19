@@ -18,7 +18,10 @@ const weekRangeLabel = () => {
 const TeacherInicio = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { courses } = useCourseOfferings();
+  const { courses: allCourses } = useCourseOfferings();
+  // Un admin ve todo; un docente solo lo de los cursos que le asignaron.
+  const courses = currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid);
+  const myCourseIds = new Set(courses.map((c) => c.id.toString()));
   const [sessions, setSessions] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
   const [pendingByCourse, setPendingByCourse] = useState([]);
@@ -39,7 +42,7 @@ const TeacherInicio = () => {
         return { course: c, pending, firstModuleId: modules[0]?.id };
       })),
     ]).then(([allSessions, allEnrollments, byCourse]) => {
-      setSessions(allSessions);
+      setSessions(allSessions.filter((s) => myCourseIds.has(s.courseId?.toString())));
       setEnrollments(allEnrollments);
       setPendingByCourse(byCourse.filter((b) => b.pending > 0));
       setLoading(false);

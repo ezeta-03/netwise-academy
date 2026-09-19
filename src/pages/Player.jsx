@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { fetchCourseContent, fetchMyEnrollments, markLessonComplete } from '../lib/db';
 import { toEmbedUrl } from '../lib/embedUrl';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
@@ -138,6 +139,9 @@ const Player = () => {
       <div className="player-layout">
         <div className="player-main">
           <div className="video-container">
+            <button className="player-exit-btn" onClick={() => navigate(`/course/${course.id}`)} title="Salir al curso">
+              <ArrowLeft size={16} /> Salir
+            </button>
             <div className="video-wrapper">
               {!isPlaying ? (
                 <div className="video-placeholder" onClick={() => setIsPlaying(true)}>

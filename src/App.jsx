@@ -1,9 +1,8 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
-import { ThemeProvider } from './context/ThemeContext';
 import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
 
 // Pages
@@ -83,6 +82,21 @@ const RoleRoute = ({ children, allowedRoles }) => {
   return children;
 };
 
+// Al navegar a una ruta nueva (ej. click en una tarjeta de curso), el
+// router no reinicia el scroll por su cuenta -- sin esto la página de
+// destino queda con el scroll heredado de la anterior. Se salta cuando
+// viene un scrollTo explícito (ver Home.jsx) para no pelear con ese scroll.
+const ScrollToTop = () => {
+  const { pathname, state } = useLocation();
+
+  useEffect(() => {
+    if (state?.scrollTo) return;
+    window.scrollTo(0, 0);
+  }, [pathname, state]);
+
+  return null;
+};
+
 // "/" es pública (como /catalog y /course/:id): un visitante sin sesión
 // también puede ver el Inicio. Un docente o admin logueado no tiene nada
 // que hacer ahí -- su propio panel ya vive en /teacher y /admin. Un
@@ -99,10 +113,10 @@ const RoleHome = () => {
 function App() {
   return (
     <BrowserRouter>
-    <ThemeProvider>
     <CourseOfferingsProvider>
     <AuthProvider>
       <UIProvider>
+          <ScrollToTop />
           {/* Navbar hides itself on login/player routes internally via useLocation */}
           <Navbar />
         <div className="main-content">
@@ -176,7 +190,6 @@ function App() {
       </UIProvider>
     </AuthProvider>
     </CourseOfferingsProvider>
-    </ThemeProvider>
     </BrowserRouter>
   );
 }

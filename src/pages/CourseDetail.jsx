@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Check, Sparkles, Fingerprint, TrendingUp, Rocket, Clock3, Video, ArrowUpRight, Download, Calendar } from 'lucide-react';
 import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
-import { fetchCourseContent } from '../lib/db';
+import { fetchCourseSummary } from '../lib/db';
 import { usePreregistration } from '../hooks/usePreregistration';
 import { useEnrollment } from '../hooks/useEnrollment';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
@@ -61,12 +61,13 @@ const CourseDetail = () => {
 
   useEffect(() => {
     if (!course) return;
-    // El temario detallado (con links de video) requiere sesión -- ver regla
-    // de `courseContent`. Un visitante sin cuenta no debe siquiera intentar
-    // el fetch (le daría permission-denied) y solo ve el resumen genérico.
-    if (!currentUser) { setModules([]); return; }
-    fetchCourseContent(course.id).then((data) => setModules(data.modules || [])).catch(() => setModules([]));
-  }, [course, currentUser]);
+    // Resumen público (solo título/semanas, sin links de video) -- se lee sin
+    // sesión para que un visitante vea el temario y pueda descargar el
+    // programa dejando su contacto (DownloadProgramModal). El contenido real
+    // con las grabaciones sigue viviendo en `courseContent`, solo para
+    // usuarios logueados (se consume desde el reproductor).
+    fetchCourseSummary(course.id).then((data) => setModules(data.modules || [])).catch(() => setModules([]));
+  }, [course]);
 
   if (!course) {
     return (
@@ -126,6 +127,7 @@ const CourseDetail = () => {
       <section className="cd-hero">
         <div className="cd-hero-inner">
           <h1 className="cd-hero-title">{course.cardTitle.join(' ')}.<span className="cd-hero-dot" /></h1>
+          {course.labName && <div className="cd-hero-eyebrow">{course.labName}</div>}
           <p className="cd-hero-desc">{course.description}</p>
 
           <div className="cd-hero-media-row">
@@ -166,11 +168,7 @@ const CourseDetail = () => {
               <p className="cd-section-sub">Cuatro módulos, ocho semanas y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
 
               {modules.length === 0 ? (
-                <p className="cd-section-sub">
-                  {currentUser
-                    ? 'El programa detallado de este módulo se publica muy pronto.'
-                    : 'Inicia sesión para ver el programa completo de este taller.'}
-                </p>
+                <p className="cd-section-sub">El programa detallado de este taller se publica muy pronto.</p>
               ) : (
                 <div className="cd-modules">
                   {modules.map((m, i) => (

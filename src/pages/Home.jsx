@@ -38,33 +38,43 @@ const Home = () => {
   return (
     <div className="view active">
       {/* HERO */}
-      <section className="home-hero anim-fade-up d1">
-        <div className="home-hero-left">
-          <h1 className="home-hero-title">
-            <span>Aprende.</span>
-            <span>Aplica.</span>
-            <em>Crece.</em>
-          </h1>
-          <p className="home-hero-desc">
-            Talleres de IA, marketing y negocios para convertir lo que sabes en lo que ya eres capaz de hacer.
-          </p>
-          <div className="home-hero-actions">
-            <button className="btn btn-primary btn-lg" onClick={scrollToCourses}>
-              Encuentra tu taller <ArrowRight size={18} />
-            </button>
-            <button className="btn btn-ghost btn-lg" onClick={scrollToMethod}>
-              Cómo es el método <ChevronDown size={18} />
-            </button>
+      <div className="home-hero-wrap">
+        <section className="home-hero anim-fade-up d1">
+          <div className="home-hero-left">
+            <h1 className="home-hero-title">
+              <span>Aprende.</span>
+              <span>Aplica.</span>
+              <em>Crece.</em>
+            </h1>
+            <p className="home-hero-desc">
+              Talleres de IA, marketing y negocios para convertir lo que sabes en lo que ya eres capaz de hacer.
+            </p>
+            <div className="home-hero-actions">
+              <button className="btn btn-primary btn-lg" onClick={scrollToCourses}>
+                Encuentra tu taller <ArrowRight size={18} />
+              </button>
+              <button className="btn btn-ghost btn-lg" onClick={scrollToMethod}>
+                Cómo es el método <ChevronDown size={18} />
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="home-hero-right">
-          <div className="home-hero-media">
-            <img src={heroImg} alt="Estudiante de Netwise Academy" />
+          <div className="home-hero-right">
+            <div className="home-hero-media">
+              <img src={heroImg} alt="Estudiante de Netwise Academy" />
+            </div>
+            <span className="home-hero-tag home-hero-tag-top"><Sparkles size={14} /> Clases online en vivo</span>
+            <span className="home-hero-tag home-hero-tag-bottom"><Sparkles size={14} /> Talleres 100% prácticos</span>
           </div>
-          <span className="home-hero-tag home-hero-tag-top"><Sparkles size={14} /> Clases en vivo</span>
-          <span className="home-hero-tag home-hero-tag-bottom"><Sparkles size={14} /> Talleres 100% prácticos</span>
-        </div>
-      </section>
+        </section>
+        <button type="button" className="home-hero-discover" onClick={scrollToMethod}>
+          <span>Descubre</span> <ArrowUpRight size={14} />
+        </button>
+      </div>
+
+      <div className="home-hero-banner">
+        <span>Metodologías propias, basada en casos y en tus proyectos 100% reales</span>
+        <ArrowRight size={16} />
+      </div>
 
       {/* TALLERES + MÉTODO — bloque claro fijo (ver nota en index.css) */}
       <div className="home-light-block">
@@ -148,7 +158,6 @@ const Home = () => {
                   <f.icon className="home-feature-icon" size={26} />
                   <div className="home-feature-title">{f.title}</div>
                   <p className="home-feature-desc">{f.desc}</p>
-                  <span className="home-feature-tag">{f.tag} <ArrowUpRight size={14} /></span>
                 </div>
               ))}
             </div>

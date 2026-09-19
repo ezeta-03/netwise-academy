@@ -72,7 +72,7 @@ const TeacherLayout = () => {
 
       <div className="admin-main">
         <div className="admin-topbar">
-          <div className="admin-breadcrumb">Mi campus / <strong>{currentLabel}</strong></div>
+          <div className="admin-breadcrumb"><span className="admin-breadcrumb-link" onClick={() => navigate('/teacher/inicio')}>Mi campus</span> / <strong>{currentLabel}</strong></div>
           <div className="admin-topbar-right">
             <button className="admin-topbar-bell" title="Notificaciones" onClick={toggleSidebar}>
               <Bell size={18} />

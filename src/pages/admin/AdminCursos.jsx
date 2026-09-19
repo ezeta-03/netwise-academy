@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, Plus, X } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
@@ -6,7 +6,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { CATEGORIES } from '../../lib/data';
-import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, logChange } from '../../lib/db';
+import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, fetchAllUsers, logChange } from '../../lib/db';
 
 const catLabel = (catId) => {
   const cat = CATEGORIES.find((c) => c.id === catId);
@@ -18,14 +18,21 @@ const EditCourseModal = ({ course, adminName, onClose, onSaved }) => {
   const [price, setPrice] = useState(course.price ?? '');
   const [startDate, setStartDate] = useState(course.startDate ?? '');
   const [promoPercent, setPromoPercent] = useState(course.promoPercent ?? '');
+  const [teacherUid, setTeacherUid] = useState(course.teacherUid ?? '');
+  const [teachers, setTeachers] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchAllUsers().then((users) => setTeachers((users || []).filter((u) => u.role === 'teacher')));
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await updateCourseOffering(course.id, { price, startDate }, 'admin');
       await updateCoursePromo(course.id, promoPercent);
-      await logChange(adminName, `Actualizó precio/promoción de "${course.title}".`);
+      await updateCourseTeacher(course.id, teacherUid);
+      await logChange(adminName, `Actualizó precio/promoción/docente de "${course.title}".`);
       addToast(`"${course.title}" actualizado.`, 'success');
       onSaved();
       onClose();
@@ -61,6 +68,13 @@ const EditCourseModal = ({ course, adminName, onClose, onSaved }) => {
         <div className="admin-field">
           <label>Fecha de inicio</label>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </div>
+        <div className="admin-field">
+          <label>Docente asignado</label>
+          <select value={teacherUid} onChange={(e) => setTeacherUid(e.target.value)}>
+            <option value="">Sin asignar</option>
+            {teachers.map((t) => <option key={t.uid} value={t.uid}>{t.displayName || t.email}</option>)}
+          </select>
         </div>
 
         <div className="admin-modal-actions">

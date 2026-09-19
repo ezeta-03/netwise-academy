@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, FileText, Sparkles, Target, Video } from 'lucide-react';
+import { Check, CheckCircle2, FileText, Sparkles, Target, Video } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { fetchCourseContent, fetchProjectAdvances, fetchProjectProfile } from '../../lib/db';
+import ModuleSessionCard from '../../components/ModuleSessionCard';
 
 const StudentCourseContenido = () => {
   const { course } = useOutletContext();
@@ -31,6 +32,7 @@ const StudentCourseContenido = () => {
 
   const selected = modules.find((m) => m.id === selectedId);
   const selectedIndex = modules.findIndex((m) => m.id === selectedId);
+  const sessionOffset = modules.slice(0, selectedIndex).reduce((sum, m) => sum + (m.sessions?.length || 0), 0);
 
   if (loading) return <div className="admin-empty-hint">Cargando contenido...</div>;
 
@@ -69,6 +71,14 @@ const StudentCourseContenido = () => {
               {selected.practiceBullets?.length > 0 && (
                 <ul className="dash-bullets">{selected.practiceBullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
               )}
+            </div>
+          )}
+
+          {selected.sessions?.length > 0 && (
+            <div style={{ marginBottom: 22 }}>
+              <h3 style={{ fontSize: '1rem', color: '#14141F', marginBottom: 6 }}>Sesiones del módulo</h3>
+              {selected.tools?.length > 0 && <div className="dash-session-tools">{selected.tools.join(' · ')}</div>}
+              {selected.sessions.map((s, i) => <ModuleSessionCard key={s.id} session={s} number={sessionOffset + i + 1} />)}
             </div>
           )}
 
@@ -114,6 +124,14 @@ const StudentCourseContenido = () => {
               {moduleClosed && <span className="admin-status admin-status-green">Módulo completado</span>}
             </div>
             <p style={{ fontSize: '.88rem', color: '#4A4860', marginBottom: 10 }}>{selected.deliverable?.description || 'Este módulo todavía no tiene un entregable definido.'}</p>
+            {selected.deliverable?.checklist?.length > 0 && (
+              <>
+                <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 0 }}>Tu entregable debe incluir</p>
+                <ul className="dash-checklist">
+                  {selected.deliverable.checklist.map((c, i) => <li key={i}><Check size={15} />{c}</li>)}
+                </ul>
+              </>
+            )}
             {totalBullets > 0 && (
               <p className="admin-cell-sub" style={{ marginBottom: 16 }}>Avances de tu proyecto en este módulo · {doneCount} de {totalBullets}</p>
             )}

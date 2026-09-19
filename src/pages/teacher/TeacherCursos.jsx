@@ -1,12 +1,17 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Video, ArrowRight, Clock3 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 
 const TeacherCursos = () => {
   const navigate = useNavigate();
-  const { courses } = useCourseOfferings();
+  const { currentUser } = useAuth();
+  const { courses: allCourses } = useCourseOfferings();
+  // Un admin sigue viendo todos los cursos desde /teacher; un docente solo
+  // ve los que el admin le asignó en Admin > Cursos y precios.
+  const courses = currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid);
 
   return (
     <div className="anim-fade-up d1">
@@ -17,6 +22,9 @@ const TeacherCursos = () => {
         </div>
       </div>
 
+      {courses.length === 0 && (
+        <p className="admin-panel-caption">Todavía no tienes cursos asignados. Pide a un administrador que te asigne uno en Admin &gt; Cursos y precios.</p>
+      )}
       <div className="home-courses-grid">
         {courses.map((c) => (
           <div className="home-course-card" key={c.id} onClick={() => navigate(`/teacher/curso/${c.id}`)}>

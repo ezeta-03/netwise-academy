@@ -47,6 +47,16 @@ service cloud.firestore {
       allow write: if isTeacherOrAdmin();
     }
 
+    // Copia pública del temario (solo título/semanas de cada módulo, sin
+    // links de video ni materiales) -- se muestra en /course/:id a un
+    // visitante sin sesión, junto con el botón de descarga del programa que
+    // captura su contacto (ver `programLeads`). La escribe saveCourseContent
+    // junto con `courseContent`, así que mismo permiso de escritura.
+    match /courseSummaries/{courseId} {
+      allow read: if true;
+      allow write: if isTeacherOrAdmin();
+    }
+
     // Clases en vivo: cualquier usuario autenticado puede verlas. Solo
     // docentes/admin pueden programarlas (la que crea queda como dueña vía
     // instructorUid); cualquier docente/admin puede editarla/cancelarla/

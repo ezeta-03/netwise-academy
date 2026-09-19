@@ -16,3 +16,16 @@ export const getLiveSessionStatus = (session) => {
   if (now <= end) return 'live';
   return 'ended';
 };
+
+// Ventana para poder abrir la sala: no se deja entrar apenas se programa la
+// clase (podría ser días antes), solo desde N minutos antes de la hora
+// definida y hasta que termine.
+export const LIVE_JOIN_WINDOW_MIN = 10;
+
+export const canJoinLiveSession = (session) => {
+  const start = new Date(session.startsAt).getTime();
+  if (Number.isNaN(start)) return false;
+  const end = start + (Number(session.durationMin) || 60) * 60000;
+  const now = Date.now();
+  return now >= start - LIVE_JOIN_WINDOW_MIN * 60000 && now <= end;
+};

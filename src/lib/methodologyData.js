@@ -33,10 +33,10 @@ export const METHOD_STEPS = [
 ];
 
 export const FEATURES = [
-  { icon: Video, title: 'Clases en vivo', desc: 'Dos sesiones de 2 horas por semana, con espacio para preguntar y aprender junto al docente.', tag: '4 horas por semana' },
-  { icon: MessageSquare, title: 'Feedback docente', desc: 'Revisión de tus entregables y comentarios concretos para mejorar cada avance.', tag: 'Acompañamiento' },
-  { icon: FolderOpen, title: 'Recursos de consulta', desc: 'Materiales de apoyo para repasar lo trabajado y practicar entre sesiones.', tag: 'A tu propio ritmo' },
-  { icon: Target, title: 'Proyecto aplicado', desc: 'Un entregable por módulo y un proyecto final desarrollado sobre tu marca, negocio o idea.', tag: 'Resultado final' },
+  { icon: Video, title: 'Clases en vivo', desc: 'Dos sesiones de 2 horas por semana, con espacio para preguntar y aprender junto al docente.' },
+  { icon: MessageSquare, title: 'Feedback docente', desc: 'Revisión de tus entregables y comentarios concretos para mejorar cada avance.' },
+  { icon: FolderOpen, title: 'Recursos de consulta', desc: 'Materiales de apoyo para repasar lo trabajado y practicar entre sesiones.' },
+  { icon: Target, title: 'Proyecto aplicado', desc: 'Un entregable por módulo y un proyecto final desarrollado sobre tu marca, negocio o idea.' },
 ];
 
 export const METHOD_FAQ = [

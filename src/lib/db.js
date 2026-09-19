@@ -224,6 +224,9 @@ export const updateCourseOffering = async (courseId, { price, startDate }, admin
 export const updateCourseVisibility = (courseId, visible) => patchCourseOffering(courseId, { visible });
 export const updateCourseEnrollmentsOpen = (courseId, enrollmentsOpen) => patchCourseOffering(courseId, { enrollmentsOpen });
 export const updateCoursePromo = (courseId, promoPercent) => patchCourseOffering(courseId, { promoPercent: promoPercent === '' || promoPercent == null ? null : Number(promoPercent) });
+// Docente a cargo del curso -- filtra lo que ve ese docente en su panel
+// (Mis cursos, dashboard, agenda). Un admin sigue viendo todos los cursos.
+export const updateCourseTeacher = (courseId, teacherUid) => patchCourseOffering(courseId, { teacherUid: teacherUid || null });
 
 const patchCourseOffering = async (courseId, patch) => {
   if (!isConfigValid) {
@@ -260,14 +263,34 @@ export const fetchCourseContent = async (courseId) => {
 
 export const saveCourseContent = async (courseId, modules, teacherUid) => {
   const payload = { modules, updatedAt: new Date().toISOString(), updatedBy: teacherUid };
+  // Copia pública sin links de video ni materiales -- ver `fetchCourseSummary`.
+  const summary = { modules: modules.map((m) => ({ id: m.id, title: m.title, weeksLabel: m.weeksLabel || '' })) };
 
   if (!isConfigValid) {
     localStorage.setItem(`mock_course_content_${courseId}`, JSON.stringify(payload));
+    localStorage.setItem(`mock_course_summary_${courseId}`, JSON.stringify(summary));
     return payload;
   }
 
   await setDoc(doc(db, 'courseContent', courseId.toString()), payload);
+  await setDoc(doc(db, 'courseSummaries', courseId.toString()), summary);
   return payload;
+};
+
+// Versión pública del temario (solo título y semanas de cada módulo, sin
+// links de video ni materiales) -- para mostrar el programa a un visitante
+// sin sesión en /course/:id, donde puede descargarlo dejando su contacto
+// (ver DownloadProgramModal). `courseContent` sigue exigiendo login porque
+// trae los links de las clases grabadas.
+export const fetchCourseSummary = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_course_summary_${courseId}`);
+    return raw ? JSON.parse(raw) : EMPTY_COURSE_CONTENT;
+  }
+
+  const docRef = doc(db, 'courseSummaries', courseId.toString());
+  const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? docSnap.data() : EMPTY_COURSE_CONTENT;
 };
 
 // --- Inscripciones y progreso reales (colección Firestore `enrollments`) ---

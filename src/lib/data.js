@@ -18,7 +18,8 @@ export const COURSES = [
     color: '#1a1035,#0d1628',
     instructor: 'Netwise Agencia',
     summary: 'Del contenido manual a la creación asistida por Inteligencia Artificial para multiplicar la productividad de marca.',
-    description: 'Aprende a planificar, crear y optimizar contenido usando las últimas herramientas de Inteligencia Artificial sin perder la identidad de tu marca.',
+    labName: 'Social AI Lab™',
+    description: 'Metodología de enseñanza práctica para producir y escalar una estrategia de redes sociales usando IA en cada etapa del proceso (investigación de tendencias, ideación, copywriting, producción visual/video y community management), aplicando modelos de atracción y conversión validados en marketing digital.',
     highlights: [
       'Estrategia y prompts: flujo continuo de copys y gráficos',
       'Automatización de publicación y respuesta en redes',
@@ -55,7 +56,8 @@ export const COURSES = [
     color: '#1a0d28,#28103a',
     instructor: 'Netwise Agencia',
     summary: 'Construcción de identidad de marca sólida: desde el propósito hasta el manual de aplicación para canales digitales.',
-    description: 'Construye una identidad de marca sólida y coherente en todos tus canales digitales, desde el propósito hasta las aplicaciones visuales.',
+    labName: 'Brand Equity Lab™',
+    description: 'Metodología de construcción de marca basada en el modelo CBBE de Kevin Keller, aplicada mediante análisis de casos reales y talleres 90% prácticos, donde cada participante construye su propio Brand Deck Ejecutivo sesión a sesión.',
     highlights: [
       'Propósito y territorio de marca',
       'Identidad visual y tono de comunicación',
@@ -81,7 +83,7 @@ export const COURSES = [
     duration: '8 semanas',
     level: 'Nivel básico',
     cardTag: 'Identidad & Diseño',
-    cardTitle: ['Branding y', 'Creación de Marcas'],
+    cardTitle: ['Branding y', 'Gestión de Marcas'],
     cardDesc: 'Construye una identidad visual sólida y un manual de marca listo para tus canales digitales.',
   },
   {

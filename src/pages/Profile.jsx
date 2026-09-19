@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
-import { useTheme } from '../context/ThemeContext';
-import { Sun, Moon } from 'lucide-react';
 
 const ROLE_WELCOME = {
   student: 'Te damos la bienvenida a tu espacio personalizado de aprendizaje.',
@@ -13,7 +11,6 @@ const ROLE_WELCOME = {
 const Profile = () => {
   const { currentUser, updateDisplayName } = useAuth();
   const { addToast } = useUI();
-  const { theme, toggleTheme } = useTheme();
   const [nameInput, setNameInput] = useState(currentUser?.displayName || '');
   const [savingName, setSavingName] = useState(false);
 
@@ -75,19 +72,6 @@ const Profile = () => {
           >
             {savingName ? 'Guardando...' : 'Guardar'}
           </button>
-        </div>
-      </div>
-
-      <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '24px', border: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          {theme === 'dark' ? <Moon size={20} color="var(--accent)" /> : <Sun size={20} color="var(--accent)" />}
-          <h3>Apariencia</h3>
-        </div>
-        <p style={{ fontSize: '.9rem', color: 'var(--text2)', marginBottom: '20px' }}>Ponte cómodo. Este mismo interruptor está disponible en la barra de navegación.</p>
-
-        <div className="my-learning-tabs" style={{ borderBottom: 'none' }}>
-          <button className={`ml-tab ${theme === 'dark' ? 'active' : ''}`} onClick={() => theme !== 'dark' && toggleTheme()}>🌙 Tema Oscuro</button>
-          <button className={`ml-tab ${theme === 'light' ? 'active' : ''}`} onClick={() => theme !== 'light' && toggleTheme()}>☀️ Tema Claro</button>
         </div>
       </div>
 

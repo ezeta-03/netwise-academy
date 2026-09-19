@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchLiveSessions } from '../../lib/db';
 
@@ -10,13 +11,17 @@ const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() ==
 
 const TeacherAgenda = () => {
   const navigate = useNavigate();
-  const { courses } = useCourseOfferings();
+  const { currentUser } = useAuth();
+  const { courses: allCourses } = useCourseOfferings();
+  // Un admin ve todo; un docente solo su(s) curso(s) asignado(s).
+  const courses = currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid);
+  const myCourseIds = new Set(courses.map((c) => c.id.toString()));
   const [sessions, setSessions] = useState([]);
   const [courseFilter, setCourseFilter] = useState('all');
   const [cursor, setCursor] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date());
 
-  useEffect(() => { fetchLiveSessions().then(setSessions); }, []);
+  useEffect(() => { fetchLiveSessions().then((all) => setSessions(all.filter((s) => myCourseIds.has(s.courseId?.toString())))); }, [courses]);
 
   const filtered = sessions.filter((s) => courseFilter === 'all' || s.courseId?.toString() === courseFilter);
 

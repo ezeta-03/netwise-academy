@@ -31,7 +31,7 @@ export const CourseOfferingsProvider = ({ children }) => {
 
   const courses = COURSES.map((c) => {
     const offer = offerings[c.id];
-    if (!offer) return { ...c, visible: true, enrollmentsOpen: true, promoPercent: c.promoPercent ?? null };
+    if (!offer) return { ...c, visible: true, enrollmentsOpen: true, promoPercent: c.promoPercent ?? null, teacherUid: null };
     return {
       ...c,
       price: offer.price ?? c.price,
@@ -39,6 +39,7 @@ export const CourseOfferingsProvider = ({ children }) => {
       visible: offer.visible ?? true,
       enrollmentsOpen: offer.enrollmentsOpen ?? true,
       promoPercent: offer.promoPercent ?? c.promoPercent ?? null,
+      teacherUid: offer.teacherUid ?? null,
     };
   });
 

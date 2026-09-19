@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Lock, Calendar, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, fetchAllEnrollments, fetchSubmissions, upsertSubmission } from '../../lib/db';
+import ModuleSessionCard from '../../components/ModuleSessionCard';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
 const emptyModule = (n) => ({
   id: uid('m'), title: `Módulo ${n}`, weeksLabel: '', objective: '', practiceIntro: '', practiceBullets: [],
-  materials: [], lessons: [], deliverable: { description: '', open: true },
+  tools: [], sessions: [], materials: [], lessons: [], deliverable: { description: '', open: true, checklist: [] },
 });
 
 const SessionForm = ({ initial, onSave, onCancel }) => {
@@ -30,6 +31,48 @@ const SessionForm = ({ initial, onSave, onCancel }) => {
         <button className="admin-btn-edit" disabled={!canSave} onClick={() => onSave({ id: initial?.id || uid('l'), title: title.trim(), videoUrl: videoUrl.trim(), duration: duration.trim(), resources: initial?.resources || [] })}>
           <Save size={13} /> Guardar sesión
         </button>
+      </div>
+    </div>
+  );
+};
+
+const SessionDetailForm = ({ initial, onSave, onCancel }) => {
+  const [dateLabel, setDateLabel] = useState(initial?.dateLabel || '');
+  const [time, setTime] = useState(initial?.time || '');
+  const [title, setTitle] = useState(initial?.title || '');
+  const [status, setStatus] = useState(initial?.status || (initial?.done ? 'done' : 'scheduled'));
+  const [learn, setLearn] = useState(initial?.learn || '');
+  const [doInClass, setDoInClass] = useState(initial?.doInClass || '');
+  const [task, setTask] = useState(initial?.task || '');
+  const canSave = title.trim();
+
+  return (
+    <div className="admin-panel" style={{ marginBottom: 10, background: '#F6F5FA' }}>
+      <div className="admin-field-row">
+        <div className="admin-field"><label>Fecha</label><input value={dateLabel} onChange={(e) => setDateLabel(e.target.value)} placeholder="Ej. lun, 10 ago" /></div>
+        <div className="admin-field"><label>Horario</label><input value={time} onChange={(e) => setTime(e.target.value)} placeholder="Ej. 19:00-21:00" /></div>
+      </div>
+      <div className="admin-field"><label>Título de la sesión</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Mapa del ecosistema digital" /></div>
+      <div className="admin-field"><label>Aprenderás</label><textarea rows={2} value={learn} onChange={(e) => setLearn(e.target.value)} /></div>
+      <div className="admin-field"><label>Harás en clase</label><textarea rows={2} value={doInClass} onChange={(e) => setDoInClass(e.target.value)} /></div>
+      <div className="admin-field"><label>Tu tarea para el proyecto</label><textarea rows={2} value={task} onChange={(e) => setTask(e.target.value)} /></div>
+      <div className="admin-field" style={{ marginBottom: 4 }}>
+        <label>Estado de la sesión</label>
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="scheduled">Programada</option>
+          <option value="next">Próxima sesión</option>
+          <option value="done">Realizada</option>
+        </select>
+      </div>
+      <div className="admin-modal-actions">
+        <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
+        <button
+          className="admin-btn-edit" disabled={!canSave}
+          onClick={() => onSave({
+            id: initial?.id || uid('s'), dateLabel: dateLabel.trim(), time: time.trim(), title: title.trim(),
+            status, learn: learn.trim(), doInClass: doInClass.trim(), task: task.trim(),
+          })}
+        ><Save size={13} /> Guardar sesión</button>
       </div>
     </div>
   );
@@ -69,8 +112,10 @@ const ModuleEditForm = ({ module, onSave, onCancel }) => {
   const [objective, setObjective] = useState(module.objective || '');
   const [practiceIntro, setPracticeIntro] = useState(module.practiceIntro || '');
   const [practiceBullets, setPracticeBullets] = useState((module.practiceBullets || []).join('\n'));
+  const [tools, setTools] = useState((module.tools || []).join(' · '));
   const [deliverable, setDeliverable] = useState(module.deliverable?.description || '');
   const [dueDate, setDueDate] = useState(module.deliverable?.dueDate || '');
+  const [checklist, setChecklist] = useState((module.deliverable?.checklist || []).join('\n'));
 
   return (
     <div className="admin-panel">
@@ -81,16 +126,22 @@ const ModuleEditForm = ({ module, onSave, onCancel }) => {
       <div className="admin-field"><label>Objetivo</label><textarea rows={2} value={objective} onChange={(e) => setObjective(e.target.value)} /></div>
       <div className="admin-field"><label>Introducción de "Contenidos y práctica"</label><textarea rows={2} value={practiceIntro} onChange={(e) => setPracticeIntro(e.target.value)} /></div>
       <div className="admin-field"><label>Puntos (uno por línea)</label><textarea rows={4} value={practiceBullets} onChange={(e) => setPracticeBullets(e.target.value)} /></div>
+      <div className="admin-field"><label>Herramientas de "Sesiones del módulo" (separadas por ·)</label><input value={tools} onChange={(e) => setTools(e.target.value)} placeholder="Ej. Meta Business Suite · ChatGPT / Claude" /></div>
       <div className="admin-field-row">
         <div className="admin-field" style={{ flex: 1 }}><label>Entregable</label><textarea rows={2} value={deliverable} onChange={(e) => setDeliverable(e.target.value)} /></div>
         <div className="admin-field"><label>Fecha límite (opcional)</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
       </div>
+      <div className="admin-field"><label>Tu entregable debe incluir (uno por línea)</label><textarea rows={4} value={checklist} onChange={(e) => setChecklist(e.target.value)} /></div>
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
         <button className="admin-btn-edit" onClick={() => onSave({
           ...module, title: title.trim() || module.title, weeksLabel, objective, practiceIntro,
           practiceBullets: practiceBullets.split('\n').map((b) => b.trim()).filter(Boolean),
-          deliverable: { ...module.deliverable, description: deliverable, dueDate: dueDate || null },
+          tools: tools.split('·').map((t) => t.trim()).filter(Boolean),
+          deliverable: {
+            ...module.deliverable, description: deliverable, dueDate: dueDate || null,
+            checklist: checklist.split('\n').map((c) => c.trim()).filter(Boolean),
+          },
         })}><Save size={13} /> Guardar módulo</button>
       </div>
     </div>
@@ -177,6 +228,8 @@ const TeacherCourseContenido = () => {
   const [editingModule, setEditingModule] = useState(false);
   const [addingSession, setAddingSession] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState(null);
+  const [addingSessionDetail, setAddingSessionDetail] = useState(false);
+  const [editingSessionDetail, setEditingSessionDetail] = useState(null);
   const [addingMaterial, setAddingMaterial] = useState(false);
   const [reviewing, setReviewing] = useState(false);
 
@@ -207,6 +260,8 @@ const TeacherCourseContenido = () => {
   };
 
   const selected = modules.find((m) => m.id === selectedId);
+  const selectedIndex = modules.findIndex((m) => m.id === selectedId);
+  const sessionOffset = modules.slice(0, selectedIndex).reduce((sum, m) => sum + (m.sessions?.length || 0), 0);
 
   const addModule = () => {
     const next = [...modules, emptyModule(modules.length + 1)];
@@ -237,6 +292,20 @@ const TeacherCourseContenido = () => {
   const deleteSession = (sessionId) => {
     if (!confirm('¿Eliminar esta sesión grabada?')) return;
     persist(modules.map((m) => (m.id === selected.id ? { ...m, lessons: m.lessons.filter((l) => l.id !== sessionId) } : m)));
+  };
+
+  const saveSessionDetail = (session) => {
+    const current = selected.sessions || [];
+    const exists = current.some((s) => s.id === session.id);
+    const sessions = exists ? current.map((s) => (s.id === session.id ? session : s)) : [...current, session];
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions } : m)));
+    setAddingSessionDetail(false);
+    setEditingSessionDetail(null);
+  };
+
+  const deleteSessionDetail = (sessionId) => {
+    if (!confirm('¿Eliminar esta sesión del módulo?')) return;
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions: (m.sessions || []).filter((s) => s.id !== sessionId) } : m)));
   };
 
   const saveMaterial = (material) => {
@@ -299,6 +368,29 @@ const TeacherCourseContenido = () => {
                 </div>
               )}
 
+              <div style={{ marginBottom: 22 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <h3 style={{ fontSize: '1rem', color: '#14141F', margin: 0 }}>Sesiones del módulo</h3>
+                  {!addingSessionDetail && <button className="admin-btn-ghost" onClick={() => setAddingSessionDetail(true)}><Plus size={13} /> Agregar sesión</button>}
+                </div>
+                {selected.tools?.length > 0 && <div className="dash-session-tools">{selected.tools.join(' · ')}</div>}
+                {(selected.sessions || []).map((s, i) => (
+                  editingSessionDetail === s.id ? (
+                    <SessionDetailForm key={s.id} initial={s} onSave={saveSessionDetail} onCancel={() => setEditingSessionDetail(null)} />
+                  ) : (
+                    <ModuleSessionCard
+                      key={s.id} session={s} number={sessionOffset + i + 1}
+                      onEdit={() => setEditingSessionDetail(s.id)}
+                      onDelete={deleteSessionDetail}
+                    />
+                  )
+                ))}
+                {addingSessionDetail && <SessionDetailForm onSave={saveSessionDetail} onCancel={() => setAddingSessionDetail(false)} />}
+                {(selected.sessions || []).length === 0 && !addingSessionDetail && (
+                  <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no defines las sesiones en vivo de este módulo.</p>
+                )}
+              </div>
+
               <div className="admin-panel" style={{ marginBottom: 20 }}>
                 <div className="admin-panel-head">
                   <span className="admin-panel-title">Materiales de este módulo</span>
@@ -355,7 +447,15 @@ const TeacherCourseContenido = () => {
 
               <div className="admin-panel">
                 <div className="admin-panel-head"><span className="admin-panel-title">Entregable</span></div>
-                <p style={{ fontSize: '.88rem', color: '#4A4860', marginBottom: 16 }}>{selected.deliverable?.description || 'Todavía no defines el entregable de este módulo.'}</p>
+                <p style={{ fontSize: '.88rem', color: '#4A4860', marginBottom: selected.deliverable?.checklist?.length ? 10 : 16 }}>{selected.deliverable?.description || 'Todavía no defines el entregable de este módulo.'}</p>
+                {selected.deliverable?.checklist?.length > 0 && (
+                  <>
+                    <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 0 }}>Tu entregable debe incluir</p>
+                    <ul className="dash-checklist">
+                      {selected.deliverable.checklist.map((c, i) => <li key={i}><Check size={15} />{c}</li>)}
+                    </ul>
+                  </>
+                )}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button className="admin-btn-edit" onClick={() => setReviewing(true)}><CheckCircle2 size={14} /> Revisar entregas</button>
                   <button className="admin-btn-ghost" onClick={() => setEditingModule(true)}><Pencil size={14} /> Editar módulo</button>
@@ -368,31 +468,63 @@ const TeacherCourseContenido = () => {
           )}
         </div>
 
-        <div className="admin-panel">
-          <div className="admin-panel-head"><span className="admin-panel-title">Módulos</span></div>
-          <div className="dash-modules-rail">
-            {modules.map((m, i) => (
-              <div
-                key={m.id}
-                className={`dash-module-item ${m.id === selectedId ? 'active' : ''} ${m.deliverable?.open === false ? 'done' : ''}`}
-                onClick={() => { setSelectedId(m.id); setEditingModule(false); setReviewing(false); setSearchParams({}); }}
-              >
-                <div className="dash-module-num">{m.deliverable?.open === false ? <CheckCircle2 size={13} /> : i + 1}</div>
-                <div>
-                  <div className="dash-module-title">{m.title}</div>
-                  {m.weeksLabel && <div className="dash-module-sub">{m.weeksLabel}</div>}
+        <div>
+          <div className="admin-panel" style={{ marginBottom: 20 }}>
+            <div className="admin-panel-head"><span className="admin-panel-title">Módulos</span></div>
+            <div className="dash-modules-rail">
+              {modules.map((m, i) => (
+                <div
+                  key={m.id}
+                  className={`dash-module-item ${m.id === selectedId ? 'active' : ''} ${m.deliverable?.open === false ? 'done' : ''}`}
+                  onClick={() => { setSelectedId(m.id); setEditingModule(false); setReviewing(false); setSearchParams({}); }}
+                >
+                  <div className="dash-module-num">{m.deliverable?.open === false ? <CheckCircle2 size={13} /> : i + 1}</div>
+                  <div>
+                    <div className="dash-module-title">{m.title}</div>
+                    {m.weeksLabel && <div className="dash-module-sub">{m.weeksLabel}</div>}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          <button className="admin-btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={addModule}>
-            <Plus size={14} /> Agregar módulo
-          </button>
-          {modules.length > 1 && (
-            <button className="admin-btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 8, color: 'var(--rose)' }} onClick={() => deleteModule(selectedId)}>
-              <Trash2 size={14} /> Eliminar módulo actual
+              ))}
+            </div>
+            <button className="admin-btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={addModule}>
+              <Plus size={14} /> Agregar módulo
             </button>
-          )}
+            {modules.length > 1 && (
+              <button className="admin-btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 8, color: 'var(--rose)' }} onClick={() => deleteModule(selectedId)}>
+                <Trash2 size={14} /> Eliminar módulo actual
+              </button>
+            )}
+          </div>
+
+          {/* Solo el docente ve esta guía -- el estudiante no tiene acceso a
+              cronograma de evaluación, guion de clase ni rúbrica. */}
+          <div className="dash-guide-panel">
+            <div className="dash-guide-head">
+              <span className="dash-guide-title">Guía docente</span>
+              <span className="dash-guide-badge"><Lock size={11} /> Solo docente</span>
+            </div>
+            <div className="dash-guide-row">
+              <div className="dash-guide-row-icon"><Calendar size={15} /></div>
+              <div>
+                <div className="dash-guide-row-title">Cronograma de evaluación</div>
+                <div className="dash-guide-row-sub">Fechas, pesos y aprobación</div>
+              </div>
+            </div>
+            <div className="dash-guide-row">
+              <div className="dash-guide-row-icon"><BookOpen size={15} /></div>
+              <div>
+                <div className="dash-guide-row-title">Indicaciones de clase</div>
+                <div className="dash-guide-row-sub">Guion de cada sesión</div>
+              </div>
+            </div>
+            <div className="dash-guide-row">
+              <div className="dash-guide-row-icon"><Check size={15} /></div>
+              <div>
+                <div className="dash-guide-row-title">Rúbrica de evaluación</div>
+                <div className="dash-guide-row-sub">Criterios y niveles de logro</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

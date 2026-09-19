@@ -8,6 +8,7 @@ import { useEnrollment } from '../hooks/useEnrollment';
 import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import { PAYMENT_METHODS, buildPaymentInstructions } from '../lib/paymentMethods';
+import YapeInstructionsModal from '../components/YapeInstructionsModal';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 
 const STEPS = [
@@ -55,6 +56,7 @@ const Checkout = () => {
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [showYapeInstructions, setShowYapeInstructions] = useState(false);
 
   const [firstClass, setFirstClass] = useState(null);
   const [paymentSettings, setPaymentSettings] = useState(null);
@@ -331,7 +333,14 @@ const Checkout = () => {
                             <p className="checkout-pay-note"><Lock size={13} /> Tu información está protegida y encriptada.</p>
                           </>
                         ) : (
-                          <div className="checkout-pay-placeholder">{buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}</div>
+                          <div className="checkout-pay-placeholder">
+                            {buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}
+                            {paymentMethod === 'yape' && (
+                              <button type="button" className="checkout-pay-howto" onClick={() => setShowYapeInstructions(true)}>
+                                Ver instructivo para pagar con Yape
+                              </button>
+                            )}
+                          </div>
                         )}
 
                         <button
@@ -406,6 +415,14 @@ const Checkout = () => {
           )}
         </div>
       </div>
+
+      {showYapeInstructions && (
+        <YapeInstructionsModal
+          cfg={paymentSettings?.yape}
+          amountLabel={fmtMoney(finalPrice)}
+          onClose={() => setShowYapeInstructions(false)}
+        />
+      )}
     </div>
   );
 };

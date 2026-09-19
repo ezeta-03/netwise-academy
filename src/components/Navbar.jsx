@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,17 @@ const Navbar = () => {
   const { toggleSidebar, unreadCount, openLoginModal } = useUI();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
+
+  // El navbar nace transparente para superponerse al hero, pero necesita un
+  // fondo sólido apenas se hace scroll -- si no, el contenido de la página
+  // se ve por debajo y encima de los links (parecía "sin fondo" al scrollear).
+  const [isScrolled, setIsScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Cerrar sesión debe llevar al Inicio público (no logueado), no dejar que
   // la ruta protegida en la que estabas te rebote sola a /login.
@@ -63,7 +74,7 @@ const Navbar = () => {
       {(location.pathname === '/' || location.pathname === '/metodologia') && (
         <div className="home-promo">Promociones y descuentos disponibles hasta el 30/09</div>
       )}
-      <nav className="navbar" id="navbar">
+      <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`} id="navbar">
         <Link to="/" className="nav-logo">
           <img src={logoNetwise} alt="Netwise Academy" className="nav-logo-img" />
         </Link>
@@ -85,7 +96,7 @@ const Navbar = () => {
                 <Link to="/admin" className="nav-link" style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--accent)' }}>Panel Admin</Link>
               )}
               {currentUser.role === 'teacher' && (
-                <Link to="/teacher" className="nav-link" style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--amber)' }}>Mis Cursos</Link>
+                <Link to="/teacher" className="nav-link" style={{ fontSize: '.85rem', fontWeight: 600, color: 'var(--accent)' }}>Mis Cursos</Link>
               )}
 
               <button className="btn-icon" title="Notificaciones" onClick={toggleSidebar} style={{ position: 'relative' }}>
@@ -143,7 +154,7 @@ const Navbar = () => {
             )
           ))}
           {currentUser?.role === 'admin' && <Link to="/admin" className="mm-link" style={{ color: 'var(--accent)' }} onClick={closeMenu}>Panel Admin</Link>}
-          {currentUser?.role === 'teacher' && <Link to="/teacher" className="mm-link" style={{ color: 'var(--amber)' }} onClick={closeMenu}>Mis Cursos</Link>}
+          {currentUser?.role === 'teacher' && <Link to="/teacher" className="mm-link" style={{ color: 'var(--accent)' }} onClick={closeMenu}>Mis Cursos</Link>}
           {currentUser && <Link to="/profile" className="mm-link" onClick={closeMenu}>Mi Perfil</Link>}
         </div>
 
