@@ -747,6 +747,8 @@ body::before {
 }
 .checkout-step-pill.active { background: var(--accent); color: #fff; }
 .checkout-step-pill.done { background: var(--accent-bg); color: var(--accent); }
+.checkout-step-pill.clickable { cursor: pointer; }
+.checkout-step-pill.clickable:hover { background: var(--accent); color: #fff; }
 .checkout-step-divider { width: 24px; height: 1px; background: #D8D6E3; }
 .checkout-title { font-family: var(--ff-body); font-weight: 700; font-size: 1.7rem; color: #14141F; margin-bottom: 8px; }
 .checkout-title em { font-style: normal; color: var(--accent); }
@@ -828,18 +830,27 @@ body::before {
 .checkout-pay-placeholder { background: #F6F5FA; border-radius: 10px; padding: 20px; color: #6B6980; font-size: .86rem; text-align: center; }
 .checkout-pay-howto { background: none; border: none; padding: 0; margin-top: 10px; color: var(--accent); font-size: .82rem; font-weight: 700; cursor: pointer; text-decoration: underline; }
 
-.yape-highlight {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  background: var(--accent-bg); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;
+.checkout-yape-qr { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-bottom: 14px; }
+.checkout-yape-qr-img { width: 160px; height: 160px; object-fit: contain; border-radius: 10px; background: #fff; padding: 6px; }
+.checkout-yape-qr-label { color: #14141F; font-size: .78rem; font-weight: 700; }
+
+.checkout-proof-field { margin-top: 18px; }
+.checkout-proof-field input[type="file"] {
+  border: 1px dashed #D8D6E3; border-radius: 10px; padding: 10px 14px; font-size: .82rem; color: #6B6980;
 }
-.yape-highlight-label { display: block; color: #6B6980; font-size: .74rem; font-weight: 600; }
-.yape-highlight-value { display: block; color: #14141F; font-size: 1.15rem; font-weight: 700; letter-spacing: .3px; }
-.yape-highlight-sub { display: block; color: #6B6980; font-size: .78rem; }
-.yape-copy-btn {
-  display: flex; align-items: center; gap: 6px; background: #fff; border: 1.5px solid var(--accent);
-  color: var(--accent); border-radius: 8px; padding: 8px 12px; font-size: .78rem; font-weight: 700; cursor: pointer; flex-shrink: 0;
+.checkout-proof-file {
+  display: flex; align-items: center; gap: 8px; background: var(--accent-bg); color: var(--accent);
+  border-radius: 10px; padding: 10px 14px; font-size: .84rem; font-weight: 600;
 }
-.yape-copy-btn:hover { background: var(--accent); color: #fff; }
+.checkout-proof-file span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.checkout-proof-file button { background: none; border: none; color: var(--accent); cursor: pointer; display: flex; }
+
+.yape-qr-highlight {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: var(--accent-bg); border-radius: 12px; padding: 18px; margin-bottom: 20px;
+}
+.yape-qr-img { width: 200px; height: 200px; object-fit: contain; border-radius: 10px; background: #fff; padding: 8px; }
+.yape-highlight-sub { display: block; color: #6B6980; font-size: .78rem; font-weight: 600; }
 
 .yape-steps { list-style: none; padding: 0; margin: 0 0 22px; display: flex; flex-direction: column; gap: 14px; }
 .yape-step { display: flex; align-items: flex-start; gap: 12px; }
@@ -856,6 +867,7 @@ body::before {
   width: 56px; height: 56px; border-radius: 50%; background: var(--accent-bg); color: var(--accent);
   display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;
 }
+.checkout-confirm-icon-pending { background: #FEF3DC; color: #B45309; }
 .checkout-confirm-title { font-family: var(--ff-body); font-weight: 800; font-size: 1.5rem; color: var(--accent); margin-bottom: 4px; }
 .checkout-confirm-sub { font-family: var(--ff-body); font-weight: 700; font-size: 1.15rem; color: #14141F; margin-bottom: 18px; }
 .checkout-confirm-desc { color: #6B6980; font-size: .88rem; line-height: 1.6; margin-bottom: 28px; }
@@ -1560,6 +1572,8 @@ body::before {
 .admin-modal-close { background: none; border: none; color: #8B8A9B; cursor: pointer; flex-shrink: 0; }
 .admin-field { margin-bottom: 15px; display: flex; flex-direction: column; gap: 6px; }
 .admin-field label { font-size: .78rem; font-weight: 600; color: #4A4860; }
+.admin-field > div { color: #14141F; font-size: .88rem; font-weight: 600; }
+.admin-proof-thumb { max-width: 100%; max-height: 260px; border-radius: 10px; border: 1px solid #E2E0EC; display: block; }
 .admin-field input, .admin-field select, .admin-field textarea {
   border: 1px solid #E2E0EC; border-radius: 10px; padding: 10px 14px; font-size: .88rem;
   color: #14141F; font-family: var(--ff-body); outline: none;

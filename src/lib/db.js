@@ -1,5 +1,6 @@
-import { db } from './firebase';
+import { db, storage } from './firebase';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 
 // Determine env (Firebase valid vs Mock)
@@ -572,11 +573,48 @@ export const fetchOrders = async () => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const createOrder = async ({ uid, studentName, courseId, courseTitle, amount, status }) => {
-  const existing = await fetchOrders();
-  const code = `NW-${String(existing.length + 1).padStart(4, '0')}`;
-  const payload = {
-    code, uid, studentName, courseId, courseTitle, amount,
+// Pedidos de UN alumno -- a diferencia de fetchOrders (solo Admin, trae
+// todos), esto lo usa el propio checkout para ver si ya tiene un pedido
+// 'pending' de este curso antes de dejarlo pagar de nuevo (ver Checkout.jsx).
+export const fetchMyOrders = async (uid) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_orders');
+    const list = raw ? JSON.parse(raw) : [];
+    return list.filter((o) => o.uid === uid);
+  }
+  const q = query(collection(db, 'orders'), where('uid', '==', uid));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// Comprobante de pago (captura de Yape/Plin o transferencia) que el alumno
+// adjunta al pagar con un método manual -- es la "evidencia" que el admin
+// revisa en Ventas antes de aprobar (ver AdminVentas.jsx). Sin proyecto
+// Firebase real (modo mock) no hay Storage, así que se guarda como
+// data URL directamente en el pedido -- vive solo en este navegador, igual
+// que el resto de datos mock.
+export const uploadPaymentProof = async (uid, courseId, file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+  const path = `paymentProofs/${uid}/${courseId}_${Date.now()}_${file.name}`;
+  const ref = storageRef(storage, path);
+  await uploadBytes(ref, file);
+  return getDownloadURL(ref);
+};
+
+export const createOrder = async ({ uid, studentName, studentEmail, courseId, courseTitle, amount, status, paymentMethod, couponId, proofCode, proofUrl }) => {
+  const base = {
+    uid, studentName, studentEmail: studentEmail || null, courseId, courseTitle, amount,
+    paymentMethod: paymentMethod || null,
+    couponId: couponId || null,
+    proofCode: proofCode || null,
+    proofUrl: proofUrl || null,
     status: status || 'paid',
     createdAt: new Date().toISOString(),
   };
@@ -584,14 +622,61 @@ export const createOrder = async ({ uid, studentName, courseId, courseTitle, amo
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_orders');
     const list = raw ? JSON.parse(raw) : [];
-    const withId = { id: `mock-${Date.now()}`, ...payload };
+    const id = `mock-${Date.now()}`;
+    const withId = { id, code: `NW-${id.slice(-6).toUpperCase()}`, ...base };
     list.push(withId);
     localStorage.setItem('mock_orders', JSON.stringify(list));
     return withId;
   }
 
-  const ref = await addDoc(collection(db, 'orders'), payload);
+  // Antes el código de pedido salía de `fetchOrders().length` -- una
+  // lectura SIN filtro de toda la colección `orders`, que un alumno
+  // (no-admin) no puede hacer según las reglas de Firestore (allow read:
+  // solo su propio uid o admin). Eso tumbaba TODO pago real con
+  // "permission-denied" apenas alguien intentaba comprar. En vez de leer
+  // la colección, se arma el código a partir del ID que Firestore ya
+  // genera para el doc -- no hace falta ninguna lectura previa.
+  const ref = doc(collection(db, 'orders'));
+  const payload = { code: `NW-${ref.id.slice(0, 6).toUpperCase()}`, ...base };
+  await setDoc(ref, payload);
   return { id: ref.id, ...payload };
+};
+
+// Cambia el estado de un pedido -- hoy solo lo usa approveOrder (pending ->
+// paid), separado por si el admin necesita ajustar el estado desde Ventas.
+export const updateOrderStatus = async (orderId, status) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_orders');
+    const list = raw ? JSON.parse(raw) : [];
+    const idx = list.findIndex((o) => o.id === orderId);
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], status };
+      localStorage.setItem('mock_orders', JSON.stringify(list));
+    }
+    return;
+  }
+  await updateDoc(doc(db, 'orders', orderId), { status });
+};
+
+// Aprobación manual de un pedido con pago pendiente (Yape/Transferencia):
+// el admin confirma que llegó el comprobante, así que recién acá se
+// matricula al alumno (adminCreateEnrollment, igual que cualquier alta
+// manual desde Admin), se canjea el cupón si usó uno (se difiere hasta
+// aquí para no gastar el cupón de un pago que nunca se valide) y el
+// pedido pasa a 'paid'. Antes de esto el alumno no tenía acceso al curso
+// -- ver handlePay en Checkout.jsx.
+export const approveOrder = async (order) => {
+  await adminCreateEnrollment({
+    uid: order.uid,
+    studentName: order.studentName,
+    studentEmail: order.studentEmail || null,
+    courseId: order.courseId,
+    courseTitle: order.courseTitle,
+    status: 'active',
+    reason: `Pago validado manualmente (pedido ${order.code})`,
+  });
+  if (order.couponId) await redeemCoupon(order.couponId);
+  await updateOrderStatus(order.id, 'paid');
 };
 
 // --- Equipo de la academia (colección Firestore `teamMembers`) ---

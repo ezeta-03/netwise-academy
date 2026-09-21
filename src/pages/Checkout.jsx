@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, Lock, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, Lock, UserCircle2, Paperclip, X } from 'lucide-react';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useEnrollment } from '../hooks/useEnrollment';
-import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
+import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchMyOrders, uploadPaymentProof, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import { PAYMENT_METHODS, buildPaymentInstructions } from '../lib/paymentMethods';
 import YapeInstructionsModal from '../components/YapeInstructionsModal';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
+import qrZaazmago from '../assets/NETWISE ACADEMY WEB/qr_zaazmago_recortado.jpeg';
 
 const STEPS = [
   { id: 1, label: 'Tus datos' },
@@ -57,6 +58,10 @@ const Checkout = () => {
   const [cardCvv, setCardCvv] = useState('');
   const [processing, setProcessing] = useState(false);
   const [showYapeInstructions, setShowYapeInstructions] = useState(false);
+  const [orderPending, setOrderPending] = useState(false);
+  const [proofCode, setProofCode] = useState('');
+  const [proofFile, setProofFile] = useState(null);
+  const [proofError, setProofError] = useState('');
 
   const [firstClass, setFirstClass] = useState(null);
   const [paymentSettings, setPaymentSettings] = useState(null);
@@ -83,6 +88,18 @@ const Checkout = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
+
+  useEffect(() => {
+    // Si ya mandó un pago manual (Yape/Transferencia) para este curso y
+    // recarga la página, no tiene `isEnrolled` todavía (el pedido sigue
+    // 'pending' hasta que un admin lo valida) -- sin esto, el checkout lo
+    // regresaría al formulario de pago y podría generar un pedido duplicado.
+    if (!course || !currentUser) return;
+    fetchMyOrders(currentUser.uid).then((list) => {
+      const pending = list.find((o) => o.courseId?.toString() === course.id.toString() && o.status === 'pending');
+      if (pending) { setOrderPending(true); setStep(3); }
+    }).catch(() => {});
+  }, [course, currentUser]);
 
   useEffect(() => {
     // `liveSessions` requiere sesión iniciada -- un visitante que todavía no
@@ -180,19 +197,67 @@ const Checkout = () => {
     }
   };
 
+  const MAX_PROOF_SIZE = 5 * 1024 * 1024;
+
+  const handleProofChange = (e) => {
+    const file = e.target.files?.[0] || null;
+    setProofError('');
+    if (!file) { setProofFile(null); return; }
+    if (!/^image\/|^application\/pdf$/.test(file.type)) {
+      setProofError('Solo se aceptan imágenes (foto/captura) o un PDF.');
+      setProofFile(null);
+      return;
+    }
+    if (file.size > MAX_PROOF_SIZE) {
+      setProofError('El archivo pesa más de 5 MB.');
+      setProofFile(null);
+      return;
+    }
+    setProofFile(file);
+  };
+
   const handlePay = async () => {
     setProcessing(true);
     await new Promise((r) => setTimeout(r, 1400)); // simulación de pasarela, igual que el checkout de un curso
-    await enroll();
+
+    // La tarjeta simula una pasarela real que cobra al toque, así que
+    // matricula de inmediato. Yape/Transferencia son pagos manuales -- nadie
+    // valida todavía que el dinero llegó, así que el pedido queda 'pending'
+    // (con el N° de operación como evidencia mínima, y la captura como
+    // respaldo opcional) y recién se matricula cuando un admin lo aprueba
+    // en Ventas (approveOrder, ver lib/db.js).
+    const isManual = paymentMethod !== 'card';
+    let proofUrl = null;
+
+    if (!isManual) {
+      await enroll();
+      if (usingCoupon) await redeemCoupon(appliedCoupon.id);
+    } else if (proofFile) {
+      // La captura es opcional (el N° de operación ya es la evidencia que se
+      // exige) -- si falla la subida no bloqueamos el pago, solo avisamos y
+      // seguimos sin adjunto.
+      try {
+        proofUrl = await uploadPaymentProof(currentUser.uid, course.id, proofFile);
+      } catch {
+        addToast('No se pudo adjuntar la captura, pero tu pedido se registró igual.', 'error');
+      }
+    }
+
     await createOrder({
       uid: currentUser.uid,
       studentName: currentUser.displayName || currentUser.email,
+      studentEmail: currentUser.email,
       courseId: course.id,
       courseTitle: course.title,
       amount: finalPrice,
-      status: 'paid',
+      paymentMethod,
+      status: isManual ? 'pending' : 'paid',
+      couponId: isManual && usingCoupon ? appliedCoupon.id : null,
+      proofCode: isManual ? proofCode.trim() : null,
+      proofUrl,
     });
-    if (usingCoupon) await redeemCoupon(appliedCoupon.id);
+
+    setOrderPending(isManual);
     setProcessing(false);
     setStep(3);
   };
@@ -209,7 +274,10 @@ const Checkout = () => {
           <div className="checkout-stepper">
             {STEPS.map((s, i) => (
               <React.Fragment key={s.id}>
-                <span className={`checkout-step-pill ${step === s.id ? 'active' : step > s.id ? 'done' : ''}`}>
+                <span
+                  className={`checkout-step-pill ${step === s.id ? 'active' : step > s.id ? 'done clickable' : ''}`}
+                  onClick={() => { if (step > s.id) setStep(s.id); }}
+                >
                   {step > s.id ? <Check size={12} /> : s.id} {s.label}
                 </span>
                 {i < STEPS.length - 1 && <span className="checkout-step-divider" />}
@@ -233,7 +301,17 @@ const Checkout = () => {
           {step < 3 && (
             <div className="checkout-grid">
               <div className="checkout-card">
-                {step === 1 && (
+                {step === 1 && currentUser && (
+                  <>
+                    <div className="checkout-session-chip">
+                      <UserCircle2 size={16} />
+                      Ya iniciaste sesión como <strong>{currentUser.displayName || currentUser.email}</strong>
+                    </div>
+                    <button type="button" className="checkout-submit-btn" onClick={() => setStep(2)}>Continuar al pago →</button>
+                  </>
+                )}
+
+                {step === 1 && !currentUser && (
                   <>
                     <div className="checkout-tabs">
                       <button className={`checkout-tab ${authTab === 'register' ? 'active' : ''}`} onClick={() => { setAuthTab('register'); setAuthError(''); }}>Crear cuenta</button>
@@ -334,6 +412,12 @@ const Checkout = () => {
                           </>
                         ) : (
                           <div className="checkout-pay-placeholder">
+                            {paymentMethod === 'yape' && (
+                              <div className="checkout-yape-qr">
+                                <img src={qrZaazmago} alt="Código QR de Yape Empresas -- GRUPO ZAAZMAGO E.I.R.L." className="checkout-yape-qr-img" />
+                                <span className="checkout-yape-qr-label">GRUPO ZAAZMAGO E.I.R.L.</span>
+                              </div>
+                            )}
                             {buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}
                             {paymentMethod === 'yape' && (
                               <button type="button" className="checkout-pay-howto" onClick={() => setShowYapeInstructions(true)}>
@@ -343,10 +427,41 @@ const Checkout = () => {
                           </div>
                         )}
 
+                        {paymentMethod !== 'card' && (
+                          <>
+                            <div className="admin-field checkout-proof-field">
+                              <label>N.° de operación de Yape/Plin</label>
+                              <input
+                                value={proofCode}
+                                onChange={(e) => setProofCode(e.target.value)}
+                                placeholder="Ej. 00312845"
+                                required
+                              />
+                              <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>
+                                Te lo muestra la app al confirmar el pago -- lo usamos para ubicarlo en nuestra cuenta.
+                              </p>
+                            </div>
+
+                            <div className="admin-field checkout-proof-field">
+                              <label>Captura del pago (opcional)</label>
+                              {proofFile ? (
+                                <div className="checkout-proof-file">
+                                  <Paperclip size={14} />
+                                  <span>{proofFile.name}</span>
+                                  <button type="button" onClick={() => { setProofFile(null); setProofError(''); }} aria-label="Quitar archivo"><X size={13} /></button>
+                                </div>
+                              ) : (
+                                <input type="file" accept="image/*,.pdf" onChange={handleProofChange} />
+                              )}
+                              {proofError && <p className="checkout-coupon-msg error">{proofError}</p>}
+                            </div>
+                          </>
+                        )}
+
                         <button
                           className="checkout-submit-btn"
                           style={{ marginTop: 20 }}
-                          disabled={processing || (paymentMethod === 'card' && (!cardNumber || !cardExpiry || !cardCvv))}
+                          disabled={processing || (paymentMethod === 'card' ? (!cardNumber || !cardExpiry || !cardCvv) : !proofCode.trim())}
                           onClick={handlePay}
                         >
                           {processing ? <Loader2 size={16} className="spin" /> : `Confirmar y pagar ${fmtMoney(finalPrice)} →`}
@@ -393,23 +508,42 @@ const Checkout = () => {
             <div className="checkout-confirm-wrap">
               <div className="checkout-confirm-card">
                 <img src={logoNetwise} alt="Netwise Academy" />
-                <div className="checkout-confirm-icon"><Check size={26} /></div>
-                <div className="checkout-confirm-title">¡Bienvenido/a a Netwise!</div>
-                <div className="checkout-confirm-sub">Ya casi empiezas.</div>
-                <p className="checkout-confirm-desc">Tu inscripción y tu pago fueron confirmados. Revisa la fecha de tu primera clase en vivo y entra a tu aula cuando quieras.</p>
+                {orderPending ? (
+                  <>
+                    <div className="checkout-confirm-icon checkout-confirm-icon-pending"><Loader2 size={26} /></div>
+                    <div className="checkout-confirm-title">¡Ya casi, {currentUser?.displayName?.split(' ')[0] || ''}!</div>
+                    <div className="checkout-confirm-sub">Estamos validando tu pago.</div>
+                    <p className="checkout-confirm-desc">Recibimos tu pedido. En cuanto nuestro equipo confirme tu Yape/Plin o transferencia, te damos acceso al aula -- normalmente en menos de un día útil.</p>
 
-                <div className="checkout-confirm-details">
-                  <div className="checkout-confirm-row"><span>Curso</span><span>{course.title}</span></div>
-                  <div className="checkout-confirm-row">
-                    <span>Primera clase</span>
-                    <span>{firstClass ? `${new Date(firstClass.startsAt).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })} · ${new Date(firstClass.startsAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}` : 'Por confirmar'}</span>
-                  </div>
-                  <div className="checkout-confirm-row"><span>Estado del pago</span><span className="admin-status admin-status-green" style={{ display: 'inline-flex' }}>Confirmado</span></div>
-                </div>
+                    <div className="checkout-confirm-details">
+                      <div className="checkout-confirm-row"><span>Curso</span><span>{course.title}</span></div>
+                      <div className="checkout-confirm-row"><span>Estado del pago</span><span className="admin-status admin-status-amber" style={{ display: 'inline-flex' }}>En validación</span></div>
+                    </div>
 
-                <button className="checkout-confirm-cta" onClick={() => navigate(`/player/${course.id}/1-1`)}>Acceder al aula →</button>
-                <a className="checkout-confirm-link" onClick={() => navigate('/')}>Volver al inicio</a>
-                <p className="checkout-confirm-footnote">Enviamos un correo de confirmación a {currentUser?.email}</p>
+                    <a className="checkout-confirm-link" onClick={() => navigate('/')}>Volver al inicio</a>
+                    <p className="checkout-confirm-footnote">Te avisamos a {currentUser?.email} en cuanto quede confirmado.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="checkout-confirm-icon"><Check size={26} /></div>
+                    <div className="checkout-confirm-title">¡Bienvenido/a a Netwise!</div>
+                    <div className="checkout-confirm-sub">Ya casi empiezas.</div>
+                    <p className="checkout-confirm-desc">Tu inscripción y tu pago fueron confirmados. Revisa la fecha de tu primera clase en vivo y entra a tu aula cuando quieras.</p>
+
+                    <div className="checkout-confirm-details">
+                      <div className="checkout-confirm-row"><span>Curso</span><span>{course.title}</span></div>
+                      <div className="checkout-confirm-row">
+                        <span>Primera clase</span>
+                        <span>{firstClass ? `${new Date(firstClass.startsAt).toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })} · ${new Date(firstClass.startsAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}` : 'Por confirmar'}</span>
+                      </div>
+                      <div className="checkout-confirm-row"><span>Estado del pago</span><span className="admin-status admin-status-green" style={{ display: 'inline-flex' }}>Confirmado</span></div>
+                    </div>
+
+                    <button className="checkout-confirm-cta" onClick={() => navigate(`/player/${course.id}/1-1`)}>Acceder al aula →</button>
+                    <a className="checkout-confirm-link" onClick={() => navigate('/')}>Volver al inicio</a>
+                    <p className="checkout-confirm-footnote">Enviamos un correo de confirmación a {currentUser?.email}</p>
+                  </>
+                )}
               </div>
             </div>
           )}

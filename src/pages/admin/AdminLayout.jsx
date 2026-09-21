@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { to: '/admin/promociones', label: 'Promociones', icon: Tag },
   { to: '/admin/grupos', label: 'Grupos y horarios', icon: Calendar },
   { to: '/admin/alumnos', label: 'Alumnos y accesos', icon: Users },
-  { to: '/admin/ventas', label: 'Ventas e inscripciones', icon: ShoppingCart },
+  { to: '/admin/ventas', label: 'Ventas e inscripciones', icon: ShoppingCart, countKey: 'ventas' },
   { to: '/admin/pagos', label: 'Métodos de pago', icon: Wallet },
   { to: '/admin/soporte', label: 'Soporte', icon: Headphones },
 ];
@@ -52,11 +52,14 @@ const AdminLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
-  const { toggleSidebar, unreadCount } = useUI();
+  const { toggleSidebar, unreadCount, notifications } = useUI();
   const { courses } = useCourseOfferings();
 
   const currentLabel = PAGE_LABELS[location.pathname] || 'Resumen';
-  const counts = { courses: courses.length };
+  // `notifications` para el admin es 1 aviso por pedido pendiente (ver
+  // buildAdminNotifications) -- su length es la cuenta real de pedidos por
+  // validar, sin importar si ya los marcó como leídos en la campanita.
+  const counts = { courses: courses.length, ventas: notifications.length };
 
   const handleLogout = async () => {
     await logout();
@@ -69,7 +72,7 @@ const AdminLayout = () => {
       <NavLink key={item.to} to={item.to} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
         <Icon size={17} />
         <span className="admin-nav-label">{item.label}</span>
-        {item.countKey && counts[item.countKey] != null && (
+        {item.countKey && counts[item.countKey] > 0 && (
           <span className="admin-nav-badge">{counts[item.countKey]}</span>
         )}
       </NavLink>

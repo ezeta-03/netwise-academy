@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Comprobantes de pago (captura de Yape/Plin o transferencia) que el
+    // alumno adjunta al pagar con un método manual -- ver uploadPaymentProof
+    // en lib/db.js. Cada alumno solo puede escribir en su propia carpeta
+    // (uid en la ruta); el admin puede leer cualquiera para validar el pago
+    // en Admin > Ventas (mismo chequeo de rol que usan las reglas de
+    // Firestore, vía firestore.get()).
+    match /paymentProofs/{uid}/{fileName} {
+      allow read: if request.auth != null && (
+                    request.auth.uid == uid ||
+                    firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                  );
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*|application/pdf');
+      allow delete: if false;
+    }
+  }
+}

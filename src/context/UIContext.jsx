@@ -1,9 +1,16 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
-import { fetchMyPreregistrations, fetchMyEnrollments, fetchLiveSessions } from '../lib/db';
-import { buildStudentNotifications } from '../lib/notifications';
+import { fetchMyPreregistrations, fetchMyEnrollments, fetchLiveSessions, fetchOrders } from '../lib/db';
+import { buildStudentNotifications, buildAdminNotifications } from '../lib/notifications';
 import LoginModal from '../components/LoginModal';
+
+// Cada cuánto se revisa si hay pedidos nuevos por validar mientras el admin
+// tiene la app abierta -- no hay backend con Cloud Functions en este
+// proyecto para avisar por push real, así que esto es lo más cercano a
+// "tiempo real" sin agregar esa infraestructura (y su costo).
+const ADMIN_POLL_MS = 45000;
 
 const UIContext = createContext();
 
@@ -12,6 +19,7 @@ export const useUI = () => useContext(UIContext);
 export const UIProvider = ({ children }) => {
   const { currentUser } = useAuth();
   const { courses } = useCourseOfferings();
+  const navigate = useNavigate();
   const [toasts, setToasts] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -36,11 +44,19 @@ export const UIProvider = ({ children }) => {
   // Notificaciones reales derivadas del estado del alumno (cohortes
   // abiertas, clases en vivo próximas/activas/canceladas) -- se recalculan
   // en vez de guardarse en Firestore, igual que el estado de una clase en
-  // vivo. Solo aplica a estudiantes: docentes y admin no tienen ninguna
-  // promesa de "te avisaremos" pendiente en la app hoy.
+  // vivo. El admin ve una versión propia (pedidos pendientes de validar,
+  // ver buildAdminNotifications); los docentes no tienen ninguna promesa
+  // de "te avisaremos" pendiente en la app hoy.
   const loadNotifications = useCallback(() => {
     const isStudent = currentUser?.role === 'student';
+    const isAdmin = currentUser?.role === 'admin';
     const uid = currentUser?.uid;
+
+    if (isAdmin) {
+      fetchOrders().then((orders) => setNotifications(buildAdminNotifications({ orders }))).catch(() => {});
+      return;
+    }
+
     Promise.all([
       isStudent ? fetchMyPreregistrations(uid) : Promise.resolve([]),
       isStudent ? fetchMyEnrollments(uid) : Promise.resolve({}),
@@ -57,6 +73,14 @@ export const UIProvider = ({ children }) => {
   }, [currentUser, courses]);
 
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
+
+  // Sondeo mientras el admin tiene la app abierta, para que el aviso de un
+  // pedido nuevo le llegue sin tener que reabrir la campanita a mano.
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') return;
+    const id = setInterval(loadNotifications, ADMIN_POLL_MS);
+    return () => clearInterval(id);
+  }, [currentUser, loadNotifications]);
 
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -100,6 +124,7 @@ export const UIProvider = ({ children }) => {
       notifications: notificationsWithRead,
       unreadCount,
       markAllRead,
+      refreshNotifications: loadNotifications,
       loginModalOpen,
       openLoginModal,
       closeLoginModal,
@@ -135,7 +160,12 @@ export const UIProvider = ({ children }) => {
             </div>
           ) : (
             notificationsWithRead.map(n => (
-              <div key={n.id} className={`notif-item ${n.read ? 'read' : 'unread'}`}>
+              <div
+                key={n.id}
+                className={`notif-item ${n.read ? 'read' : 'unread'}`}
+                style={n.to ? { cursor: 'pointer' } : undefined}
+                onClick={n.to ? () => { closeSidebar(); navigate(n.to); } : undefined}
+              >
                 <div className="notif-dot"></div>
                 <div>
                   <div className="notif-title">{n.title}</div>

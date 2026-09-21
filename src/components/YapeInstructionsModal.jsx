@@ -1,28 +1,15 @@
 import React from 'react';
-import { X, Smartphone, Copy, CheckCircle2 } from 'lucide-react';
-import { useUI } from '../context/UIContext';
+import { X, Smartphone, CheckCircle2 } from 'lucide-react';
 import ModalPortal from './ModalPortal';
+import qrZaazmago from '../assets/NETWISE ACADEMY WEB/qr_zaazmago_recortado.jpeg';
 
 const YapeInstructionsModal = ({ cfg, amountLabel, onClose }) => {
-  const { addToast } = useUI();
-  const number = cfg?.number?.trim();
-  const accountName = cfg?.accountName?.trim();
+  const accountName = cfg?.accountName?.trim() || 'GRUPO ZAAZMAGO E.I.R.L.';
   const note = cfg?.note?.trim();
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(number);
-      addToast('Número copiado.', 'success');
-    } catch {
-      addToast('No se pudo copiar. Cópialo manualmente.', 'error');
-    }
-  };
 
   const steps = [
     'Abre tu app Yape (o Plin) en el celular.',
-    number
-      ? `Selecciona "Yapear" e ingresa el número ${number}${accountName ? ` (${accountName})` : ''}.`
-      : 'Selecciona "Yapear" e ingresa el número que te compartió Netwise Academy.',
+    'Selecciona "Yapear/Plinear con QR" y escanea el código de abajo.',
     `Escribe el monto exacto: ${amountLabel}.`,
     'En el motivo o mensaje, agrega tu nombre completo para identificar tu pago.',
     'Confirma el pago en la app y guarda la captura del comprobante.',
@@ -40,16 +27,10 @@ const YapeInstructionsModal = ({ cfg, amountLabel, onClose }) => {
           <h2 className="lead-modal-title"><Smartphone size={20} style={{ verticalAlign: '-3px', marginRight: 8 }} />Cómo pagar con <em>Yape</em></h2>
           <p className="lead-modal-desc">Sigue estos pasos para completar tu pago y asegurar tu cupo.</p>
 
-          {number && (
-            <div className="yape-highlight">
-              <div>
-                <span className="yape-highlight-label">Número de Yape/Plin</span>
-                <span className="yape-highlight-value">{number}</span>
-                {accountName && <span className="yape-highlight-sub">{accountName}</span>}
-              </div>
-              <button type="button" className="yape-copy-btn" onClick={handleCopy}><Copy size={14} /> Copiar</button>
-            </div>
-          )}
+          <div className="yape-qr-highlight">
+            <img src={qrZaazmago} alt={`Código QR de Yape Empresas -- ${accountName}`} className="yape-qr-img" />
+            <span className="yape-highlight-sub">{accountName}</span>
+          </div>
 
           <ol className="yape-steps">
             {steps.map((s, i) => (

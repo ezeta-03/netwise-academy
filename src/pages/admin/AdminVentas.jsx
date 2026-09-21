@@ -1,12 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Download, Eye, X } from 'lucide-react';
-import { fetchOrders } from '../../lib/db';
+import { Search, Download, Eye, X, Check, Loader2 } from 'lucide-react';
+import { fetchOrders, approveOrder, logChange } from '../../lib/db';
 import { downloadCsv } from '../../lib/csv';
 import ModalPortal from '../../components/ModalPortal';
+import { useAuth } from '../../context/AuthContext';
+import { useUI } from '../../context/UIContext';
 
 const ORDER_STATUS = {
   paid: { label: 'Pagada', cls: 'admin-status-green' },
   pending: { label: 'Pendiente', cls: 'admin-status-amber' },
+};
+
+const PAYMENT_LABELS = {
+  yape: 'Yape Empresas / Plin Negocios',
+  transfer: 'Transferencia bancaria',
+  card: 'Tarjeta de crédito/débito',
 };
 
 const exportOrdersCsv = (rows) => downloadCsv(
@@ -16,13 +24,34 @@ const exportOrdersCsv = (rows) => downloadCsv(
 );
 
 const AdminVentas = () => {
+  const { currentUser } = useAuth();
+  const { addToast, refreshNotifications } = useUI();
+  const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
+
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
+  const [approvingId, setApprovingId] = useState(null);
 
   useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }).catch(() => setLoading(false)); }, []);
+
+  const handleApprove = async (order) => {
+    setApprovingId(order.id);
+    try {
+      await approveOrder(order);
+      await logChange(adminName, `Validó el pago de ${order.studentName} -- pedido ${order.code} (${order.courseTitle}).`);
+      setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: 'paid' } : o)));
+      setViewing((v) => (v?.id === order.id ? { ...v, status: 'paid' } : v));
+      refreshNotifications();
+      addToast('Pago validado. El alumno ya tiene acceso al curso.', 'success');
+    } catch {
+      addToast('No se pudo validar el pago. Intenta de nuevo.', 'error');
+    } finally {
+      setApprovingId(null);
+    }
+  };
 
   const filtered = orders.filter((o) => {
     const matchesSearch = `${o.code} ${o.studentName} ${o.courseTitle}`.toLowerCase().includes(search.toLowerCase());
@@ -61,12 +90,19 @@ const AdminVentas = () => {
                 const status = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
                 return (
                   <tr key={o.id}>
-                    <td><div className="admin-cell-name">{o.code}</div><div className="admin-cell-sub">{new Date(o.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short.', year: 'numeric' })}</div></td>
+                    <td><div className="admin-cell-name">{o.code}</div><div className="admin-cell-sub">{new Date(o.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</div></td>
                     <td>{o.studentName}</td>
                     <td>{o.courseTitle}</td>
                     <td className="admin-price">S/ {Number(o.amount).toFixed(2)}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
-                    <td><button className="admin-icon-btn" onClick={() => setViewing(o)}><Eye size={14} /></button></td>
+                    <td style={{ display: 'flex', gap: 6 }}>
+                      <button className="admin-icon-btn" onClick={() => setViewing(o)}><Eye size={14} /></button>
+                      {o.status === 'pending' && (
+                        <button className="admin-btn-edit" style={{ padding: '6px 10px', fontSize: '.78rem' }} disabled={approvingId === o.id} onClick={() => handleApprove(o)}>
+                          {approvingId === o.id ? <Loader2 size={13} className="spin" /> : <Check size={13} />} Aprobar
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -88,8 +124,39 @@ const AdminVentas = () => {
             <div className="admin-field"><label>Alumno</label><div>{viewing.studentName}</div></div>
             <div className="admin-field"><label>Curso</label><div>{viewing.courseTitle}</div></div>
             <div className="admin-field"><label>Importe</label><div>S/ {Number(viewing.amount).toFixed(2)}</div></div>
+            <div className="admin-field"><label>Método de pago</label><div>{PAYMENT_LABELS[viewing.paymentMethod] || 'No especificado'}</div></div>
             <div className="admin-field"><label>Fecha</label><div>{new Date(viewing.createdAt).toLocaleString('es-PE')}</div></div>
             <div className="admin-field"><label>Estado</label><div>{(ORDER_STATUS[viewing.status] || ORDER_STATUS.pending).label}</div></div>
+
+            {viewing.paymentMethod && viewing.paymentMethod !== 'card' && (
+              <div className="admin-field">
+                <label>N.° de operación</label>
+                <div>{viewing.proofCode || <span style={{ color: '#B45309' }}>No informado</span>}</div>
+              </div>
+            )}
+
+            <div className="admin-field">
+              <label>Captura adjunta</label>
+              {viewing.proofUrl ? (
+                viewing.proofUrl.startsWith('data:application/pdf') || viewing.proofUrl.includes('.pdf') ? (
+                  <a href={viewing.proofUrl} target="_blank" rel="noreferrer" className="admin-panel-link">Ver PDF adjunto ↗</a>
+                ) : (
+                  <a href={viewing.proofUrl} target="_blank" rel="noreferrer">
+                    <img src={viewing.proofUrl} alt="Comprobante de pago" className="admin-proof-thumb" />
+                  </a>
+                )
+              ) : (
+                <div style={{ color: '#8B8A9B', fontWeight: 500 }}>No adjuntó -- valida con el N.° de operación.</div>
+              )}
+            </div>
+
+            {viewing.status === 'pending' && (
+              <div className="admin-modal-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
+                <button className="admin-btn-edit" disabled={approvingId === viewing.id} onClick={() => handleApprove(viewing)}>
+                  {approvingId === viewing.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />} Validar pago y matricular
+                </button>
+              </div>
+            )}
           </div>
         </div>
         </ModalPortal>

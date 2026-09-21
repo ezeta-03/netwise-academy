@@ -49,3 +49,20 @@ export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledC
 
   return notifications;
 };
+
+// Notificaciones para el Admin: un aviso por cada pedido manual (Yape/
+// Transferencia) que sigue 'pending' -- nadie confirmó todavía que el
+// dinero llegó, así que necesita que alguien lo revise en Ventas y lo
+// apruebe (ver approveOrder en lib/db.js) para recién matricular al
+// alumno. Igual que las del alumno, se recalculan a partir de `orders` en
+// vez de guardarse aparte.
+export const buildAdminNotifications = ({ orders }) => (
+  orders
+    .filter((o) => o.status === 'pending')
+    .map((o) => ({
+      id: `order_pending_${o.id}`,
+      title: `🧾 Pago por validar: ${o.studentName}`,
+      detail: `${o.courseTitle} · S/ ${Number(o.amount).toFixed(2)} · ${o.code}`,
+      to: '/admin/ventas',
+    }))
+);
