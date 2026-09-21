@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import WhatsAppButton from './components/WhatsAppButton';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
@@ -119,6 +120,7 @@ function App() {
           <ScrollToTop />
           {/* Navbar hides itself on login/player routes internally via useLocation */}
           <Navbar />
+          <WhatsAppButton />
         <div className="main-content">
         <Routes>
           {/* Public Routes */}

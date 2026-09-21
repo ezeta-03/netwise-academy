@@ -5,6 +5,7 @@ import { COURSE_THUMBNAILS } from '../lib/courseThumbnails';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { METHOD_STEPS, FEATURES } from '../lib/methodologyData';
 import Footer from '../components/Footer';
+import HeroLeadPanel from '../components/HeroLeadPanel';
 
 import heroImg from '../assets/NETWISE ACADEMY WEB/hero_principal.webp';
 import videoFuturo from '../assets/NETWISE ACADEMY WEB/videos/video_futuro.mp4';
@@ -66,9 +67,7 @@ const Home = () => {
             <span className="home-hero-tag home-hero-tag-bottom"><Sparkles size={14} /> Talleres 100% prácticos</span>
           </div>
         </section>
-        <button type="button" className="home-hero-discover" onClick={scrollToMethod}>
-          <span>Descubre</span> <ArrowUpRight size={14} />
-        </button>
+        <HeroLeadPanel courses={COURSES} />
       </div>
 
       <div className="home-hero-banner">

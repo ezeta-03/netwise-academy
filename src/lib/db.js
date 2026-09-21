@@ -913,14 +913,41 @@ export const updateSupportRequestStatus = async (requestId, status) => {
 };
 
 // --- Leads del programa descargable (colección `programLeads`) ---
-// Captura de contacto antes de descargar el programa de un curso -- no
-// requiere cuenta, solo deja el interés registrado para seguimiento comercial.
+// Captura de contacto antes de descargar el programa de un curso, o interés
+// general dejado en el formulario del hero de Inicio (ver HeroLeadPanel) --
+// ninguno requiere cuenta, solo deja el interés registrado para seguimiento
+// comercial. `source` distingue de dónde vino ('download' vs 'hero').
 
-export const captureProgramLead = async ({ courseId, courseTitle, name, email, phone, marketingConsent }) => {
+// Web App de Apps Script que agrega el lead como fila a un Google Sheet --
+// ver scripts/google-apps-script/Code.gs para el código a pegar ahí y los
+// pasos de instalación. Sin VITE_LEADS_WEBAPP_URL configurada, esto no hace
+// nada (el lead igual se guarda en Firestore más abajo).
+const LEADS_WEBAPP_URL = import.meta.env.VITE_LEADS_WEBAPP_URL;
+const LEADS_WEBAPP_SECRET = import.meta.env.VITE_LEADS_WEBAPP_SECRET;
+
+const sendLeadToSheet = (payload) => {
+  if (!LEADS_WEBAPP_URL) return;
+  // mode: 'no-cors' porque Apps Script no siempre manda los headers CORS que
+  // el navegador exige para LEER la respuesta -- con no-cors el envío sí
+  // llega, solo no podemos inspeccionar qué contestó. Content-Type
+  // text/plain evita el preflight OPTIONS, que Apps Script no maneja.
+  // Best-effort: si falla, no bloquea ni rompe el guardado en Firestore.
+  fetch(LEADS_WEBAPP_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ ...payload, secret: LEADS_WEBAPP_SECRET || null }),
+  }).catch(() => {});
+};
+
+export const captureProgramLead = async ({ courseId, courseTitle, name, email, phone, marketingConsent, source }) => {
   const payload = {
-    courseId, courseTitle, name, email, phone: phone || null,
+    courseId: courseId || null, courseTitle: courseTitle || null, name, email, phone: phone || null,
+    source: source || 'download',
     marketingConsent: !!marketingConsent, createdAt: new Date().toISOString(),
   };
+
+  sendLeadToSheet(payload);
 
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_program_leads');
