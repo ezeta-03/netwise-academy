@@ -128,7 +128,7 @@ const Checkout = () => {
   }
 
   if (isEnrolled && step !== 3) {
-    navigate(`/player/${course.id}/1-1`, { replace: true });
+    navigate(`/student/curso/${course.id}`, { replace: true });
     return null;
   }
 
@@ -539,7 +539,7 @@ const Checkout = () => {
                       <div className="checkout-confirm-row"><span>Estado del pago</span><span className="admin-status admin-status-green" style={{ display: 'inline-flex' }}>Confirmado</span></div>
                     </div>
 
-                    <button className="checkout-confirm-cta" onClick={() => navigate(`/player/${course.id}/1-1`)}>Acceder al aula →</button>
+                    <button className="checkout-confirm-cta" onClick={() => navigate(`/student/curso/${course.id}`)}>Acceder al aula →</button>
                     <a className="checkout-confirm-link" onClick={() => navigate('/')}>Volver al inicio</a>
                     <p className="checkout-confirm-footnote">Enviamos un correo de confirmación a {currentUser?.email}</p>
                   </>

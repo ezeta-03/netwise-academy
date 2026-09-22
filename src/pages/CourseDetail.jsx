@@ -99,7 +99,7 @@ const CourseDetail = () => {
 
   const enrollCourse = () => {
     if (isEnrolled) {
-      navigate(`/player/${course.id}/1-1`);
+      navigate(`/student/curso/${course.id}`);
       return;
     }
     if (course.enrollmentsOpen === false) {

@@ -131,7 +131,7 @@ const Catalog = () => {
               const enrollment = enrollments[c.id];
               const priceInfo = getPriceBadge(c.price, !!enrollment);
               return (
-                <div className="course-card" key={c.id} onClick={() => navigate(enrollment ? `/player/${c.id}/1-1` : `/course/${c.id}`)}>
+                <div className="course-card" key={c.id} onClick={() => navigate(enrollment ? `/student/curso/${c.id}` : `/course/${c.id}`)}>
                   <div className="course-thumb">
                     <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} className="course-thumb-img" />
                     <div className="play-overlay"><div className="play-btn-sm"><Play size={20} fill="currentColor" /></div></div>

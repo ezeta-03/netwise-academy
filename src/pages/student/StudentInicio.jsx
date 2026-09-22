@@ -134,7 +134,7 @@ const StudentInicio = () => {
                   <span>Tu progreso</span><span style={{ color: 'var(--accent)', fontWeight: 700 }}>{enrollments[c.id]?.progress || 0}%</span>
                 </div>
                 <div className="progress-bar" style={{ height: 6, marginBottom: 12 }}><div className="progress-fill" style={{ width: `${enrollments[c.id]?.progress || 0}%` }}></div></div>
-                <span className="home-course-link" onClick={(e) => { e.stopPropagation(); navigate(`/player/${c.id}/1-1`); }}>Entrar al curso <ArrowRight size={16} /></span>
+                <span className="home-course-link" onClick={(e) => { e.stopPropagation(); navigate(`/student/curso/${c.id}`); }}>Entrar al curso <ArrowRight size={16} /></span>
               </div>
             </div>
           ))}

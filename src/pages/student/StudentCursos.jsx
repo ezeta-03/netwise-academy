@@ -57,7 +57,7 @@ const StudentCursos = () => {
                 </div>
                 <div className="progress-bar" style={{ height: 6, marginBottom: 6 }}><div className="progress-fill" style={{ width: `${enrollments[c.id]?.progress || 0}%` }}></div></div>
                 <div className="admin-cell-sub" style={{ marginBottom: 12 }}>{(enrollments[c.id]?.completedLessonIds || []).length} módulos completados</div>
-                <span className="home-course-link" onClick={(e) => { e.stopPropagation(); navigate(`/player/${c.id}/1-1`); }}>Entrar al curso <ArrowRight size={16} /></span>
+                <span className="home-course-link" onClick={(e) => { e.stopPropagation(); navigate(`/student/curso/${c.id}`); }}>Entrar al curso <ArrowRight size={16} /></span>
               </div>
             </div>
           ))}
