@@ -4,7 +4,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, deleteEnrollment, fetchGroups, logChange } from '../../lib/db';
+import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, deleteEnrollment, fetchGroups, fetchAllUsers, logChange } from '../../lib/db';
 import { downloadCsv } from '../../lib/csv';
 
 const ACCESS_STATUS = {
@@ -21,6 +21,8 @@ const exportEnrollmentsCsv = (rows) => downloadCsv(
 const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSaved }) => {
   const { addToast } = useUI();
   const isEdit = !!enrollment;
+  const [students, setStudents] = useState([]);
+  const [selectedUid, setSelectedUid] = useState('');
   const [studentName, setStudentName] = useState(enrollment?.studentName || '');
   const [studentEmail, setStudentEmail] = useState(enrollment?.studentEmail || '');
   const [courseId, setCourseId] = useState(enrollment?.courseId ?? courses[0]?.id ?? '');
@@ -29,7 +31,18 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
   const [reason, setReason] = useState(enrollment?.reason || 'Matrícula de ejemplo');
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (isEdit) return;
+    fetchAllUsers().then((users) => setStudents((users || []).filter((u) => u.role === 'student')));
+  }, [isEdit]);
+
   const courseGroups = groups.filter((g) => g.courseId?.toString() === courseId?.toString());
+
+  const handleSelectStudent = (uid) => {
+    setSelectedUid(uid);
+    const user = students.find((u) => u.uid === uid);
+    if (user) { setStudentName(user.displayName || ''); setStudentEmail(user.email || ''); }
+  };
 
   const handleSave = async () => {
     if (!studentName.trim() || !studentEmail.trim()) { addToast('Nombre y correo son obligatorios.', 'error'); return; }
@@ -43,6 +56,7 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
         addToast('Acceso actualizado.', 'success');
       } else {
         await adminCreateEnrollment({
+          uid: selectedUid || undefined,
           studentName: studentName.trim(), studentEmail: studentEmail.trim(),
           courseId, courseTitle: course?.title || '', groupId: group?.id, groupName: group?.name,
           status, reason,
@@ -69,10 +83,22 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
         </div>
 
         {!isEdit && (
-          <div className="admin-field-row">
-            <div className="admin-field"><label>Nombre del alumno</label><input value={studentName} onChange={(e) => setStudentName(e.target.value)} /></div>
-            <div className="admin-field"><label>Correo</label><input type="email" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} /></div>
-          </div>
+          <>
+            <div className="admin-field">
+              <label>Alumno ya registrado · opcional</label>
+              <select value={selectedUid} onChange={(e) => handleSelectStudent(e.target.value)}>
+                <option value="">Escribir datos manualmente (sin cuenta todavía)</option>
+                {students.map((u) => <option key={u.uid} value={u.uid}>{u.displayName || u.email} · {u.email}</option>)}
+              </select>
+              <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>
+                Elige uno si ya tiene cuenta en la plataforma -- así la matrícula queda conectada a su usuario real. Si todavía no se registra, deja esto en blanco y llena los datos abajo.
+              </p>
+            </div>
+            <div className="admin-field-row">
+              <div className="admin-field"><label>Nombre del alumno</label><input value={studentName} onChange={(e) => { setStudentName(e.target.value); setSelectedUid(''); }} /></div>
+              <div className="admin-field"><label>Correo</label><input type="email" value={studentEmail} onChange={(e) => { setStudentEmail(e.target.value); setSelectedUid(''); }} /></div>
+            </div>
+          </>
         )}
         <div className="admin-field-row">
           <div className="admin-field">
