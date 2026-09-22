@@ -65,6 +65,8 @@ const TeacherCourseSala = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [firstClassDate, setFirstClassDate] = useState(course.startDate || '');
   const [generating, setGenerating] = useState(false);
+  const [selected, setSelected] = useState([]);
+  const [bulkCancelling, setBulkCancelling] = useState(false);
   const hasSchedule = course.scheduleDays?.length > 0 && !!course.scheduleTime;
 
   const load = useCallback(() => {
@@ -133,6 +135,25 @@ const TeacherCourseSala = () => {
     }
   };
 
+  const toggleSelect = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const handleBulkCancel = async () => {
+    if (!confirm(`¿Cancelar ${selected.length} clase${selected.length === 1 ? '' : 's'} seleccionada${selected.length === 1 ? '' : 's'}?`)) return;
+    setBulkCancelling(true);
+    try {
+      await Promise.all(selected.map((id) => cancelLiveSession(id)));
+      addToast(`${selected.length} clase${selected.length === 1 ? '' : 's'} cancelada${selected.length === 1 ? '' : 's'}.`, 'success');
+      setSelected([]);
+      load();
+    } catch {
+      addToast('No se pudieron cancelar todas las clases seleccionadas.', 'error');
+    } finally {
+      setBulkCancelling(false);
+    }
+  };
+
+  const cancelableIds = sessions.filter((s) => { const st = getLiveSessionStatus(s); return st === 'upcoming' || st === 'live'; }).map((s) => s.id);
+
   if (activeSession) {
     return (
       <div className="anim-fade-up d1">
@@ -180,26 +201,49 @@ const TeacherCourseSala = () => {
       </div>
 
       <div className="admin-panel">
-        <div className="admin-panel-head"><span className="admin-panel-title">Clases de este curso</span></div>
-        {sessions.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no programas clases para este curso.</p> : sessions.map((s) => {
-          const status = getLiveSessionStatus(s);
-          const joinable = status === 'live' || status === 'upcoming';
-          const canCancel = status === 'upcoming' || status === 'live';
-          return (
-            <div key={s.id} className="dash-list-row">
-              <div>
-                <div className="dash-list-row-title">{s.title}</div>
-                <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleString('es-PE')} {status === 'cancelled' && '· Cancelada'} {status === 'ended' && '· Finalizada'}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {joinable && <button className="admin-btn-edit" onClick={() => setActiveSession(s)}><LogIn size={13} /> Entrar</button>}
-                {canCancel
-                  ? <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>
-                  : <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
-              </div>
-            </div>
-          );
-        })}
+        <div className="admin-panel-head">
+          <span className="admin-panel-title">Clases de este curso</span>
+          {selected.length > 0 && (
+            <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkCancel} disabled={bulkCancelling}>
+              <XCircle size={13} /> {bulkCancelling ? 'Cancelando...' : `Cancelar ${selected.length} seleccionada${selected.length === 1 ? '' : 's'}`}
+            </button>
+          )}
+        </div>
+        {sessions.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no programas clases para este curso.</p> : (
+          <>
+            {cancelableIds.length > 0 && (
+              <label className="admin-field-checkbox" style={{ marginBottom: 8, fontSize: '.78rem' }}>
+                <input
+                  type="checkbox"
+                  checked={selected.length === cancelableIds.length}
+                  onChange={(e) => setSelected(e.target.checked ? cancelableIds : [])}
+                /> Seleccionar todas las cancelables
+              </label>
+            )}
+            {sessions.map((s) => {
+              const status = getLiveSessionStatus(s);
+              const joinable = status === 'live' || status === 'upcoming';
+              const canCancel = status === 'upcoming' || status === 'live';
+              return (
+                <div key={s.id} className="dash-list-row">
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    {canCancel && <input type="checkbox" style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
+                    <div>
+                      <div className="dash-list-row-title">{s.title}</div>
+                      <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleString('es-PE')} {status === 'cancelled' && '· Cancelada'} {status === 'ended' && '· Finalizada'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {joinable && <button className="admin-btn-edit" onClick={() => setActiveSession(s)}><LogIn size={13} /> Entrar</button>}
+                    {canCancel
+                      ? <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>
+                      : <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
   );

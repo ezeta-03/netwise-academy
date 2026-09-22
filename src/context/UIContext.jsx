@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
 import { fetchMyPreregistrations, fetchMyEnrollments, fetchLiveSessions, fetchOrders } from '../lib/db';
 import { buildStudentNotifications, buildAdminNotifications } from '../lib/notifications';
 import LoginModal from '../components/LoginModal';
+
+// Un ícono y color por tipo de toast -- 'info' es el default (comunicados),
+// el resto son semánticos (éxito/error/advertencia). Ver .toast-* en index.css.
+const TOAST_ICON = { success: CheckCircle2, error: XCircle, warning: AlertTriangle, info: Info };
 
 // Cada cuánto se revisa si hay pedidos nuevos por validar mientras el admin
 // tiene la app abierta -- no hay backend con Cloud Functions en este
@@ -133,12 +138,16 @@ export const UIProvider = ({ children }) => {
 
       {/* Toast Container */}
       <div className="toast-container">
-        {toasts.map(t => (
-          <div key={t.id} className={`toast toast-${t.type} anim-fade-up`}>
-            {t.message}
-            <button className="toast-close" onClick={() => removeToast(t.id)}>×</button>
-          </div>
-        ))}
+        {toasts.map(t => {
+          const Icon = TOAST_ICON[t.type] || TOAST_ICON.info;
+          return (
+            <div key={t.id} className={`toast toast-${t.type} anim-fade-up`}>
+              <Icon size={18} className="toast-icon" />
+              <span className="toast-msg">{t.message}</span>
+              <button className="toast-close" onClick={() => removeToast(t.id)}>×</button>
+            </div>
+          );
+        })}
       </div>
 
       {/* Notification Sidebar */}

@@ -5,7 +5,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent } from '../../lib/db';
+import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 
 const GROUP_STATUS = {
@@ -14,18 +14,30 @@ const GROUP_STATUS = {
   closed: { label: 'Cerrado', cls: 'admin-status-gray' },
 };
 
+// Horarios reales que ya dicta algún curso (data.js), para elegir en vez de
+// escribir uno nuevo a mano -- evita horarios inconsistentes entre aulas.
+const buildScheduleOptions = (courses) => [...new Set(
+  courses.filter((c) => c.scheduleDays?.length && c.scheduleTime).map((c) => `${c.scheduleDays.join(' y ')} · ${c.scheduleTime}`)
+)];
+
 const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
   const { addToast } = useUI();
   const [name, setName] = useState(group?.name || '');
   const [courseId, setCourseId] = useState(group?.courseId ?? courses[0]?.id ?? '');
   const [startDate, setStartDate] = useState(group?.startDate || '');
   const [endDate, setEndDate] = useState(group?.endDate || '');
-  const [scheduleTime, setScheduleTime] = useState(group?.scheduleTime || group?.scheduleDays || '');
+  const scheduleOptions = buildScheduleOptions(courses);
+  const [scheduleTime, setScheduleTime] = useState(group?.scheduleTime || group?.scheduleDays || scheduleOptions[0] || '');
+  const [teachers, setTeachers] = useState([]);
   const [instructor, setInstructor] = useState(group?.instructor || '');
   const [capacity, setCapacity] = useState(group?.capacity ?? 30);
   const [status, setStatus] = useState(group?.status || 'to-open');
   const [classLink, setClassLink] = useState(group?.classLink || '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetchAllUsers().then((users) => setTeachers((users || []).filter((u) => u.role === 'teacher')));
+  }, []);
 
   const handleSave = async () => {
     if (!name.trim() || !instructor.trim()) { addToast('Nombre de aula y docente son obligatorios.', 'error'); return; }
@@ -90,7 +102,10 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
         <div className="admin-field-row">
           <div className="admin-field">
             <label>Horario · hora de Perú</label>
-            <input value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} placeholder="Ej. Martes y jueves · 19:00-21:00" />
+            <select value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}>
+              {scheduleOptions.length === 0 && <option value="">Sin horarios definidos todavía</option>}
+              {scheduleOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
           </div>
           <div className="admin-field">
             <label>Cupos</label>
@@ -100,7 +115,10 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
         <div className="admin-field-row">
           <div className="admin-field">
             <label>Docente responsable</label>
-            <input value={instructor} onChange={(e) => setInstructor(e.target.value)} placeholder="Ej. Valeria Torres" />
+            <select value={instructor} onChange={(e) => setInstructor(e.target.value)}>
+              <option value="">Sin asignar</option>
+              {teachers.map((t) => <option key={t.uid} value={t.displayName || t.email}>{t.displayName || t.email}</option>)}
+            </select>
           </div>
           <div className="admin-field">
             <label>Estado</label>

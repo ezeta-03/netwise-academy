@@ -1365,16 +1365,27 @@ body::before {
 ═══════════════════════════════════════════════════ */
 .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 10px; }
 .toast {
-  background: var(--surface); border: 1.5px solid var(--border2);
+  background: var(--surface); border: 1.5px solid var(--border2); color: var(--text);
   border-radius: var(--r-md); padding: 14px 18px;
   display: flex; align-items: center; gap: 12px; min-width: 280px; max-width: 360px;
   animation: fadeUp .3s ease both; box-shadow: var(--shadow);
 }
-.toast.success { border-left: 3px solid var(--green); }
-.toast.error   { border-left: 3px solid var(--rose); }
-.toast.info    { border-left: 3px solid var(--accent); }
-.toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+/* Éxito/error/advertencia llevan fondo sólido de su color (mismos tonos que
+   admin-status-*, para que se lean igual sin importar qué haya detrás del
+   toast -- es position:fixed, puede caer sobre una página clara u oscura);
+   'info' (el default, para comunicados sin connotación) se queda con el
+   estilo neutro de arriba. */
+.toast-success { background: #E3F9EE; border-color: #A7E9C9; color: #15803D; }
+.toast-error   { background: #FDE8EC; border-color: #F7B8C6; color: #BE123C; }
+.toast-warning { background: #FEF3DC; border-color: #F9DFA0; color: #B45309; }
+.toast-success .toast-icon { color: #15803D; }
+.toast-error   .toast-icon { color: #BE123C; }
+.toast-warning .toast-icon { color: #B45309; }
+.toast-info    .toast-icon { color: var(--accent2); }
+.toast-icon { flex-shrink: 0; }
 .toast-msg { font-size: .87rem; flex: 1; }
+.toast-close { color: inherit; opacity: .6; }
+.toast-close:hover { opacity: 1; }
 
 /* ═══════════════════════════════════════════════════
    MISC

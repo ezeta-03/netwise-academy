@@ -34,8 +34,8 @@ const TeacherCourseLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
-  const { toggleSidebar, unreadCount } = useUI();
-  const { courses } = useCourseOfferings();
+  const { toggleSidebar, unreadCount, addToast } = useUI();
+  const { courses, loaded: coursesLoaded } = useCourseOfferings();
   const [group, setGroup] = useState(null);
   const [avgProgress, setAvgProgress] = useState(0);
 
@@ -45,6 +45,18 @@ const TeacherCourseLayout = () => {
   };
 
   const course = courses.find((c) => c.id.toString() === courseId?.toString());
+  // Un docente solo entra al curso que el admin le asignó (courseOfferings
+  // .teacherUid) -- si lo desasignan mientras el docente sigue con la
+  // pestaña abierta, al navegar entre secciones este layout se re-evalúa y
+  // lo saca. Un admin sigue viendo cualquier curso.
+  const isAssigned = currentUser?.role === 'admin' || course?.teacherUid === currentUser?.uid;
+
+  useEffect(() => {
+    if (coursesLoaded && course && !isAssigned) {
+      addToast('Ya no tienes asignado este curso.', 'warning');
+      navigate('/teacher/cursos', { replace: true });
+    }
+  }, [coursesLoaded, course, isAssigned, navigate, addToast]);
 
   useEffect(() => {
     Promise.all([fetchGroups(), fetchAllEnrollments()]).then(([groups, enrollments]) => {
@@ -57,7 +69,7 @@ const TeacherCourseLayout = () => {
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
 
-  if (!course) return <div className="admin-empty-hint">Cargando curso...</div>;
+  if (!course || !isAssigned) return <div className="admin-empty-hint">Cargando curso...</div>;
 
   return (
     <div className="admin-shell">
