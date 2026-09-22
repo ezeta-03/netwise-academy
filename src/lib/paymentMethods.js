@@ -36,14 +36,20 @@ export const PAYMENT_METHODS = [
 ];
 
 // Arma el mensaje que ve el comprador para un método manual, con el monto
-// exacto de su compra -- si el admin todavía no puso un número, cae a un
-// mensaje genérico en vez de mostrar "al ...".
+// exacto de su compra -- si el método es solo-QR (cfg.noNumber, ver
+// AdminPagos), no hay número que mostrar y el QR ya se ve aparte (ver
+// checkout-yape-qr en Checkout.jsx); si el admin todavía no configuró nada,
+// cae a un mensaje genérico en vez de mostrar "al ...".
 export const buildPaymentInstructions = (methodId, cfg, amountLabel) => {
   const meta = PAYMENT_METHODS.find((m) => m.id === methodId);
-  if (!meta?.manual || !cfg?.number?.trim()) {
-    return 'Nuestro equipo te contactará para completar tu pago.';
+  if (!meta?.manual) return 'Nuestro equipo te contactará para completar tu pago.';
+
+  const who = cfg?.accountName?.trim() ? ` (${cfg.accountName.trim()})` : '';
+  const note = cfg?.note?.trim() ? ` ${cfg.note.trim()}` : '';
+
+  if (cfg?.noNumber) {
+    return `${meta.verb} ${amountLabel} escaneando el código QR${who} y envía tu comprobante para confirmar tu cupo.${note}`;
   }
-  const who = cfg.accountName?.trim() ? ` (${cfg.accountName.trim()})` : '';
-  const note = cfg.note?.trim() ? ` ${cfg.note.trim()}` : '';
+  if (!cfg?.number?.trim()) return 'Nuestro equipo te contactará para completar tu pago.';
   return `${meta.verb} ${amountLabel} al ${cfg.number.trim()}${who} y envía tu comprobante para confirmar tu cupo.${note}`;
 };

@@ -32,7 +32,7 @@ const AdminPagos = () => {
   };
 
   const handleSave = async () => {
-    const missing = METHODS.filter((m) => m.manual && settings.paymentMethods?.[m.id]?.enabled && !settings.paymentMethods[m.id]?.number?.trim());
+    const missing = METHODS.filter((m) => m.manual && settings.paymentMethods?.[m.id]?.enabled && !settings.paymentMethods[m.id]?.noNumber && !settings.paymentMethods[m.id]?.number?.trim());
     if (missing.length > 0) {
       addToast(`Falta el número de ${missing.map((m) => m.label).join(' y ')} para poder activarlo.`, 'error');
       return;
@@ -86,11 +86,19 @@ const AdminPagos = () => {
               {m.manual ? (
                 cfg.enabled && (
                   <>
+                    <label className="admin-field-checkbox" style={{ marginBottom: 10 }}>
+                      <input
+                        type="checkbox" checked={!!cfg.noNumber}
+                        onChange={(e) => updateField(m.id, 'noNumber', e.target.checked)}
+                      /> No tiene número · solo código QR
+                    </label>
                     <div className="admin-field-row">
-                      <div className="admin-field">
-                        <label>{m.numberLabel}</label>
-                        <input value={cfg.number || ''} onChange={(e) => updateField(m.id, 'number', e.target.value)} placeholder={m.numberPlaceholder} />
-                      </div>
+                      {!cfg.noNumber && (
+                        <div className="admin-field">
+                          <label>{m.numberLabel}</label>
+                          <input value={cfg.number || ''} onChange={(e) => updateField(m.id, 'number', e.target.value)} placeholder={m.numberPlaceholder} />
+                        </div>
+                      )}
                       <div className="admin-field">
                         <label>Nombre del titular</label>
                         <input value={cfg.accountName || ''} onChange={(e) => updateField(m.id, 'accountName', e.target.value)} placeholder="Ej. Netwise Academy SAC" />
@@ -101,7 +109,9 @@ const AdminPagos = () => {
                       <input value={cfg.note || ''} onChange={(e) => updateField(m.id, 'note', e.target.value)} placeholder={m.notePlaceholder} />
                     </div>
                     <p className="admin-panel-caption" style={{ marginBottom: 0 }}>
-                      El comprador verá: "{m.verb} [monto] al {cfg.number || '...'}{cfg.accountName ? ` (${cfg.accountName})` : ''}".
+                      El comprador verá: {cfg.noNumber
+                        ? `"${m.verb} [monto] escaneando el código QR${cfg.accountName ? ` (${cfg.accountName})` : ''}".`
+                        : `"${m.verb} [monto] al ${cfg.number || '...'}${cfg.accountName ? ` (${cfg.accountName})` : ''}".`}
                     </p>
                   </>
                 )

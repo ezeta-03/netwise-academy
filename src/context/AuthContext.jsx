@@ -82,6 +82,15 @@ export const AuthProvider = ({ children }) => {
       }
 
       const profile = await ensureUserProfile(user);
+      // Cuenta desactivada desde Admin > Equipo y permisos (ver
+      // updateUserStatus): se cierra la sesión de inmediato, no puede
+      // volver a entrar mientras siga en ese estado.
+      if (profile.disabled) {
+        await firebaseSignOut(auth);
+        setCurrentUser(null);
+        setLoading(false);
+        return;
+      }
       setCurrentUser({
         uid: user.uid,
         email: user.email,

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Pencil } from 'lucide-react';
+import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, logChange } from '../../lib/db';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserProfile, logChange } from '../../lib/db';
 
 const ROLE_BADGE = {
   Administrador: 'admin-status-green',
@@ -111,7 +111,7 @@ const AdminEquipo = () => {
       if (!realUsers) return;
       setUsers(realUsers.map((u) => ({
         id: u.uid, uid: u.uid, name: u.displayName || u.email, email: u.email,
-        role: u.role || 'student', joined: formatJoined(u.createdAt),
+        role: u.role || 'student', joined: formatJoined(u.createdAt), disabled: !!u.disabled,
       })));
     });
   }, []);
@@ -127,6 +127,32 @@ const AdminEquipo = () => {
     } catch {
       setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, role: previousRole } : u)));
       addToast(`No se pudo actualizar el rol de ${targetUser.name}. Intenta de nuevo.`, 'error');
+    }
+  };
+
+  const toggleUserDisabled = async (targetUser) => {
+    if (targetUser.uid === currentUser?.uid) return;
+    const nextDisabled = !targetUser.disabled;
+    try {
+      await updateUserStatus(targetUser.uid, nextDisabled);
+      await logChange(adminName, `${nextDisabled ? 'Desactivó' : 'Reactivó'} la cuenta de ${targetUser.name}.`);
+      addToast(`${targetUser.name} ${nextDisabled ? 'desactivado' : 'reactivado'}.`, 'success');
+      setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, disabled: nextDisabled } : u)));
+    } catch {
+      addToast('No se pudo actualizar la cuenta.', 'error');
+    }
+  };
+
+  const handleDeleteUser = async (targetUser) => {
+    if (targetUser.uid === currentUser?.uid) return;
+    if (!confirm(`¿Eliminar el perfil de ${targetUser.name} (${targetUser.email})? Esto quita su rol y acceso, pero no borra la cuenta de inicio de sesión -- si vuelve a entrar, se le crea un perfil nuevo como estudiante. Para bloquearla de verdad, usa "Desactivar".`)) return;
+    try {
+      await deleteUserProfile(targetUser.uid);
+      await logChange(adminName, `Eliminó el perfil de ${targetUser.name}.`);
+      addToast('Perfil eliminado.', 'success');
+      setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+    } catch {
+      addToast('No se pudo eliminar el perfil.', 'error');
     }
   };
 
@@ -197,30 +223,52 @@ const AdminEquipo = () => {
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
-          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Registro</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Registro</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
-            {filteredUsers.length > 0 ? filteredUsers.map((u) => (
-              <tr key={u.id}>
-                <td className="admin-cell-name">{u.name}</td>
-                <td className="admin-cell-sub">{u.email}</td>
-                <td>
-                  <select
-                    className="admin-select"
-                    style={{ padding: '6px 10px', fontSize: '.82rem' }}
-                    value={u.role}
-                    disabled={u.uid === currentUser?.uid}
-                    title={u.uid === currentUser?.uid ? 'No puedes cambiar tu propio rol de administrador.' : undefined}
-                    onChange={(e) => handleRoleChange(u, e.target.value)}
-                  >
-                    <option value="student">student</option>
-                    <option value="teacher">teacher</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </td>
-                <td className="admin-cell-sub">{u.joined}</td>
-              </tr>
-            )) : (
-              <tr><td colSpan="4" className="admin-empty-hint">No se encontraron usuarios.</td></tr>
+            {filteredUsers.length > 0 ? filteredUsers.map((u) => {
+              const isSelf = u.uid === currentUser?.uid;
+              return (
+                <tr key={u.id}>
+                  <td className="admin-cell-name">{u.name}</td>
+                  <td className="admin-cell-sub">{u.email}</td>
+                  <td>
+                    <select
+                      className="admin-select"
+                      style={{ padding: '6px 10px', fontSize: '.82rem' }}
+                      value={u.role}
+                      disabled={isSelf}
+                      title={isSelf ? 'No puedes cambiar tu propio rol de administrador.' : undefined}
+                      onChange={(e) => handleRoleChange(u, e.target.value)}
+                    >
+                      <option value="student">student</option>
+                      <option value="teacher">teacher</option>
+                      <option value="admin">admin</option>
+                    </select>
+                  </td>
+                  <td className="admin-cell-sub">{u.joined}</td>
+                  <td><span className={`admin-status ${u.disabled ? 'admin-status-gray' : 'admin-status-green'}`}>{u.disabled ? 'Desactivado' : 'Activo'}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="admin-icon-btn" disabled={isSelf} onClick={() => toggleUserDisabled(u)}
+                        title={isSelf ? 'No puedes desactivar tu propia cuenta.' : (u.disabled ? 'Reactivar' : 'Desactivar')}
+                        style={isSelf ? undefined : (u.disabled ? undefined : { color: '#BE123C' })}
+                      >
+                        {u.disabled ? <RotateCcw size={14} /> : <Ban size={14} />}
+                      </button>
+                      <button
+                        className="admin-icon-btn" disabled={isSelf} onClick={() => handleDeleteUser(u)}
+                        title={isSelf ? 'No puedes eliminar tu propia cuenta.' : 'Eliminar perfil'}
+                        style={isSelf ? undefined : { color: '#BE123C' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            }) : (
+              <tr><td colSpan="6" className="admin-empty-hint">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
         </table>

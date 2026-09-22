@@ -146,6 +146,25 @@ export const updateUserRole = async (uid, role) => {
   await setDoc(doc(db, 'users', uid), { role }, { merge: true });
 };
 
+// Bloquea/desbloquea el acceso de una cuenta (ver AuthContext: si
+// `disabled` es true, se cierra su sesión apenas inicia y no puede volver a
+// entrar mientras siga así). No borra nada -- es la forma real de "dar de
+// baja" a alguien sin tocar su cuenta de Firebase Auth.
+export const updateUserStatus = async (uid, disabled) => {
+  if (!isConfigValid) return;
+  await setDoc(doc(db, 'users', uid), { disabled }, { merge: true });
+};
+
+// Borra el perfil/rol de Firestore (Admin > Equipo y permisos, limpiar
+// cuentas de prueba). Esto NO borra la cuenta de Firebase Auth -- si esa
+// persona vuelve a iniciar sesión, `ensureUserProfile` le crea un perfil
+// nuevo como 'student' (ver AuthContext). Para bloquear de verdad el
+// acceso, usar updateUserStatus (disabled) en vez de esto.
+export const deleteUserProfile = async (uid) => {
+  if (!isConfigValid) return;
+  await deleteDoc(doc(db, 'users', uid));
+};
+
 // --- Preinscripciones (colección Firestore `preregistrations`) ---
 // Los 4 talleres todavía no tienen precio ni fecha de inicio confirmados, así
 // que "Preinscribirme" no puede ser una compra real todavía. Lo que sí

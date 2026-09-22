@@ -134,7 +134,14 @@ service cloud.firestore {
                             && request.resource.data.role != 'admin')) ||
                     (isSignedIn() && request.auth.uid == userId
                      && request.resource.data.role == resource.data.role);
-      allow delete: if false;
+      // Solo el admin borra -- para limpiar cuentas de prueba desde
+      // Admin > Equipo y permisos (ver deleteUserProfile en lib/db.js). Ojo:
+      // esto borra el perfil/rol en Firestore, no la cuenta de Firebase Auth
+      // (eso requeriría el Admin SDK, que este proyecto no tiene expuesto)
+      // -- si esa persona vuelve a iniciar sesión, ensureUserProfile le crea
+      // un perfil nuevo como 'student'. Para bloquearla de verdad, usar
+      // "Desactivar" (campo `disabled`), no "Eliminar".
+      allow delete: if isAdmin();
     }
 
     // Directorio interno del equipo (Admin > Equipo y permisos). Es una
