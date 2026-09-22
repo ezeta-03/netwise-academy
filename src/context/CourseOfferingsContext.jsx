@@ -29,16 +29,22 @@ export const CourseOfferingsProvider = ({ children }) => {
     setLoaded(true);
   }, []);
 
+  // `has(field)` distingue "el admin lo dejó explícitamente en null/vacío"
+  // (ej. apagó la promoción) de "nunca se tocó, usa el valor del taller" --
+  // con `??` ambos casos se ven iguales (null también es "nullish"), así que
+  // apagar una promoción o vaciar el precio volvía a mostrar el valor
+  // original de data.js en vez de quedar realmente apagado/vacío.
   const courses = COURSES.map((c) => {
     const offer = offerings[c.id];
     if (!offer) return { ...c, visible: true, enrollmentsOpen: true, promoPercent: c.promoPercent ?? null, teacherUid: null };
+    const has = (field) => Object.prototype.hasOwnProperty.call(offer, field);
     return {
       ...c,
-      price: offer.price ?? c.price,
-      startDate: offer.startDate ?? c.startDate ?? null,
+      price: has('price') ? offer.price : c.price,
+      startDate: has('startDate') ? offer.startDate : (c.startDate ?? null),
       visible: offer.visible ?? true,
       enrollmentsOpen: offer.enrollmentsOpen ?? true,
-      promoPercent: offer.promoPercent ?? c.promoPercent ?? null,
+      promoPercent: has('promoPercent') ? offer.promoPercent : (c.promoPercent ?? null),
       teacherUid: offer.teacherUid ?? null,
     };
   });

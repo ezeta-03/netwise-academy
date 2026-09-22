@@ -13,7 +13,7 @@ const catLabel = (catId) => {
   return cat ? cat.label.replace(/[^a-zA-Z\s]/g, '').trim() : catId;
 };
 
-const EditCourseModal = ({ course, adminName, onClose, onSaved }) => {
+const EditCourseModal = ({ course, adminName, adminUid, onClose, onSaved }) => {
   const { addToast } = useUI();
   const [price, setPrice] = useState(course.price ?? '');
   const [startDate, setStartDate] = useState(course.startDate ?? '');
@@ -29,7 +29,7 @@ const EditCourseModal = ({ course, adminName, onClose, onSaved }) => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateCourseOffering(course.id, { price, startDate }, 'admin');
+      await updateCourseOffering(course.id, { price, startDate }, adminUid);
       await updateCoursePromo(course.id, promoPercent);
       await updateCourseTeacher(course.id, teacherUid);
       await logChange(adminName, `Actualizó precio/promoción/docente de "${course.title}".`);
@@ -221,7 +221,7 @@ const AdminCursos = () => {
       </div>
 
       {editing && (
-        <EditCourseModal course={editing} adminName={adminName} onClose={() => setEditing(null)} onSaved={refresh} />
+        <EditCourseModal course={editing} adminName={adminName} adminUid={currentUser?.uid} onClose={() => setEditing(null)} onSaved={refresh} />
       )}
     </div>
   );

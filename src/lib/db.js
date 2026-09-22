@@ -427,6 +427,20 @@ export const updateEnrollmentAccess = async (enrollmentId, uid, courseId, { stat
   await updateDoc(doc(db, 'enrollments', enrollmentId), patch);
 };
 
+// Borra una matrícula (ej. datos de prueba desde Admin > Alumnos y accesos).
+// En mock mode el doc vive dentro del mapa `mock_enrollments_${uid}`, sin id
+// propio -- se borra por uid+courseId en vez de por `id`.
+export const deleteEnrollment = async ({ id, uid, courseId }) => {
+  if (!isConfigValid) {
+    const key = `mock_enrollments_${uid}`;
+    const map = JSON.parse(localStorage.getItem(key) || '{}');
+    delete map[courseId];
+    localStorage.setItem(key, JSON.stringify(map));
+    return;
+  }
+  await deleteDoc(doc(db, 'enrollments', id));
+};
+
 export const markLessonComplete = async (uid, courseId, lessonId, totalLessons) => {
   if (!isConfigValid) {
     const key = `mock_enrollments_${uid}`;
@@ -557,6 +571,16 @@ export const updateGroup = async (groupId, patch) => {
     return;
   }
   await updateDoc(doc(db, 'groups', groupId), patch);
+};
+
+export const deleteGroup = async (groupId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_groups');
+    const list = raw ? JSON.parse(raw) : [];
+    localStorage.setItem('mock_groups', JSON.stringify(list.filter((g) => g.id !== groupId)));
+    return;
+  }
+  await deleteDoc(doc(db, 'groups', groupId));
 };
 
 // --- Pedidos (colección Firestore `orders`) ---

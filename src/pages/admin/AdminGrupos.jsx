@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2 } from 'lucide-react';
+import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchGroups, createGroup, updateGroup, logChange, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent } from '../../lib/db';
+import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 
 const GROUP_STATUS = {
@@ -139,6 +139,8 @@ const LiveClassesPanel = ({ courses }) => {
   const [sessions, setSessions] = useState([]);
   const [contentCounts, setContentCounts] = useState({});
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState([]);
+  const [bulkCancelling, setBulkCancelling] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([
@@ -176,8 +178,26 @@ const LiveClassesPanel = ({ courses }) => {
     }
   };
 
+  const toggleSelect = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const handleBulkCancel = async () => {
+    if (!confirm(`¿Cancelar ${selected.length} clase${selected.length === 1 ? '' : 's'} seleccionada${selected.length === 1 ? '' : 's'}?`)) return;
+    setBulkCancelling(true);
+    try {
+      await Promise.all(selected.map((id) => cancelLiveSession(id)));
+      addToast(`${selected.length} clase${selected.length === 1 ? '' : 's'} cancelada${selected.length === 1 ? '' : 's'}.`, 'success');
+      setSelected([]);
+      load();
+    } catch {
+      addToast('No se pudieron cancelar todas las clases seleccionadas.', 'error');
+    } finally {
+      setBulkCancelling(false);
+    }
+  };
+
   if (loading) return <div className="admin-empty-hint">Cargando actividad en vivo...</div>;
   const sortedSessions = [...sessions].sort((a, b) => new Date(b.startsAt) - new Date(a.startsAt));
+  const cancelableIds = sortedSessions.filter((s) => { const st = getLiveSessionStatus(s); return st === 'upcoming' || st === 'live'; }).map((s) => s.id);
 
   return (
     <>
@@ -199,31 +219,52 @@ const LiveClassesPanel = ({ courses }) => {
       </div>
 
       <div className="admin-panel">
-        <div className="admin-panel-head"><span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Clases en vivo</span></div>
+        <div className="admin-panel-head">
+          <span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Clases en vivo</span>
+          {selected.length > 0 && (
+            <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkCancel} disabled={bulkCancelling}>
+              <XCircle size={13} /> {bulkCancelling ? 'Cancelando...' : `Cancelar ${selected.length} seleccionada${selected.length === 1 ? '' : 's'}`}
+            </button>
+          )}
+        </div>
         {sortedSessions.length === 0 ? (
           <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no se ha programado ninguna clase en vivo.</p>
-        ) : sortedSessions.map((s) => {
-          const liveStatus = getLiveSessionStatus(s);
-          const status = LIVE_STATUS_BADGE[liveStatus] || LIVE_STATUS_BADGE.upcoming;
-          const joinable = liveStatus === 'live' || liveStatus === 'upcoming';
-          const canCancel = liveStatus === 'upcoming' || liveStatus === 'live';
-          return (
-            <div key={s.id} style={{ padding: '12px 14px', background: '#F6F5FA', borderRadius: 10, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <span className={status.className} style={{ marginBottom: 6, display: 'inline-block' }}>{status.label}</span>
-                <div style={{ fontWeight: 600, fontSize: '.9rem', color: '#14141F' }}>{s.title}</div>
-                <div style={{ fontSize: '.78rem', color: '#6B6980' }}>{s.courseTitle} · {s.instructor}</div>
-                <div style={{ fontSize: '.76rem', color: '#8B8A9B' }}>{new Date(s.startsAt).toLocaleString('es-PE')}</div>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {joinable && <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><LogIn size={13} /> Ver sala</button>}
-                {canCancel
-                  ? <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>
-                  : <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
-              </div>
-            </div>
-          );
-        })}
+        ) : (
+          <>
+            <label className="admin-field-checkbox" style={{ marginBottom: 8, fontSize: '.78rem' }}>
+              <input
+                type="checkbox"
+                checked={cancelableIds.length > 0 && selected.length === cancelableIds.length}
+                onChange={(e) => setSelected(e.target.checked ? cancelableIds : [])}
+              /> Seleccionar todas las cancelables
+            </label>
+            {sortedSessions.map((s) => {
+              const liveStatus = getLiveSessionStatus(s);
+              const status = LIVE_STATUS_BADGE[liveStatus] || LIVE_STATUS_BADGE.upcoming;
+              const joinable = liveStatus === 'live' || liveStatus === 'upcoming';
+              const canCancel = liveStatus === 'upcoming' || liveStatus === 'live';
+              return (
+                <div key={s.id} style={{ padding: '12px 14px', background: '#F6F5FA', borderRadius: 10, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                    {canCancel && <input type="checkbox" style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
+                    <div>
+                      <span className={status.className} style={{ marginBottom: 6, display: 'inline-block' }}>{status.label}</span>
+                      <div style={{ fontWeight: 600, fontSize: '.9rem', color: '#14141F' }}>{s.title}</div>
+                      <div style={{ fontSize: '.78rem', color: '#6B6980' }}>{s.courseTitle} · {s.instructor}</div>
+                      <div style={{ fontSize: '.76rem', color: '#8B8A9B' }}>{new Date(s.startsAt).toLocaleString('es-PE')}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {joinable && <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><LogIn size={13} /> Ver sala</button>}
+                    {canCancel
+                      ? <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>
+                      : <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
     </>
   );
@@ -231,6 +272,7 @@ const LiveClassesPanel = ({ courses }) => {
 
 const AdminGrupos = () => {
   const { currentUser } = useAuth();
+  const { addToast } = useUI();
   const { courses } = useCourseOfferings();
   const [groups, setGroups] = useState([]);
   const [search, setSearch] = useState('');
@@ -242,6 +284,29 @@ const AdminGrupos = () => {
   useEffect(() => { load(); }, []);
 
   const filtered = groups.filter((g) => `${g.name} ${g.courseTitle}`.toLowerCase().includes(search.toLowerCase()));
+
+  const toggleClosed = async (g) => {
+    const nextStatus = g.status === 'closed' ? 'open' : 'closed';
+    try {
+      await updateGroup(g.id, { status: nextStatus });
+      await logChange(adminName, `${nextStatus === 'closed' ? 'Desactivó' : 'Reactivó'} el aula "${g.name}".`);
+      load();
+    } catch {
+      addToast('No se pudo actualizar el aula.', 'error');
+    }
+  };
+
+  const handleDeleteGroup = async (g) => {
+    if (!confirm(`¿Eliminar el aula "${g.name}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    try {
+      await deleteGroup(g.id);
+      await logChange(adminName, `Eliminó el aula "${g.name}".`);
+      addToast('Aula eliminada.', 'success');
+      load();
+    } catch {
+      addToast('No se pudo eliminar el aula.', 'error');
+    }
+  };
 
   const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -281,7 +346,15 @@ const AdminGrupos = () => {
                     <td className="admin-cell-sub">{g.scheduleTime || g.scheduleDays || 'Sin horario'}<br />Hora de Perú · {g.instructor}</td>
                     <td>{g.enrolledCount || 0} / {g.capacity}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
-                    <td><button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', group: g })}><Pencil size={14} /></button></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', group: g })} title="Editar"><Pencil size={14} /></button>
+                        <button className="admin-icon-btn" onClick={() => toggleClosed(g)} title={g.status === 'closed' ? 'Reactivar' : 'Desactivar'} style={g.status === 'closed' ? undefined : { color: '#BE123C' }}>
+                          {g.status === 'closed' ? <RotateCcw size={14} /> : <Ban size={14} />}
+                        </button>
+                        <button className="admin-icon-btn" onClick={() => handleDeleteGroup(g)} title="Eliminar" style={{ color: '#BE123C' }}><Trash2 size={14} /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, X, Pencil, Check } from 'lucide-react';
+import { Search, Plus, X, Pencil, Check, Ban, RotateCcw } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
@@ -121,6 +121,7 @@ const CouponModal = ({ coupon, courses, adminName, onClose, onSaved }) => {
 
 const AdminPromociones = () => {
   const { currentUser } = useAuth();
+  const { addToast } = useUI();
   const { courses } = useCourseOfferings();
   const [coupons, setCoupons] = useState([]);
   const [search, setSearch] = useState('');
@@ -131,6 +132,17 @@ const AdminPromociones = () => {
 
   const load = () => fetchCoupons().then((list) => { setCoupons(list); setLoading(false); });
   useEffect(() => { load(); }, []);
+
+  const toggleActive = async (c) => {
+    const nextActive = c.active === false;
+    try {
+      await updateCoupon(c.id, { active: nextActive });
+      await logChange(adminName, `${nextActive ? 'Activó' : 'Desactivó'} el cupón "${c.code}".`);
+      load();
+    } catch {
+      addToast('No se pudo actualizar el cupón.', 'error');
+    }
+  };
 
   const filtered = coupons.filter((c) => c.code.toLowerCase().includes(search.toLowerCase()));
 
@@ -180,7 +192,14 @@ const AdminPromociones = () => {
                     <td className="admin-cell-sub">{vigenciaLabel(c)}</td>
                     <td>{c.usedCount || 0} / {c.maxUses}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
-                    <td><button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', coupon: c })}><Pencil size={14} /></button></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', coupon: c })} title="Editar"><Pencil size={14} /></button>
+                        <button className="admin-icon-btn" onClick={() => toggleActive(c)} title={c.active === false ? 'Activar' : 'Desactivar'} style={c.active === false ? undefined : { color: '#BE123C' }}>
+                          {c.active === false ? <RotateCcw size={14} /> : <Ban size={14} />}
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

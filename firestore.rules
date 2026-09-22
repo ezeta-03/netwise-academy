@@ -113,7 +113,9 @@ service cloud.firestore {
                       (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid) ||
                       isTeacherOrAdmin()
                     );
-      allow delete: if false;
+      // Solo el admin borra -- para limpiar matrículas de prueba desde
+      // Admin > Alumnos y accesos (ver deleteEnrollment en lib/db.js).
+      allow delete: if isAdmin();
     }
 
     // Perfiles con rol. Un usuario puede crear/leer su propio doc, pero solo

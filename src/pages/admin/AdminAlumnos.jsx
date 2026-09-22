@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, Download, X, Pencil } from 'lucide-react';
+import { Search, Plus, Download, X, Pencil, Trash2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, fetchGroups, logChange } from '../../lib/db';
+import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, deleteEnrollment, fetchGroups, logChange } from '../../lib/db';
 import { downloadCsv } from '../../lib/csv';
 
 const ACCESS_STATUS = {
@@ -112,6 +112,7 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
 
 const AdminAlumnos = () => {
   const { currentUser } = useAuth();
+  const { addToast } = useUI();
   const { courses } = useCourseOfferings();
   const [enrollments, setEnrollments] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -126,6 +127,18 @@ const AdminAlumnos = () => {
     setEnrollments(e); setGroups(g); setLoading(false);
   });
   useEffect(() => { load(); }, []);
+
+  const handleDelete = async (e) => {
+    if (!confirm(`¿Eliminar la matrícula de ${e.studentName || e.uid} en "${e.courseTitle}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await deleteEnrollment(e);
+      await logChange(adminName, `Eliminó la matrícula de ${e.studentName || e.uid} en "${e.courseTitle}".`);
+      addToast('Matrícula eliminada.', 'success');
+      load();
+    } catch {
+      addToast('No se pudo eliminar la matrícula.', 'error');
+    }
+  };
 
   const filtered = enrollments.filter((e) => {
     const matchesSearch = `${e.studentName} ${e.studentEmail} ${e.courseTitle}`.toLowerCase().includes(search.toLowerCase());
@@ -171,7 +184,12 @@ const AdminAlumnos = () => {
                     <td className="admin-cell-sub">{e.groupName || '—'}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
                     <td className="admin-cell-sub">{e.reason || '—'}</td>
-                    <td><button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', enrollment: e })}><Pencil size={14} /></button></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', enrollment: e })} title="Editar"><Pencil size={14} /></button>
+                        <button className="admin-icon-btn" onClick={() => handleDelete(e)} title="Eliminar" style={{ color: '#BE123C' }}><Trash2 size={14} /></button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
