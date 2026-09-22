@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Sparkles, Send, Plus, Headphones } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { createSupportRequest } from '../../lib/db';
+import { createSupportRequest, fetchCourseContent } from '../../lib/db';
+import { isAiConfigured, askAssistant } from '../../lib/groq';
+import { STUDENT_SYSTEM_PROMPT } from '../../lib/aiContext';
 
 const SUGGESTIONS = [
   'Explicar el tema de este módulo',
@@ -16,15 +18,40 @@ const StudentCourseIA = () => {
   const { course } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast } = useUI();
+  const [modules, setModules] = useState([]);
   const [input, setInput] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [sending, setSending] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const threadRef = useRef(null);
 
-  // El asistente todavía no tiene un backend de IA conectado -- por ahora
-  // esta pantalla es la interfaz real, sin inventar respuestas falsas.
-  const handleSend = () => {
-    if (!input.trim()) return;
-    addToast('El Asistente IA todavía no está conectado a un modelo. Muy pronto podrás preguntarle sobre el contenido de tus cursos.', 'info');
+  useEffect(() => { fetchCourseContent(course.id).then((data) => setModules(data.modules || [])); }, [course.id]);
+  useEffect(() => { threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, sending]);
+
+  const systemInstruction = useMemo(() => STUDENT_SYSTEM_PROMPT(course, modules), [course, modules]);
+
+  const handleSend = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+
+    if (!isAiConfigured()) {
+      addToast('El Asistente IA todavía no está conectado a un modelo.', 'info');
+      return;
+    }
+
+    const history = messages;
+    setMessages((prev) => [...prev, { role: 'user', text }]);
     setInput('');
+    setSending(true);
+    try {
+      const reply = await askAssistant({ systemInstruction, history, message: text });
+      setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
+    } catch {
+      addToast('El asistente no pudo responder. Intenta de nuevo.', 'error');
+      setMessages((prev) => [...prev, { role: 'assistant', text: 'No pude responder esta vez. ¿Puedes intentarlo de nuevo?' }]);
+    } finally {
+      setSending(false);
+    }
   };
 
   const askHuman = async () => {
@@ -53,18 +80,29 @@ const StudentCourseIA = () => {
         <div className="dash-ai-shell">
           <div className="dash-ai-head">
             <div className="dash-ai-title"><Sparkles size={18} color="var(--accent)" /> Netwise IA</div>
-            <button className="admin-btn-ghost" onClick={() => addToast('Nueva conversación disponible cuando el asistente esté conectado.', 'info')}><Plus size={13} /> Nueva conversación</button>
+            <button className="admin-btn-ghost" onClick={() => setMessages([])} disabled={messages.length === 0}><Plus size={13} /> Nueva conversación</button>
           </div>
 
-          <div className="dash-ai-empty">
-            <div className="dash-ai-orb"><Sparkles size={26} /></div>
-            <h2 style={{ fontSize: '1.15rem', color: '#14141F' }}>¿Qué quieres entender hoy?</h2>
-            <div className="dash-ai-chips">
-              {SUGGESTIONS.map((s) => (
-                <button key={s} className="dash-ai-chip" onClick={() => setInput(s)}>{s}</button>
-              ))}
+          {messages.length === 0 ? (
+            <div className="dash-ai-empty">
+              <div className="dash-ai-orb"><Sparkles size={26} /></div>
+              <h2 style={{ fontSize: '1.15rem', color: '#14141F' }}>¿Qué quieres entender hoy?</h2>
+              <div className="dash-ai-chips">
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} className="dash-ai-chip" onClick={() => setInput(s)}>{s}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="dash-ai-thread" ref={threadRef}>
+              {messages.map((m, i) => (
+                <div key={i} className={`dash-ai-msg ${m.role === 'user' ? 'dash-ai-msg-user' : 'dash-ai-msg-bot'}`} style={{ whiteSpace: 'pre-wrap', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  {m.text}
+                </div>
+              ))}
+              {sending && <div className="dash-ai-msg dash-ai-msg-bot" style={{ alignSelf: 'flex-start' }}>Pensando...</div>}
+            </div>
+          )}
 
           <div className="dash-ai-input-row">
             <input
@@ -72,8 +110,9 @@ const StudentCourseIA = () => {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              disabled={sending}
             />
-            <button className="dash-ai-send" onClick={handleSend}><Send size={17} /></button>
+            <button className="dash-ai-send" onClick={handleSend} disabled={sending}><Send size={17} /></button>
           </div>
         </div>
 
