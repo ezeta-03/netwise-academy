@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useOutletContext, useSearchParams } from 'react-router-dom';
+import { useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Lock, Calendar, BookOpen } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, saveCourseContent, fetchAllEnrollments, fetchSubmissions, upsertSubmission } from '../../lib/db';
+import { fetchCourseContent, saveCourseContent } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -115,6 +115,7 @@ const ModuleEditForm = ({ module, onSave, onCancel }) => {
   const [tools, setTools] = useState((module.tools || []).join(' · '));
   const [deliverable, setDeliverable] = useState(module.deliverable?.description || '');
   const [dueDate, setDueDate] = useState(module.deliverable?.dueDate || '');
+  const [weight, setWeight] = useState(module.deliverable?.weight ?? '');
   const [checklist, setChecklist] = useState((module.deliverable?.checklist || []).join('\n'));
 
   return (
@@ -130,6 +131,7 @@ const ModuleEditForm = ({ module, onSave, onCancel }) => {
       <div className="admin-field-row">
         <div className="admin-field" style={{ flex: 1 }}><label>Entregable</label><textarea rows={2} value={deliverable} onChange={(e) => setDeliverable(e.target.value)} /></div>
         <div className="admin-field"><label>Fecha límite (opcional)</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
+        <div className="admin-field"><label>Peso en la nota final (%)</label><input type="number" min="0" max="100" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="Ej. 25" /></div>
       </div>
       <div className="admin-field"><label>Tu entregable debe incluir (uno por línea)</label><textarea rows={4} value={checklist} onChange={(e) => setChecklist(e.target.value)} /></div>
       <div className="admin-modal-actions">
@@ -140,78 +142,10 @@ const ModuleEditForm = ({ module, onSave, onCancel }) => {
           tools: tools.split('·').map((t) => t.trim()).filter(Boolean),
           deliverable: {
             ...module.deliverable, description: deliverable, dueDate: dueDate || null,
+            weight: weight === '' ? null : Number(weight),
             checklist: checklist.split('\n').map((c) => c.trim()).filter(Boolean),
           },
         })}><Save size={13} /> Guardar módulo</button>
-      </div>
-    </div>
-  );
-};
-
-const SubmissionsTable = ({ course, module, onClose }) => {
-  const { addToast } = useUI();
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    Promise.all([fetchAllEnrollments(), fetchSubmissions(course.id, module.id)]).then(([enrollments, subs]) => {
-      const courseEnrollments = enrollments.filter((e) => e.courseId?.toString() === course.id.toString());
-      setRows(courseEnrollments.map((e) => ({
-        uid: e.uid, studentName: e.studentName || e.uid,
-        submission: subs.find((s) => s.uid === e.uid) || null,
-      })));
-      setLoading(false);
-    });
-  }, [course.id, module.id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const markReviewed = async (row) => {
-    await upsertSubmission({
-      courseId: course.id, moduleId: module.id, moduleTitle: module.title,
-      uid: row.uid, studentName: row.studentName,
-      deliverableTitle: module.deliverable?.description || module.title,
-      status: 'reviewed',
-    });
-    addToast(`Entrega de ${row.studentName} marcada como revisada.`, 'success');
-    load();
-  };
-
-  return (
-    <div className="anim-fade-up d1">
-      <div className="admin-page-head">
-        <div>
-          <span className="dash-eyebrow">{module.title}</span>
-          <h1 className="admin-page-title">Evaluaciones</h1>
-          <p className="admin-page-sub">{course.title}</p>
-        </div>
-        <button className="admin-btn-ghost" onClick={onClose}>← Volver al módulo</button>
-      </div>
-      <div className="admin-table-wrap">
-        {loading ? <div className="admin-empty-hint">Cargando entregas...</div> : rows.length === 0 ? (
-          <div className="admin-empty-hint">Todavía no hay alumnos matriculados en este curso.</div>
-        ) : (
-          <table className="admin-table">
-            <thead><tr><th>Estudiante</th><th>Entregable</th><th>Estado</th><th>Evaluación</th></tr></thead>
-            <tbody>
-              {rows.map((row) => {
-                const status = row.submission?.status === 'reviewed' ? { label: 'Revisado', cls: 'admin-status-green' } : { label: 'Pendiente', cls: 'admin-status-amber' };
-                return (
-                  <tr key={row.uid}>
-                    <td className="admin-cell-name">{row.studentName}</td>
-                    <td>{module.deliverable?.description || module.title}</td>
-                    <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
-                    <td>
-                      {row.submission?.status === 'reviewed'
-                        ? <span className="admin-cell-sub">Ya revisado</span>
-                        : <button className="admin-btn-ghost" onClick={() => markReviewed(row)}><CheckCircle2 size={13} /> Revisar</button>}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
       </div>
     </div>
   );
@@ -221,6 +155,7 @@ const TeacherCourseContenido = () => {
   const { course } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast } = useUI();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modules, setModules] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -231,7 +166,6 @@ const TeacherCourseContenido = () => {
   const [addingSessionDetail, setAddingSessionDetail] = useState(false);
   const [editingSessionDetail, setEditingSessionDetail] = useState(null);
   const [addingMaterial, setAddingMaterial] = useState(false);
-  const [reviewing, setReviewing] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -333,10 +267,6 @@ const TeacherCourseContenido = () => {
         </div>
       </div>
     );
-  }
-
-  if (reviewing && selected) {
-    return <SubmissionsTable course={course} module={selected} onClose={() => setReviewing(false)} />;
   }
 
   return (
@@ -457,7 +387,7 @@ const TeacherCourseContenido = () => {
                   </>
                 )}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button className="admin-btn-edit" onClick={() => setReviewing(true)}><CheckCircle2 size={14} /> Revisar entregas</button>
+                  <button className="admin-btn-edit" onClick={() => navigate(`../evaluacion?vista=entregas&modulo=${selected.id}`)}><CheckCircle2 size={14} /> Revisar entregas</button>
                   <button className="admin-btn-ghost" onClick={() => setEditingModule(true)}><Pencil size={14} /> Editar módulo</button>
                   <button className="admin-btn-ghost" onClick={toggleDeliverableOpen}>
                     <CheckCircle2 size={14} /> Marcar como {selected.deliverable?.open === false ? 'activo' : 'pendiente'}
@@ -476,7 +406,7 @@ const TeacherCourseContenido = () => {
                 <div
                   key={m.id}
                   className={`dash-module-item ${m.id === selectedId ? 'active' : ''} ${m.deliverable?.open === false ? 'done' : ''}`}
-                  onClick={() => { setSelectedId(m.id); setEditingModule(false); setReviewing(false); setSearchParams({}); }}
+                  onClick={() => { setSelectedId(m.id); setEditingModule(false); setSearchParams({}); }}
                 >
                   <div className="dash-module-num">{m.deliverable?.open === false ? <CheckCircle2 size={13} /> : i + 1}</div>
                   <div>

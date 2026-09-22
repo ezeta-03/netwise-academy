@@ -28,7 +28,9 @@ import StudentCourseContenido from './pages/student/StudentCourseContenido';
 import StudentCourseSala from './pages/student/StudentCourseSala';
 import StudentCourseMateriales from './pages/student/StudentCourseMateriales';
 import StudentCourseProyecto from './pages/student/StudentCourseProyecto';
+import StudentCourseEvaluacion from './pages/student/StudentCourseEvaluacion';
 import StudentCourseComunidad from './pages/student/StudentCourseComunidad';
+import StudentCourseGrupos from './pages/student/StudentCourseGrupos';
 import StudentCourseIA from './pages/student/StudentCourseIA';
 
 // Phase 3 Dashboards
@@ -43,7 +45,9 @@ import TeacherCourseContenido from './pages/teacher/TeacherCourseContenido';
 import TeacherCourseSala from './pages/teacher/TeacherCourseSala';
 import TeacherCourseMateriales from './pages/teacher/TeacherCourseMateriales';
 import TeacherCourseProyecto from './pages/teacher/TeacherCourseProyecto';
+import TeacherCourseEvaluacion from './pages/teacher/TeacherCourseEvaluacion';
 import TeacherCourseComunidad from './pages/teacher/TeacherCourseComunidad';
+import TeacherCourseGrupos from './pages/teacher/TeacherCourseGrupos';
 import TeacherCourseIA from './pages/teacher/TeacherCourseIA';
 import Profile from './pages/Profile';
 
@@ -163,7 +167,9 @@ function App() {
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />
+            <Route path="evaluacion" element={<TeacherCourseEvaluacion />} />
             <Route path="comunidad" element={<TeacherCourseComunidad />} />
+            <Route path="grupos" element={<TeacherCourseGrupos />} />
             <Route path="ia" element={<TeacherCourseIA />} />
           </Route>
           <Route path="/student" element={<RoleRoute allowedRoles={['student']}><StudentLayout /></RoleRoute>}>
@@ -180,7 +186,9 @@ function App() {
             <Route path="sala" element={<StudentCourseSala />} />
             <Route path="materiales" element={<StudentCourseMateriales />} />
             <Route path="proyecto" element={<StudentCourseProyecto />} />
+            <Route path="evaluacion" element={<StudentCourseEvaluacion />} />
             <Route path="comunidad" element={<StudentCourseComunidad />} />
+            <Route path="grupos" element={<StudentCourseGrupos />} />
             <Route path="ia" element={<StudentCourseIA />} />
           </Route>
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

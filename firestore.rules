@@ -189,6 +189,23 @@ service cloud.firestore {
       allow write: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isTeacherOrAdmin());
     }
 
+    // Asistencia por sesión: un doc por alumno+sesión. La toma el docente
+    // (columna clicable en Asistencia); el alumno solo la lee (Mi asistencia).
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn();
+      allow write: if isTeacherOrAdmin();
+    }
+
+    // Grupos de trabajo del proyecto (equipos que arman los alumnos, o que
+    // crea el docente). Cualquier usuario logueado del curso puede crear el
+    // suyo y actualizar integrantes/invitaciones (aceptar, unirse, invitar);
+    // mismo nivel de confianza que communityPosts. Solo docente/admin borra.
+    match /workGroups/{groupId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isTeacherOrAdmin();
+    }
+
     // Comunidad de un curso/grupo. Cualquier alumno/docente del curso lee;
     // solo el docente/admin publica anuncios; los comentarios (append al
     // array `comments` vía update) los agrega cualquier usuario logueado.

@@ -784,9 +784,32 @@ export const fetchSubmissions = async (courseId, moduleId) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note }) => {
+// Todas las entregas de un curso (los módulos que sean), para el Registro de
+// notas y el resumen del aula del docente -- a diferencia de fetchSubmissions
+// (un módulo a la vez), esto trae todo en una sola llamada.
+export const fetchCourseSubmissions = async (courseId) => {
+  if (!isConfigValid) {
+    const prefix = `mock_submissions_${courseId}_`;
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) {
+        rows.push(...JSON.parse(localStorage.getItem(key) || '[]'));
+      }
+    }
+    return rows;
+  }
+  const q = query(collection(db, 'submissions'), where('courseId', '==', courseId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note, grade, feedback }) => {
   const docId = `${uid}_${courseId}_${moduleId}`;
-  const payload = { courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note: note || '', updatedAt: new Date().toISOString() };
+  const payload = { courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, updatedAt: new Date().toISOString() };
+  if (note !== undefined) payload.note = note || '';
+  if (grade !== undefined) payload.grade = grade === null || grade === '' ? null : Number(grade);
+  if (feedback !== undefined) payload.feedback = feedback || '';
 
   if (!isConfigValid) {
     const key = `mock_submissions_${courseId}_${moduleId}`;
@@ -1069,11 +1092,12 @@ export const fetchPrivateRooms = async (courseId) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const createPrivateRoom = async ({ courseId, courseTitle, groupName, name, createdByUid, createdByName, memberUids, memberNames }) => {
+export const createPrivateRoom = async ({ courseId, courseTitle, groupName, name, createdByUid, createdByName, memberUids, memberNames, groupId }) => {
   const roomName = `netwise-academy-private-${courseId}-${Date.now()}`;
   const payload = {
     courseId, courseTitle, groupName: groupName || null, name, roomName,
     createdByUid, createdByName, memberUids: memberUids || [], memberNames: memberNames || [],
+    groupId: groupId || null,
     createdAt: new Date().toISOString(),
   };
 
@@ -1088,4 +1112,84 @@ export const createPrivateRoom = async ({ courseId, courseTitle, groupName, name
 
   const ref = await addDoc(collection(db, 'privateRooms'), payload);
   return { id: ref.id, ...payload };
+};
+
+// --- Asistencia por sesión (colección Firestore `attendance`) ---
+// Un doc por alumno+sesión. Las sesiones vienen de `module.sessions` (ver
+// `courseSessions.js`), así que sessionId es el id de esa sesión dentro del
+// módulo -- no hace falta una colección de "sesiones" aparte.
+
+export const fetchCourseAttendance = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_attendance_${courseId}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'attendance'), where('courseId', '==', courseId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studentName, present }) => {
+  const docId = `${uid}_${courseId}_${sessionId}`;
+  const payload = { courseId, sessionId, moduleId, uid, studentName, present, updatedAt: new Date().toISOString() };
+
+  if (!isConfigValid) {
+    const key = `mock_attendance_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = list.findIndex((a) => a.uid === uid && a.sessionId === sessionId);
+    if (idx >= 0) list[idx] = { ...list[idx], ...payload }; else list.push({ id: docId, ...payload });
+    localStorage.setItem(key, JSON.stringify(list));
+    return payload;
+  }
+
+  await setDoc(doc(db, 'attendance', docId), payload, { merge: true });
+  return payload;
+};
+
+// --- Grupos de trabajo del proyecto (colección Firestore `workGroups`) ---
+// Equipos que los alumnos arman para el trabajo final de un curso -- distinto
+// de `groups` (que es el aula/cohorte). El docente también puede crearlos.
+// `pendingUids`/`pendingNames` son las invitaciones aún no respondidas.
+
+export const fetchWorkGroups = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_work_groups_${courseId}`);
+    return raw ? JSON.parse(raw) : [];
+  }
+  const q = query(collection(db, 'workGroups'), where('courseId', '==', courseId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const createWorkGroup = async ({ courseId, courseTitle, name, description, maxMembers, leaderUid, leaderName, memberUids, memberNames }) => {
+  const payload = {
+    courseId, courseTitle, name, description: description || '', maxMembers: maxMembers || 5,
+    leaderUid: leaderUid || null, leaderName: leaderName || null,
+    memberUids: memberUids || [], memberNames: memberNames || [],
+    pendingUids: [], pendingNames: [],
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!isConfigValid) {
+    const key = `mock_work_groups_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const withId = { id: `mock-${Date.now()}`, ...payload };
+    list.push(withId);
+    localStorage.setItem(key, JSON.stringify(list));
+    return withId;
+  }
+
+  const ref = await addDoc(collection(db, 'workGroups'), payload);
+  return { id: ref.id, ...payload };
+};
+
+export const updateWorkGroup = async (groupId, courseId, patch) => {
+  if (!isConfigValid) {
+    const key = `mock_work_groups_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const next = list.map((g) => (g.id === groupId ? { ...g, ...patch } : g));
+    localStorage.setItem(key, JSON.stringify(next));
+    return;
+  }
+  await updateDoc(doc(db, 'workGroups', groupId), patch);
 };

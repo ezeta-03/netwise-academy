@@ -1971,3 +1971,34 @@ body::before {
   .live-lobby { min-height: 420px; padding: 32px 20px; }
 }
 
+/* --- Evaluación: grilla de asistencia y registro de notas --- */
+.eval-nav-card { display: flex; flex-direction: column; gap: 2px; }
+.eval-nav-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; }
+.eval-nav-row:hover { background: #F6F5FA; }
+.eval-nav-row.active { background: var(--accent-bg); }
+.eval-nav-row-icon { width: 30px; height: 30px; border-radius: 8px; background: #EFEEF5; color: #6B6980; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.eval-nav-row.active .eval-nav-row-icon { background: var(--accent); color: #fff; }
+.eval-nav-row-title { font-size: .84rem; font-weight: 600; color: #14141F; }
+.eval-nav-row-sub { font-size: .72rem; color: #8B8A9B; }
+
+.session-module-group { margin-bottom: 14px; }
+.session-module-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #8B8A9B; margin-bottom: 6px; }
+.session-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.session-chip {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 52px; height: 44px; border-radius: 9px; border: 1px solid #ECEAF3; background: #fff;
+  font-size: .68rem; color: #6B6980; cursor: default; gap: 1px;
+}
+.session-chip.present { background: #E3F9EE; color: #15803D; border-color: transparent; }
+.session-chip.absent { background: #FDE8EC; color: #BE123C; border-color: transparent; }
+.session-chip.pending { background: #F6F5FA; color: #B4B2C4; border-color: transparent; }
+.session-chip.clickable { cursor: pointer; }
+.session-chip.clickable:hover { filter: brightness(0.96); }
+.session-chip-label { font-weight: 700; }
+
+.grade-cell-input {
+  width: 56px; padding: 6px 8px; border: 1px solid #ECEAF3; border-radius: 8px; font-size: .84rem;
+  text-align: center; color: #14141F;
+}
+.grade-cell-input:focus { border-color: var(--accent); outline: none; }
+

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, Users, Sparkles, Bell, LogOut } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -13,11 +13,13 @@ const SUB_NAV = [
   { to: 'sala', label: 'Sala de reuniones', icon: Video },
   { to: 'materiales', label: 'Materiales', icon: FolderOpen },
   { to: 'proyecto', label: 'Mi proyecto', icon: Target },
+  { to: 'evaluacion', label: 'Mis evaluaciones', icon: ClipboardCheck },
   { to: 'comunidad', label: 'Comunidad', icon: Users },
+  { to: 'grupos', label: 'Grupos de trabajo', icon: UsersRound },
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de Reunión', materiales: 'Materiales', proyecto: 'Mi proyecto', comunidad: 'Comunidad', ia: 'Asistente IA' };
+const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de Reunión', materiales: 'Materiales', proyecto: 'Mi proyecto', evaluacion: 'Mis evaluaciones', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA' };
 
 const getInitials = (name) => {
   if (!name) return '??';
