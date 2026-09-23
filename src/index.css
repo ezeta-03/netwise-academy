@@ -1816,6 +1816,7 @@ body::before {
 .dash-rubric-applies-weight { color: #8B8A9B; }
 
 .dash-session-card { background: #fff; border: 1px solid #ECEAF3; border-radius: 14px; padding: 16px 20px; margin-bottom: 12px; }
+.dash-session-card.next { border-color: rgba(125,51,255,.45); }
 .dash-session-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .dash-session-check {
   width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;

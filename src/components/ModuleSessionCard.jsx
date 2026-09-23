@@ -22,7 +22,7 @@ const ModuleSessionCard = ({ session, number, defaultOpen = false, onEdit, onDel
   const meta = STATUS_META[status] || STATUS_META.scheduled;
 
   return (
-    <div className="dash-session-card">
+    <div className={`dash-session-card ${status === 'next' ? 'next' : ''}`}>
       <div className="dash-session-head" onClick={() => setOpen((o) => !o)}>
         <div className={`dash-session-check ${meta.checkClass}`}>
           {status === 'done' ? <Check size={13} /> : <span>{number}</span>}
