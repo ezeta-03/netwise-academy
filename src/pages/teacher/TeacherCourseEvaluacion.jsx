@@ -322,7 +322,7 @@ const RegistroNotas = ({ course, modules, roster, submissions, attendance, score
               {hasModuleBlock && (
                 <tr>
                   {moduleBlocks.flatMap((b) => b.components).map((c) => (
-                    <th key={c.key} className="grade-sub-head">{c.label}<br /><span>{c.weightInBlock}% {model.hasScheme ? 'del bloque' : 'de la nota'}</span></th>
+                    <th key={c.key} className="grade-sub-head">{c.label}<br /><span>{c.weightInBlock}% {model.hasScheme && model.blocks.length > 1 ? 'del bloque' : 'de la nota'}</span></th>
                   ))}
                 </tr>
               )}

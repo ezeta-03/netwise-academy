@@ -5,8 +5,8 @@ import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
 import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions, fetchAllEnrollments, fetchCourseGrades } from '../../lib/db';
 import { courseRoster } from '../../lib/roster';
 import { deliverableDueDate } from '../../lib/deliveryDates';
-import { resolveWeights, deliverableLabel, deliverableModules } from '../../lib/weights';
-import { getGradingModel } from '../../lib/gradingScheme';
+import { resolveWeights, deliverableModules } from '../../lib/weights';
+import { getGradingModel, moduleLabel } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const fmtDate = (iso, withTime) => {
@@ -75,7 +75,7 @@ const TeacherCourseCronograma = () => {
     // Vence al final del día de entrega (23:59, hora de Perú); sin calificar y vencida -> 'overdue'.
     const isOverdue = !!dueIso && now > new Date(`${dueIso}T23:59:59-05:00`).getTime();
     const status = isGraded(m.id) ? 'graded' : (isOverdue ? 'overdue' : (i === firstOpenIdx ? 'current' : 'scheduled'));
-    const label = model.hasScheme ? `Entregable M${i + 1}` : deliverableLabel(i, moduleComps.length);
+    const label = moduleLabel(model, i, moduleComps.length);
     return {
       id: m.id, sub: m.deliverable?.description, weeks: m.weeksLabel || '—', dueIso, status, weight: c.weight,
       explicit: model.hasScheme || resolved.rows[i]?.explicit, graded: gradedCount(m.id), name: `${label} · ${m.title}`,

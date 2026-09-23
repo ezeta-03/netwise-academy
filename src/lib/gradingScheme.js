@@ -15,10 +15,12 @@ const manualBlock = (key, label, weight) => ({ key, label, weight });
 
 export const GRADING_SCHEMES = {
   // Redes Sociales & IA
+  // Pesos del sílabo EDRRSS: cada entregable pesa directo sobre la nota final
+  // (M4 es el trabajo final). No hay componente manual.
   1: {
-    subtitle: 'Notas por módulo, sustentación y promedio final.',
-    footer: 'Esquema propuesto · 70% módulos + 30% sustentación',
-    blocks: [moduleBlock('Evaluación de módulos', 70, [20, 25, 25, 30]), manualBlock('sustentacion', 'Sustentación final', 30)],
+    subtitle: 'Notas por entregable y promedio final.',
+    footer: 'Pesos del sílabo EDRRSS · 20% + 25% + 25% + 30%',
+    blocks: [moduleBlock('Entregables del curso', 100, [20, 25, 25, 30])],
   },
   // Branding & Marca
   2: {
@@ -117,6 +119,15 @@ export const buildStudentRows = (model, studentSubmissions, scores) => model.com
   const grade = blank || !Number.isFinite(n) ? null : Math.min(20, Math.max(0, n));
   return { key: c.key, kind: 'manual', title: c.label, weight: c.weight, grade, status: grade === null ? 'pending' : 'reviewed' };
 });
+
+// Nombre del entregable en Cronograma y Rúbrica. El último es el "Trabajo final"
+// salvo que el esquema tenga además componentes manuales (sustentación, proyecto...):
+// ahí ese cierre es el componente manual y los módulos son "Entregable M#".
+export const moduleLabel = (model, index, count) => (
+  model.hasScheme && model.components.some((c) => c.kind === 'manual')
+    ? `Entregable M${index + 1}`
+    : (index === count - 1 ? 'Trabajo final' : `Entregable M${index + 1}`)
+);
 
 // Peso efectivo de cada módulo (moduleId -> % de la nota final).
 export const effectiveModuleWeights = (courseId, modules) => Object.fromEntries(

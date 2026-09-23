@@ -5,8 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchCourseRubric, saveCourseRubric } from '../../lib/db';
 import { getRubricTemplate } from '../../lib/rubricTemplates';
-import { resolveWeights, deliverableLabel } from '../../lib/weights';
-import { getGradingModel } from '../../lib/gradingScheme';
+import { resolveWeights } from '../../lib/weights';
+import { getGradingModel, moduleLabel } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 // "5" -> 5, "2,5" -> 2.5, "0-2" -> 2 (el máximo del rango): los puntos de un
@@ -151,7 +151,7 @@ const TeacherCourseRubrica = () => {
   const appliesRows = model.components.map((c) => ({
     id: c.key,
     name: c.kind === 'module'
-      ? `${model.hasScheme ? `Entregable M${c.index + 1}` : deliverableLabel(c.index, moduleCount)} · ${c.module.title}`
+      ? `${moduleLabel(model, c.index, moduleCount)} · ${c.module.title}`
       : c.label,
     weight: c.weight,
     estimated: !model.hasScheme && !resolved.rows[c.index]?.explicit,

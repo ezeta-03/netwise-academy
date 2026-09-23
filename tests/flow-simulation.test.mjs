@@ -395,20 +395,37 @@ describe('propiedades: flujo de entregas y notas manuales -> promedio', () => {
     });
     assert.ok(touched > 300);
   });
-  test('reentrega: la nota anterior deja de contar hasta que el docente califica de nuevo (secuencia paso a paso)', () => {
-    const model = getGradingModel(1, mods(4));
+  test('reentrega (Branding, con sustentación): la nota anterior deja de contar hasta que el docente califica de nuevo (paso a paso)', () => {
+    const model = getGradingModel(2, mods(4));
     const store = new Map();
     const view = () => summaryOf(model, [...store.values()], { sustentacion: 10 });
     store.set('m1', rev('m1', null, 'submitted'));
     assert.equal(view().promedioParcial, 10);
     store.set('m1', rev('m1', 20, 'reviewed'));
-    assert.equal(view().promedioParcial, round2((14 * 20 + 30 * 10) / 44));
+    assert.equal(view().promedioParcial, round2((17.5 * 20 + 30 * 10) / 47.5)); // 650 / 47.5 = 13.68
     store.set('m1', { ...store.get('m1'), status: 'submitted' }); // reentrega, la nota 20 queda guardada
     assert.equal(store.get('m1').grade, 20);
     assert.equal(usableGrade(store.get('m1')), null);
     assert.equal(view().promedioParcial, 10);
     store.set('m1', { ...store.get('m1'), status: 'reviewed', grade: 12 });
-    assert.equal(view().promedioParcial, round2((14 * 12 + 30 * 10) / 44));
+    assert.equal(view().promedioParcial, round2((17.5 * 12 + 30 * 10) / 47.5)); // 510 / 47.5 = 10.74
+  });
+  test('reentrega (Redes, sin componente manual): la nota anterior deja de contar hasta recalificar; M2 = 10 fija el promedio mientras M1 está reentregado', () => {
+    const model = getGradingModel(1, mods(4));
+    const store = new Map([['m2', rev('m2', 10)]]);
+    const view = () => summaryOf(model, [...store.values()], {});
+    assert.equal(view().promedioParcial, 10); // sólo M2
+    store.set('m1', rev('m1', null, 'submitted'));
+    assert.equal(view().promedioParcial, 10);
+    assert.equal(view().gradedCount, 1);
+    store.set('m1', rev('m1', 20, 'reviewed'));
+    assert.equal(view().promedioParcial, round2((20 * 20 + 25 * 10) / 45)); // 650 / 45 = 14.44
+    store.set('m1', { ...store.get('m1'), status: 'submitted' }); // reentrega: la nota 20 queda guardada pero no cuenta
+    assert.equal(store.get('m1').grade, 20);
+    assert.equal(usableGrade(store.get('m1')), null);
+    assert.equal(view().promedioParcial, 10);
+    store.set('m1', { ...store.get('m1'), status: 'reviewed', grade: 12 });
+    assert.equal(view().promedioParcial, round2((20 * 12 + 25 * 10) / 45)); // 490 / 45 = 10.89
   });
   test('notas fuera de 0-20 (entregas y manuales) se acotan; rows y promedio siempre quedan en [0, 20]', () => {
     forEachStudent((sc, st, ctx) => {
@@ -679,7 +696,7 @@ describe('propiedades: matrículas -> courseRoster', () => {
 
 // ------------------------------------------------- escenarios "de oro" ----
 describe('escenarios manuales (valores calculados a mano)', () => {
-  test('Redes (curso 1): M1..M4 = 18,19,17,16 y sustentación 17 -> 17.28, rendimiento 86.4, regular; asistencia 3/4 = 75 ok', () => {
+  test('Redes (curso 1): pesos 20/25/25/30 sin componente manual; M1..M4 = 18,19,17,16 -> 17.4, rendimiento 87, regular; asistencia 3/4 = 75 ok', () => {
     const modules = [
       { id: 'r1', title: 'M1', deliverable: { description: 'Estrategia' }, sessions: [{ id: 'a1', status: 'done' }, { id: 'a2', status: 'done' }] },
       { id: 'r2', title: 'M2', deliverable: { description: 'Contenido' }, sessions: [{ id: 'b1', status: 'done' }, { id: 'b2', status: 'done' }] },
@@ -687,21 +704,29 @@ describe('escenarios manuales (valores calculados a mano)', () => {
       { id: 'r4', title: 'M4', deliverable: { description: 'Métricas', weight: 99 } },
     ];
     const model = getGradingModel('1', modules);
-    assert.deepEqual(model.components.map((c) => c.weight), [14, 17.5, 17.5, 21, 30]);
+    assert.deepEqual(model.components.map((c) => c.weight), [20, 25, 25, 30]);
+    assert.ok(model.components.every((c) => c.kind === 'module'));
     const subs = [rev('r1', 18), rev('r2', 19), rev('r3', 17), rev('r4', 16)];
-    const summary = summaryOf(model, subs, { sustentacion: 17 });
-    // 14*18 + 17.5*19 + 17.5*17 + 21*16 + 30*17 = 252 + 332.5 + 297.5 + 336 + 510 = 1728
-    assert.equal(summary.promedioParcial, 17.28);
-    assert.ok(close(summary.rendimientoRaw, 86.4));
-    assert.equal(summary.rendimientoPct, 86);
-    assert.deepEqual([summary.allGraded, summary.gradedCount, summary.totalCount], [true, 5, 5]);
+    const summary = summaryOf(model, subs, {});
+    // 20*18 + 25*19 + 25*17 + 30*16 = 360 + 475 + 425 + 480 = 1740
+    assert.equal(summary.promedioParcial, 17.4);
+    assert.ok(close(summary.rendimientoRaw, 87));
+    assert.equal(summary.rendimientoPct, 87);
+    assert.deepEqual([summary.allGraded, summary.gradedCount, summary.totalCount], [true, 4, 4]);
+    // una nota "sustentacion" en scores no existe para Redes y no cambia nada
+    assert.deepEqual(summaryOf(model, subs, { sustentacion: 17 }), summary);
     const att = attendanceStats(getOrderedSessions(modules), [{ sessionId: 'a1', present: true }, { sessionId: 'a2', present: true }, { sessionId: 'b1', present: true }, { sessionId: 'b2', present: false }]);
     assert.deepEqual([att.taken, att.present, att.absent, att.raw, att.pct], [4, 3, 1, 75, 75]);
     assert.deepEqual(evaluateApproval(summary, { taken: att.taken, pct: att.raw }), { finalGrade: 'ok', performance: 'ok', attendance: 'ok', overall: 'regular' });
-    // sin la sustentación: (252+332.5+297.5+336)/70 = 1218/70 = 17.4 y todo queda pendiente
-    const sinSust = summaryOf(model, subs, {});
-    assert.equal(sinSust.promedioParcial, 17.4);
-    assert.equal(evaluateApproval(sinSust, null).overall, 'pending');
+    // sin M4: (360+475+425)/70 = 1260/70 = 18 y todo queda pendiente hasta calificar el trabajo final
+    const sinM4 = summaryOf(model, subs.slice(0, 3), {});
+    assert.equal(sinM4.promedioParcial, 18);
+    assert.deepEqual([sinM4.allGraded, sinM4.gradedCount, sinM4.totalCount], [false, 3, 4]);
+    assert.equal(evaluateApproval(sinM4, null).overall, 'pending');
+    // todo en 15 -> promedio 15: no llega al 16 ni al 80%, va a la sustitutoria
+    const low = summaryOf(model, [rev('r1', 15), rev('r2', 15), rev('r3', 15), rev('r4', 15)], {});
+    assert.equal(low.promedioParcial, 15);
+    assert.deepEqual(evaluateApproval(low, null), { finalGrade: 'fail', performance: 'fail', attendance: 'pending', overall: 'substitute' });
   });
 
   test('Branding (curso 2): pesos 17.5 x4 + 30; M = 15,16,14,17 y sustentación 18 -> 16.25 regular; con 14,14,14,14 y 16 -> 14.6 sustitutoria', () => {
@@ -777,12 +802,31 @@ describe('escenarios manuales (valores calculados a mano)', () => {
     assert.equal(equal.promedioParcial, 15);
   });
 
-  test('Redes con 5 módulos: cada uno pesa 14 (70/5) y el promedio sigue siendo la media ponderada', () => {
-    const model = getGradingModel(1, mods(5));
+  test('Branding con 5 módulos: cada uno pesa 14 (70/5) y el promedio sigue siendo la media ponderada', () => {
+    const model = getGradingModel(2, mods(5));
     assert.deepEqual(model.components.map((c) => c.weight), [14, 14, 14, 14, 14, 30]);
     const s = summaryOf(model, [10, 12, 14, 16, 18].map((g, i) => rev(`m${i + 1}`, g)), { sustentacion: 20 });
     // 14*70 = 980; 30*20 = 600 -> 1580 / 100 = 15.8
     assert.equal(s.promedioParcial, 15.8);
     assert.equal(evaluateApproval(s, null).overall, 'substitute');
+  });
+
+  test('Redes con 5 módulos: cada uno pesa 20 (100/5), sin componente manual, y el promedio es la media simple', () => {
+    const model = getGradingModel(1, mods(5));
+    assert.deepEqual(model.components.map((c) => c.weight), [20, 20, 20, 20, 20]);
+    const s = summaryOf(model, [10, 12, 14, 16, 18].map((g, i) => rev(`m${i + 1}`, g)), {});
+    // 20*70 = 1400 -> 1400 / 100 = 14
+    assert.equal(s.promedioParcial, 14);
+    assert.deepEqual([s.allGraded, s.gradedCount, s.totalCount], [true, 5, 5]);
+    assert.equal(evaluateApproval(s, null).overall, 'substitute');
+  });
+
+  test('Redes con 3 módulos: cada uno pesa 33.33 (total 99.99) y con notas 10, 15, 20 el promedio es 15', () => {
+    const model = getGradingModel(1, mods(3));
+    assert.deepEqual(model.components.map((c) => c.weight), [33.33, 33.33, 33.33]);
+    assert.equal(model.total, 99.99);
+    const s = summaryOf(model, [rev('m1', 10), rev('m2', 15), rev('m3', 20)], {});
+    assert.equal(s.promedioParcial, 15); // 33.33*45 / 99.99
+    assert.equal(s.allGraded, true);
   });
 });

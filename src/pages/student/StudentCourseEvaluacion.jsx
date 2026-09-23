@@ -199,7 +199,7 @@ const MisNotas = ({ course, modules, submissions, attendance, scores }) => {
                   {b.components.map((c) => (
                     <tr key={c.key}>
                       <td>{c.kind === 'module' ? `${c.label} · ${c.module.title}` : c.label}</td>
-                      <td>{c.weight}%{c.kind === 'module' && model.hasScheme ? <span className="admin-cell-sub"> ({c.weightInBlock}% del bloque)</span> : null}</td>
+                      <td>{c.weight}%{c.kind === 'module' && model.hasScheme && model.blocks.length > 1 ? <span className="admin-cell-sub"> ({c.weightInBlock}% del bloque)</span> : null}</td>
                       <td>{gradeByKey[c.key] ?? '—'}</td>
                     </tr>
                   ))}

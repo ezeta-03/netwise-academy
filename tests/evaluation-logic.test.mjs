@@ -7,10 +7,10 @@ import assert from 'node:assert/strict';
 import { buildGradebookRows, computeGradeSummary } from '../src/lib/gradebook.js';
 import { getOrderedSessions } from '../src/lib/courseSessions.js';
 import { deliverableDueDate } from '../src/lib/deliveryDates.js';
-import { resolveWeights, deliverableLabel } from '../src/lib/weights.js';
+import { resolveWeights } from '../src/lib/weights.js';
 import { APPROVAL, evaluateApproval } from '../src/lib/approval.js';
 import { attendanceStats } from '../src/lib/attendance.js';
-import { getGradingModel, buildStudentRows } from '../src/lib/gradingScheme.js';
+import { getGradingModel, buildStudentRows, moduleLabel } from '../src/lib/gradingScheme.js';
 import { courseRoster } from '../src/lib/roster.js';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@ const cronograma = (modules, group, roster = [], subs = [], scores = [], courseI
     const m = c.module;
     const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
     const status = isGraded(m.id) ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
-    const label = model.hasScheme ? `Entregable M${i + 1}` : deliverableLabel(i, moduleComps.length);
+    const label = moduleLabel(model, i, moduleComps.length);
     return { id: m.id, dueIso, status, weight: c.weight, explicit: model.hasScheme || resolved.rows[i]?.explicit, graded: gradedCount(m.id), name: `${label} · ${m.title}` };
   });
   const manualRows = manualComps.map((c) => ({
@@ -535,7 +535,7 @@ describe('Resumen del aula (estudiantes en riesgo, promedio)', () => {
 // TeacherCourseEvaluacion.jsx RegistroNotas (cabeceras y saveCell)
 // ---------------------------------------------------------------------------
 const misNotasFormula = (model) => model.components.map((c) => `${c.label} × ${c.weight}%`).join(' + ');
-const subHeader = (c, model) => `${c.weightInBlock}% ${model.hasScheme ? 'del bloque' : 'de la nota'}`; // RegistroNotas :321
+const subHeader = (c, model) => `${c.weightInBlock}% ${model.hasScheme && model.blocks.length > 1 ? 'del bloque' : 'de la nota'}`; // RegistroNotas :325 (un solo bloque -> "de la nota")
 const blockHeader = (b) => `${b.label} · ${b.weight}%`;                                                 // RegistroNotas :313-314
 const headerKindOf = (b) => b.components[0].kind;                                                        // RegistroNotas :312 (sin "?.")
 const entregasSummary = (model, submissions, scores) => {                                                // EntregasNotas :98-103
@@ -556,9 +556,13 @@ describe('Mis notas: fórmula PF y pesos mostrados (con y sin esquema)', () => {
     const mods = [1, 2, 3].map((i) => M(`m${i}`, `Semana ${i}`, D()));
     assert.equal(misNotasFormula(getGradingModel(99, mods)), 'M1 × 33.33% + M2 × 33.33% + M3 × 33.33%');
   });
-  test('Redes: incluye el componente manual con su nombre y pesos efectivos', () => {
+  test('Redes: sólo los 4 entregables con sus pesos del sílabo (sin componente manual)', () => {
     const mods = ['a', 'b', 'c', 'd'].map((id) => M(id, 'S1', D()));
-    assert.equal(misNotasFormula(getGradingModel(1, mods)), 'M1 × 14% + M2 × 17.5% + M3 × 17.5% + M4 × 21% + Sustentación final × 30%');
+    assert.equal(misNotasFormula(getGradingModel(1, mods)), 'M1 × 20% + M2 × 25% + M3 × 25% + M4 × 30%');
+  });
+  test('Branding: incluye el componente manual con su nombre y pesos efectivos', () => {
+    const mods = ['a', 'b', 'c', 'd'].map((id) => M(id, 'S1', D()));
+    assert.equal(misNotasFormula(getGradingModel(2, mods)), 'M1 × 17.5% + M2 × 17.5% + M3 × 17.5% + M4 × 17.5% + Sustentación del Brand Deck × 30%');
   });
   test('el alumno y el Cronograma del docente muestran la MISMA fórmula en los 4 esquemas', () => {
     const mods = ['a', 'b', 'c', 'd'].map((id, i) => M(id, `Semana ${i + 1}`, D()));
@@ -570,10 +574,15 @@ describe('Mis notas: fórmula PF y pesos mostrados (con y sin esquema)', () => {
 
 describe('Registro de notas (docente): cabeceras', () => {
   const four = ['a', 'b', 'c', 'd'].map((id) => M(id, 'S1', D()));
-  test('con esquema: "25% del bloque" por módulo y el bloque "Evaluación de módulos · 70%"', () => {
+  test('con esquema de varios bloques (Branding): "25% del bloque" por módulo y el bloque "Tareas prácticas por módulo · 70%"', () => {
+    const model = getGradingModel(2, four);
+    assert.deepEqual(model.components.filter((c) => c.kind === 'module').map((c) => subHeader(c, model)), Array(4).fill('25% del bloque'));
+    assert.deepEqual(model.blocks.map(blockHeader), ['Tareas prácticas por módulo · 70%', 'Sustentación del Brand Deck · 30%']);
+  });
+  test('Redes (un solo bloque del 100%): "20% de la nota" ... "30% de la nota" y el bloque "Entregables del curso · 100%"', () => {
     const model = getGradingModel(1, four);
-    assert.deepEqual(model.components.filter((c) => c.kind === 'module').map((c) => subHeader(c, model)), ['20% del bloque', '25% del bloque', '25% del bloque', '30% del bloque']);
-    assert.deepEqual(model.blocks.map(blockHeader), ['Evaluación de módulos · 70%', 'Sustentación final · 30%']);
+    assert.deepEqual(model.components.map((c) => subHeader(c, model)), ['20% de la nota', '25% de la nota', '25% de la nota', '30% de la nota']);
+    assert.deepEqual(model.blocks.map(blockHeader), ['Entregables del curso · 100%']);
   });
   test('sin esquema: "20% de la nota" con el peso efectivo de resolveWeights', () => {
     const mods = [M('a', 'S1', D(30)), M('b', 'S2', D(30)), M('c', 'S3', D())];
@@ -709,12 +718,30 @@ describe('Cronograma con esquema de calificación', () => {
     assert.deepEqual(cronograma(w, GROUP, [], [], [], 2).rows.map((r) => r.weight), [17.5, 17.5, 17.5, 17.5, 30]);
   });
   test('las filas manuales no tienen fecha (dueIso null) y las de módulo sí (fecha calculada)', () => {
-    const c = cronograma(four, GROUP, [], [], [], 1);
+    const c = cronograma(four, GROUP, [], [], [], 2);
     assert.deepEqual(c.moduleRows.map((r) => r.dueIso), ['2026-03-12', '2026-03-19', '2026-03-26', '2026-04-02']);
     assert.equal(c.manualRows[0].dueIso, null);
+    // Redes: mismas fechas de entrega y ninguna fila manual
+    const r = cronograma(four, GROUP, [], [], [], 1);
+    assert.deepEqual(r.moduleRows.map((x) => x.dueIso), ['2026-03-12', '2026-03-19', '2026-03-26', '2026-04-02']);
+    assert.equal(r.manualRows.length, 0);
   });
-  test('fórmula: "PF = M1 × 14% + ... + Sustentación final × 30%"', () => {
-    assert.equal(cronograma(four, GROUP, [], [], [], 1).formula, 'PF = M1 × 14% + M2 × 17.5% + M3 × 17.5% + M4 × 21% + Sustentación final × 30%');
+  test('fórmula Branding: "PF = M1 × 17.5% + ... + Sustentación del Brand Deck × 30%"', () => {
+    assert.equal(cronograma(four, GROUP, [], [], [], 2).formula, 'PF = M1 × 17.5% + M2 × 17.5% + M3 × 17.5% + M4 × 17.5% + Sustentación del Brand Deck × 30%');
+  });
+  test('Redes: 4 filas de módulo (20/25/25/30), sin fila manual, total 100 y fórmula "PF = M1 × 20% + ... + M4 × 30%"', () => {
+    const c = cronograma(four, GROUP, [], [], [], 1);
+    assert.deepEqual(c.rows.map((r) => [r.id, r.weight]), [['a', 20], ['b', 25], ['c', 25], ['d', 30]]);
+    assert.equal(c.totalWeight, 100);
+    assert.equal(c.weightsOk, true);
+    assert.equal(c.manualRows.length, 0);
+    assert.equal(c.formula, 'PF = M1 × 20% + M2 × 25% + M3 × 25% + M4 × 30%');
+    assert.deepEqual(c.warnings, { sumNot100: false, missingWeights: false });
+  });
+  test('Redes: los tres primeros son "Entregable M{n}" y el último (M4, trabajo final) es "Trabajo final"', () => {
+    const c = cronograma(four, GROUP, [], [], [], 1);
+    assert.deepEqual(c.moduleRows.map((r) => r.name), ['Entregable M1 · T-a', 'Entregable M2 · T-b', 'Entregable M3 · T-c', 'Trabajo final · T-d']);
+    assert.ok(c.rows.every((r) => r.explicit === true));
   });
   test('Marketing: 3 filas manuales además de los módulos; total 100', () => {
     const c = cronograma(four, GROUP, [], [], [], 3);
@@ -770,48 +797,78 @@ describe('Cronograma con esquema de calificación', () => {
       assert.equal(c2.nextRow.id, 'caso1');
     });
     test('todo calificado (módulos y manuales): no hay próxima evaluación', () => {
-      const c = cronograma(four, GROUP, roster, allSubs(['u1', 'u2'], ['a', 'b', 'c', 'd']), [sc('u1', { sustentacion: 10 }), sc('u2', { sustentacion: 10 })], 1);
+      const c = cronograma(four, GROUP, roster, allSubs(['u1', 'u2'], ['a', 'b', 'c', 'd']), [sc('u1', { sustentacion: 10 }), sc('u2', { sustentacion: 10 })], 2);
       assert.equal(c.nextRow, undefined);
       assert.deepEqual(c.rows.map((r) => r.status), Array(5).fill('graded'));
     });
+    test('Redes (sin manual): con los 4 módulos calificados ya no hay próxima evaluación; con 3, la próxima es M4', () => {
+      const all = cronograma(four, GROUP, roster, allSubs(['u1', 'u2'], ['a', 'b', 'c', 'd']), [], 1);
+      assert.equal(all.nextRow, undefined);
+      assert.deepEqual(all.rows.map((r) => r.status), Array(4).fill('graded'));
+      const three = cronograma(four, GROUP, roster, allSubs(['u1', 'u2'], ['a', 'b', 'c']), [], 1);
+      assert.equal(three.nextRow.id, 'd');
+      assert.equal(three.moduleRows[3].status, 'current');
+    });
     test('los módulos usan la próxima manual sólo cuando ya no queda ningún módulo abierto', () => {
-      const c = cronograma(four, GROUP, roster, [], [], 1);
+      const c = cronograma(four, GROUP, roster, [], [], 2);
       assert.equal(c.nextRow.id, 'a');
     });
     test('sin roster: primero módulo "current" y ninguna manual es "graded"', () => {
-      const c = cronograma(four, GROUP, [], [], [], 1);
+      const c = cronograma(four, GROUP, [], [], [], 2);
       assert.equal(c.nextRow.id, 'a');
+      assert.equal(c.manualRows.length, 1);
       assert.ok(c.manualRows.every((r) => r.status === 'scheduled'));
     });
   });
 
   describe('cantidades de módulos raras', () => {
-    test('4 módulos pero sólo 3 con entregable: 3 filas de módulo + manual; pesos iguales; total dentro de tolerancia', () => {
+    test('Branding, 4 módulos pero sólo 3 con entregable: 3 filas de módulo + manual; pesos iguales; total dentro de tolerancia', () => {
       const three = [M('a', 'Semana 1', D()), M('z', 'Semana 2'), M('b', 'Semana 3', D()), M('c', 'Semana 4', D())];
-      const c = cronograma(three, GROUP, [], [], [], 1);
+      const c = cronograma(three, GROUP, [], [], [], 2);
       assert.deepEqual(c.moduleRows.map((r) => r.id), ['a', 'b', 'c']);
       assert.deepEqual(c.moduleRows.map((r) => r.weight), [23.33, 23.33, 23.33]);
+      assert.equal(c.manualRows.length, 1);
       assert.equal(c.totalWeight, 99.99);
       assert.equal(c.weightsOk, true);
       assert.deepEqual(c.moduleRows.map((r) => r.name), ['Entregable M1 · T-a', 'Entregable M2 · T-b', 'Entregable M3 · T-c']);
+    });
+    test('Redes, 4 módulos pero sólo 3 con entregable: 3 filas de módulo (33.33 c/u), sin manual; total dentro de tolerancia', () => {
+      const three = [M('a', 'Semana 1', D()), M('z', 'Semana 2'), M('b', 'Semana 3', D()), M('c', 'Semana 4', D())];
+      const c = cronograma(three, GROUP, [], [], [], 1);
+      assert.deepEqual(c.moduleRows.map((r) => r.id), ['a', 'b', 'c']);
+      assert.deepEqual(c.moduleRows.map((r) => r.weight), [33.33, 33.33, 33.33]);
+      assert.equal(c.manualRows.length, 0);
+      assert.equal(c.totalWeight, 99.99);
+      assert.equal(c.weightsOk, true);
+      assert.deepEqual(c.moduleRows.map((r) => r.name), ['Entregable M1 · T-a', 'Entregable M2 · T-b', 'Trabajo final · T-c']);
     });
     test('las fechas usan la semana real de cada módulo aun con un módulo sin entregable en medio', () => {
       const three = [M('a', 'Semana 1', D()), M('z', 'Semana 2'), M('b', 'Semana 3', D())];
       assert.deepEqual(cronograma(three, GROUP, [], [], [], 2).moduleRows.map((r) => r.dueIso), ['2026-03-12', '2026-03-26']);
     });
-    test('5 módulos: 5 filas de módulo (14% c/u en Redes) y total 100', () => {
+    test('5 módulos: 5 filas de módulo (20% c/u en Redes, 14% c/u en Branding) y total 100', () => {
       const five = [1, 2, 3, 4, 5].map((i) => M(`m${i}`, `Semana ${i}`, D()));
       const c = cronograma(five, GROUP, [], [], [], 1);
-      assert.deepEqual(c.moduleRows.map((r) => r.weight), [14, 14, 14, 14, 14]);
+      assert.deepEqual(c.moduleRows.map((r) => r.weight), [20, 20, 20, 20, 20]);
       assert.equal(c.totalWeight, 100);
+      const b = cronograma(five, GROUP, [], [], [], 2);
+      assert.deepEqual(b.moduleRows.map((r) => r.weight), [14, 14, 14, 14, 14]);
+      assert.equal(b.totalWeight, 100);
     });
-    test('sin módulos con entregable: sólo filas manuales, total 30 y aviso de pesos', () => {
-      const c = cronograma([M('z', 'Semana 1')], GROUP, [], [], [], 1);
+    test('sin módulos con entregable: sólo filas manuales, total 30 y aviso de pesos (Branding)', () => {
+      const c = cronograma([M('z', 'Semana 1')], GROUP, [], [], [], 2);
       assert.equal(c.moduleRows.length, 0);
       assert.equal(c.totalWeight, 30);
       assert.equal(c.weightsOk, false);
       assert.equal(c.warnings.sumNot100, true);
       assert.equal(c.nextRow.id, 'sustentacion');
+    });
+    test('Redes sin módulos con entregable: no hay filas (ni manuales), total 0 y sin próxima evaluación', () => {
+      const c = cronograma([M('z', 'Semana 1')], GROUP, [], [], [], 1);
+      assert.equal(c.rows.length, 0);
+      assert.equal(c.totalWeight, 0);
+      assert.equal(c.formula, null);
+      assert.equal(c.nextRow, undefined);
     });
     test('sin esquema (curso 99) no aparecen filas manuales y se mantiene la etiqueta "Trabajo final"', () => {
       const c = cronograma(four, GROUP, [], [], [], 99);
@@ -828,8 +885,8 @@ describe('Cronograma con esquema de calificación', () => {
       assert.ok(c.model.blocks[0].components.some((x) => x.weightInBlock !== 33.33), 'se aplicó el reparto por defecto sin avisar');
     });
     test('una fila manual con nota no numérica ("") en el almacén cuenta como calificada en el Cronograma pero no en el Registro', { todo: 'BAJO TeacherCourseCronograma.jsx (scoredUids: != null) vs gradingScheme.js:106-108 (Number.isFinite): score "" cuenta como calificado en un lado y sin nota en el otro' }, () => {
-      const c = cronograma(four, GROUP, [{ uid: 'u1' }], [], [{ uid: 'u1', scores: { sustentacion: '' } }], 1).manualRows[0];
-      const model = getGradingModel(1, four);
+      const c = cronograma(four, GROUP, [{ uid: 'u1' }], [], [{ uid: 'u1', scores: { sustentacion: '' } }], 2).manualRows[0];
+      const model = getGradingModel(2, four);
       const inGradebook = buildStudentRows(model, [], { sustentacion: '' })[4].grade !== null;
       assert.equal(c.status === 'graded', inGradebook);
     });
@@ -844,18 +901,24 @@ describe('Rúbrica: appliesRows', () => {
     const moduleCount = model.components.filter((c) => c.kind === 'module').length;
     return model.components.map((c) => ({
       id: c.key,
-      name: c.kind === 'module' ? `${model.hasScheme ? `Entregable M${c.index + 1}` : deliverableLabel(c.index, moduleCount)} · ${c.module.title}` : c.label,
+      name: c.kind === 'module' ? `${moduleLabel(model, c.index, moduleCount)} · ${c.module.title}` : c.label,
       weight: c.weight,
       estimated: !model.hasScheme && !resolved.rows[c.index]?.explicit,
     }));
   };
   const four = ['a', 'b', 'c', 'd'].map((id, i) => M(id, `Semana ${i + 1}`, D()));
 
-  test('con esquema: módulos + componentes manuales con su peso efectivo, nunca "estimado"', () => {
+  test('con esquema: módulos + componentes manuales con su peso efectivo, nunca "estimado" (Branding)', () => {
+    const r = appliesRows(2, four);
+    assert.deepEqual(r.map((x) => [x.name, x.weight, x.estimated]), [
+      ['Entregable M1 · T-a', 17.5, false], ['Entregable M2 · T-b', 17.5, false], ['Entregable M3 · T-c', 17.5, false], ['Entregable M4 · T-d', 17.5, false],
+      ['Sustentación del Brand Deck', 30, false],
+    ]);
+  });
+  test('Redes: 4 filas con pesos 20/25/25/30, el último es "Trabajo final" y nunca "estimado"', () => {
     const r = appliesRows(1, four);
     assert.deepEqual(r.map((x) => [x.name, x.weight, x.estimated]), [
-      ['Entregable M1 · T-a', 14, false], ['Entregable M2 · T-b', 17.5, false], ['Entregable M3 · T-c', 17.5, false], ['Entregable M4 · T-d', 21, false],
-      ['Sustentación final', 30, false],
+      ['Entregable M1 · T-a', 20, false], ['Entregable M2 · T-b', 25, false], ['Entregable M3 · T-c', 25, false], ['Trabajo final · T-d', 30, false],
     ]);
   });
   test('Marketing: 7 filas (4 módulos + 3 manuales)', () => {
@@ -869,9 +932,15 @@ describe('Rúbrica: appliesRows', () => {
     const r = appliesRows(2, ['a', 'b', 'c', 'd'].map((id) => M(id, 'S1', D(1))));
     assert.deepEqual(r.slice(0, 4).map((x) => x.weight), Array(4).fill(17.5));
   });
-  test('con 3 de 4 entregables: 3 módulos + manual; suma cercana a 100', () => {
-    const r = appliesRows(1, [M('a', 'S1', D()), M('z', 'S2'), M('b', 'S3', D()), M('c', 'S4', D())]);
+  test('con 3 de 4 entregables: 3 módulos + manual (Branding); suma cercana a 100', () => {
+    const r = appliesRows(2, [M('a', 'S1', D()), M('z', 'S2'), M('b', 'S3', D()), M('c', 'S4', D())]);
     assert.equal(r.length, 4);
+    assert.ok(Math.abs(r.reduce((s, x) => s + x.weight, 0) - 100) <= 0.05);
+  });
+  test('Redes con 3 de 4 entregables: 3 módulos (33.33 c/u) sin manual; suma cercana a 100', () => {
+    const r = appliesRows(1, [M('a', 'S1', D()), M('z', 'S2'), M('b', 'S3', D()), M('c', 'S4', D())]);
+    assert.equal(r.length, 3);
+    assert.deepEqual(r.map((x) => x.weight), [33.33, 33.33, 33.33]);
     assert.ok(Math.abs(r.reduce((s, x) => s + x.weight, 0) - 100) <= 0.05);
   });
   test('ids únicos (key del componente)', () => {
@@ -887,23 +956,31 @@ describe('Rúbrica: appliesRows', () => {
 
 describe('Mis entregas (alumno): calificados / promedio', () => {
   const four = ['a', 'b', 'c', 'd'].map((id) => M(id, 'S1', D()));
-  const redes = getGradingModel(1, four);
+  const brand = getGradingModel(2, four); // con componente manual (sustentación)
+  const redes = getGradingModel(1, four); // sólo módulos
 
   test('"Calificados" cuenta sólo módulos revisados; el denominador son los módulos (no los componentes)', () => {
-    const r = entregasSummary(redes, [revd('a', 15), revd('b', 12)], { sustentacion: 17 });
+    const r = entregasSummary(brand, [revd('a', 15), revd('b', 12)], { sustentacion: 17 });
     assert.deepEqual([r.calificados, r.totalModulos], [2, 4]);
   });
   test('un alumno con sólo nota manual: 0/4 calificados pero promedio parcial calculado', () => {
-    const r = entregasSummary(redes, [], { sustentacion: 17 });
+    const r = entregasSummary(brand, [], { sustentacion: 17 });
     assert.deepEqual([r.calificados, r.totalModulos, r.summary.promedioParcial], [0, 4, 17]);
   });
   test('nota 0 en un módulo cuenta como calificado; "submitted" no', () => {
-    const r = entregasSummary(redes, [revd('a', 0), revd('b', 18, 'submitted')], {});
+    const r = entregasSummary(brand, [revd('a', 0), revd('b', 18, 'submitted')], {});
     assert.equal(r.calificados, 1);
   });
   test('el total de componentes (allGraded) incluye los manuales aunque "Calificados" no', () => {
-    const r = entregasSummary(redes, [revd('a', 1), revd('b', 1), revd('c', 1), revd('d', 1)], {});
+    const r = entregasSummary(brand, [revd('a', 1), revd('b', 1), revd('c', 1), revd('d', 1)], {});
     assert.deepEqual([r.calificados, r.totalModulos, r.summary.allGraded, r.summary.totalCount], [4, 4, false, 5]);
+  });
+  test('Redes (sin manual): "Calificados" y allGraded coinciden; con 4 módulos calificados el total es 4', () => {
+    const all = entregasSummary(redes, [revd('a', 1), revd('b', 1), revd('c', 1), revd('d', 1)], {});
+    assert.deepEqual([all.calificados, all.totalModulos, all.summary.allGraded, all.summary.totalCount], [4, 4, true, 4]);
+    const some = entregasSummary(redes, [revd('a', 15), revd('b', 12)], { sustentacion: 17 });
+    assert.deepEqual([some.calificados, some.totalModulos, some.summary.allGraded, some.summary.gradedCount], [2, 4, false, 2]);
+    assert.equal(some.summary.promedioParcial, 13.33); // (20*15 + 25*12) / 45 = 600 / 45
   });
   test('sin esquema no hay componentes manuales: calificados y allGraded coinciden', () => {
     const r = entregasSummary(getGradingModel(99, four), [revd('a', 10), revd('b', 10), revd('c', 10), revd('d', 10)], {});
@@ -914,44 +991,67 @@ describe('Mis entregas (alumno): calificados / promedio', () => {
     assert.equal(entregasSummary(three, [], {}).totalModulos, 3);
   });
   test('notas fuera de rango del almacén se acotan en el promedio del alumno', () => {
-    const r = entregasSummary(redes, [revd('a', 25)], { sustentacion: -4 });
-    assert.equal(r.summary.promedioParcial, 6.36); // (14*20 + 30*0) / 44
+    const r = entregasSummary(brand, [revd('a', 25)], { sustentacion: -4 });
+    assert.equal(r.summary.promedioParcial, 7.37); // (17.5*20 + 30*0) / 47.5 = 350 / 47.5
+    assert.equal(entregasSummary(redes, [revd('a', 25), revd('b', -4)], {}).summary.promedioParcial, 8.89); // (20*20 + 25*0) / 45 = 400 / 45
   });
 });
 
 describe('Resumen del aula con esquema de calificación (classSummary)', () => {
+  // Con componente manual: Branding (curso 2). Redes (curso 1) no tiene manual: tests al final.
   const four = ['a', 'b', 'c', 'd'].map((id) => ({ id, title: `T-${id}`, deliverable: { description: 'x' } }));
   const subsFor = (uid, g) => ['a', 'b', 'c', 'd'].map((moduleId) => ({ uid, moduleId, grade: g, status: 'reviewed' }));
   const scoreOf = (uid, scores) => ({ uid, scores });
 
   test('la sustentación manual entra al promedio: módulos 20 y sustentación 0 -> 14 (en riesgo)', () => {
-    const r = classSummary(four, [ROSTER[0]], subsFor('u1', 20), [], [scoreOf('u1', { sustentacion: 0 })], 1);
+    const r = classSummary(four, [ROSTER[0]], subsFor('u1', 20), [], [scoreOf('u1', { sustentacion: 0 })], 2);
     assert.equal(r.promedioParcial, 14);
     assert.equal(r.enRiesgo, 1);
   });
   test('módulos 20 y sustentación 10 -> 17 (no en riesgo)', () => {
-    const r = classSummary(four, [ROSTER[0]], subsFor('u1', 20), [], [scoreOf('u1', { sustentacion: 10 })], 1);
+    const r = classSummary(four, [ROSTER[0]], subsFor('u1', 20), [], [scoreOf('u1', { sustentacion: 10 })], 2);
     assert.equal(r.promedioParcial, 17);
     assert.equal(r.enRiesgo, 0);
   });
   test('un alumno con SÓLO nota manual 15 (sin módulos) queda en riesgo; con 16 no', () => {
-    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 15 })], 1).enRiesgo, 1);
-    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 16 })], 1).enRiesgo, 0);
+    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 15 })], 2).enRiesgo, 1);
+    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 16 })], 2).enRiesgo, 0);
   });
   test('el promedio del aula promedia los promedios individuales de quienes tienen alguna nota (manual o módulo)', () => {
-    const r = classSummary(four, ROSTER, subsFor('u1', 10), [], [scoreOf('u1', { sustentacion: 10 }), scoreOf('u2', { sustentacion: 20 })], 1);
+    const r = classSummary(four, ROSTER, subsFor('u1', 10), [], [scoreOf('u1', { sustentacion: 10 }), scoreOf('u2', { sustentacion: 20 })], 2);
     assert.equal(r.promedioParcial, 15); // u1 = 10, u2 = 20
     assert.equal(r.total, 2);
   });
   test('notas fuera de rango en el almacén se acotan: sustentación 25 -> 20', () => {
-    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 25 })], 1).promedioParcial, 20);
+    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 25 })], 2).promedioParcial, 20);
   });
   test('sin esquema (curso 99) las notas manuales no existen y no afectan', () => {
     const r = classSummary(four, [ROSTER[0]], subsFor('u1', 12), [], [scoreOf('u1', { sustentacion: 20 })], 99);
     assert.equal(r.promedioParcial, 12);
   });
+  test('Redes (sin manual): sólo cuentan los módulos; una "sustentacion" en scores no existe y no afecta', () => {
+    const r = classSummary(four, [ROSTER[0]], subsFor('u1', 12), [], [scoreOf('u1', { sustentacion: 20 })], 1);
+    assert.equal(r.promedioParcial, 12);
+    assert.equal(r.enRiesgo, 1);
+  });
+  test('Redes: un alumno con sólo notas manuales no tiene promedio (no hay componente manual) ni riesgo por nota', () => {
+    const r = classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 5 })], 1);
+    assert.equal(r.promedioParcial, null);
+    assert.equal(r.enRiesgo, 0);
+  });
+  test('Redes: promedio con 2 de 4 entregables calificados (M1 10, M2 20) -> (20*10 + 25*20) / 45 = 15.56 (en riesgo)', () => {
+    const subs = [{ uid: 'u1', moduleId: 'a', grade: 10, status: 'reviewed' }, { uid: 'u1', moduleId: 'b', grade: 20, status: 'reviewed' }];
+    const r = classSummary(four, [ROSTER[0]], subs, [], [], 1);
+    assert.equal(r.promedioParcial, 15.56);
+    assert.equal(r.enRiesgo, 1);
+  });
+  test('Redes: todos los entregables en 20 -> promedio 20 sin riesgo; en 16 -> 16 sin riesgo', () => {
+    assert.deepEqual([classSummary(four, [ROSTER[0]], subsFor('u1', 20), [], [], 1).promedioParcial, classSummary(four, [ROSTER[0]], subsFor('u1', 20), [], [], 1).enRiesgo], [20, 0]);
+    assert.deepEqual([classSummary(four, [ROSTER[0]], subsFor('u1', 16), [], [], 1).promedioParcial, classSummary(four, [ROSTER[0]], subsFor('u1', 16), [], [], 1).enRiesgo], [16, 0]);
+  });
   test('string vs número como id de curso da el mismo resumen', () => {
     const args = [four, [ROSTER[0]], subsFor('u1', 16), [], [scoreOf('u1', { sustentacion: 18 })]];
+    assert.deepEqual(classSummary(...args, 2), classSummary(...args, '2'));
     assert.deepEqual(classSummary(...args, 1), classSummary(...args, '1'));
   });
 });
