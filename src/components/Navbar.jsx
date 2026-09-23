@@ -119,6 +119,11 @@ const Navbar = () => {
             </div>
           )}
 
+          {/* En teléfono los botones de escritorio se ocultan: el acceso queda aquí y en el menú. */}
+          {!currentUser && (
+            <button type="button" className="btn btn-primary btn-sm nav-mobile-login" onClick={openLoginModal}>Iniciar sesión</button>
+          )}
+
           <button className="hamburger-btn" title="Menú" onClick={() => setIsMenuOpen(true)}>
             <Menu size={22} />
           </button>
@@ -164,7 +169,10 @@ const Navbar = () => {
               <LogOut size={16} /> Cerrar sesión
             </button>
           ) : (
-            <button type="button" className="btn btn-primary btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Inscribirme</button>
+            <div className="mm-footer-guest">
+              <button type="button" className="btn btn-ghost btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Iniciar sesión</button>
+              <button type="button" className="btn btn-primary btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Inscribirme</button>
+            </div>
           )}
         </div>
       </div>

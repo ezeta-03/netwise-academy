@@ -52,9 +52,12 @@ const HeroLeadPanel = ({ courses }) => {
         aria-expanded={open}
       >
         <ArrowLeft size={13} />
-        <span>Descubre</span>
+        <span className="hd-desktop">Descubre</span>
+        <span className="hd-mobile">Solicita información</span>
         <ArrowLeft size={13} />
       </button>
+
+      <div className={`home-lead-backdrop ${open ? 'open' : ''}`} onClick={() => setOpen(false)} />
 
       <div className={`home-lead-panel ${open ? 'open' : ''}`} aria-hidden={!open}>
         <button type="button" className="home-lead-panel-close" onClick={() => setOpen(false)} aria-label="Cerrar formulario">
