@@ -1934,15 +1934,20 @@ body::before {
 .dash-calendar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .dash-calendar-title { font-weight: 700; font-size: 1rem; color: #14141F; }
 .dash-calendar-nav { display: flex; gap: 8px; }
-.dash-calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); border-top: 1px solid #ECEAF3; border-left: 1px solid #ECEAF3; }
+.dash-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid #ECEAF3; border-left: 1px solid #ECEAF3; }
 .dash-calendar-dow {
   padding: 8px; text-align: center; font-size: .7rem; font-weight: 700; text-transform: uppercase;
   color: #8B8A9B; border-right: 1px solid #ECEAF3; border-bottom: 1px solid #ECEAF3; background: #FAFAFD;
 }
 .dash-calendar-cell {
   min-height: 84px; padding: 8px; border-right: 1px solid #ECEAF3; border-bottom: 1px solid #ECEAF3;
-  font-size: .78rem; color: #B4B2C4; position: relative;
+  font-size: .78rem; color: #B4B2C4; position: relative; min-width: 0; overflow: hidden;
 }
+.dash-calendar-cell.selected { box-shadow: inset 0 0 0 2px var(--accent); }
+.dash-calendar-events { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.dash-calendar-events .dash-calendar-event { margin-top: 0; }
+.dash-calendar-more { font-size: .64rem; font-weight: 700; color: #8B8A9B; }
+.dash-day-title::first-letter { text-transform: uppercase; }
 .dash-calendar-cell.today { background: var(--accent-bg); }
 .dash-calendar-cell.today .dash-calendar-daynum {
   background: var(--accent); color: #fff; width: 22px; height: 22px; border-radius: 50%;
@@ -1996,6 +2001,18 @@ body::before {
 @media (max-width: 900px) {
   .dash-calendar-cell { min-height: 56px; font-size: .7rem; }
   .dash-ai-chips { grid-template-columns: 1fr; }
+}
+
+/* Agenda en el teléfono: las celdas de ~40px no caben con texto -- cada clase
+   se ve como un puntito y el detalle va en la lista del día seleccionado. */
+@media (max-width: 640px) {
+  .dash-calendar-head { flex-wrap: wrap; gap: 10px; }
+  .dash-calendar-dow { padding: 6px 0; font-size: .62rem; }
+  .dash-calendar-cell { min-height: 46px; padding: 4px 2px; text-align: center; }
+  .dash-calendar-cell.today .dash-calendar-daynum { width: 22px; height: 22px; }
+  .dash-calendar-events { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 3px; margin-top: 3px; }
+  .dash-calendar-event { width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--accent); font-size: 0; overflow: hidden; }
+  .dash-calendar-more { font-size: .58rem; line-height: 7px; }
 }
 
 /* ═══════════════════════════════════════════════════

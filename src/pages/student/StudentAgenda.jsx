@@ -43,7 +43,9 @@ const StudentAgenda = () => {
 
   const eventsFor = (day) => day ? filtered.filter((s) => sameDay(new Date(s.startsAt), day)) : [];
   const today = new Date();
-  const monthLabel = cursor.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+  const rawMonthLabel = cursor.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+  // Solo la primera letra en mayúscula ("Setiembre de 2026"): capitalize de CSS dejaba "De".
+  const monthLabel = rawMonthLabel.charAt(0).toUpperCase() + rawMonthLabel.slice(1);
   const selectedEvents = eventsFor(selectedDay);
 
   return (
@@ -69,7 +71,7 @@ const StudentAgenda = () => {
 
       <div className="admin-panel" style={{ marginBottom: 20 }}>
         <div className="dash-calendar-head">
-          <div className="dash-calendar-title" style={{ textTransform: 'capitalize' }}>{monthLabel}</div>
+          <div className="dash-calendar-title">{monthLabel}</div>
           <div className="dash-calendar-nav">
             <button className="admin-btn-ghost" onClick={() => { setCursor(new Date()); setSelectedDay(new Date()); }}>Hoy</button>
             <button className="admin-icon-btn" onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}><ChevronLeft size={15} /></button>
@@ -85,12 +87,17 @@ const StudentAgenda = () => {
             return (
               <div
                 key={i}
-                className={`dash-calendar-cell ${isToday ? 'today' : ''}`}
+                className={`dash-calendar-cell ${isToday ? 'today' : ''} ${day && sameDay(day, selectedDay) ? 'selected' : ''}`}
                 style={{ cursor: day ? 'pointer' : 'default' }}
                 onClick={() => day && setSelectedDay(day)}
               >
                 {day && <span className="dash-calendar-daynum">{day.getDate()}</span>}
-                {events.slice(0, 2).map((e) => <div key={e.id} className="dash-calendar-event">{e.title}</div>)}
+                {events.length > 0 && (
+                  <div className="dash-calendar-events">
+                    {events.slice(0, 2).map((e) => <div key={e.id} className="dash-calendar-event" title={e.title}>{e.title}</div>)}
+                    {events.length > 2 && <div className="dash-calendar-more">+{events.length - 2}</div>}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -99,7 +106,7 @@ const StudentAgenda = () => {
 
       <div className="admin-panel">
         <div className="admin-panel-head">
-          <span className="admin-panel-title" style={{ textTransform: 'capitalize' }}>{selectedDay.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+          <span className="admin-panel-title dash-day-title">{selectedDay.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
           <span className="admin-status admin-status-gray">{selectedEvents.length} evento{selectedEvents.length === 1 ? '' : 's'}</span>
         </div>
         {selectedEvents.length === 0 ? (
