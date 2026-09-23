@@ -13,7 +13,6 @@ import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
 import Player from './pages/Player';
-import LiveClasses from './pages/LiveClasses';
 import LiveClassRoom from './pages/LiveClassRoom';
 
 // Alumno (panel propio con su sidebar, ver src/pages/student/StudentLayout.jsx)
@@ -138,7 +137,8 @@ function App() {
 
           {/* Protected Routes */}
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
-          <Route path="/live" element={<ProtectedRoute><LiveClasses /></ProtectedRoute>} />
+          {/* /live era el listado antiguo de clases: cada rol tiene su Agenda, así que se redirige a su panel. */}
+          <Route path="/live" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
           <Route path="/live/:sessionId" element={<ProtectedRoute><LiveClassRoom /></ProtectedRoute>} />
 
           {/* Role-Specific Dashboards */}

@@ -5,6 +5,9 @@ import { fetchLiveSessionById } from '../lib/db';
 import { useAuth } from '../context/AuthContext';
 import LiveRoom from '../components/LiveRoom';
 
+// Agenda de cada rol: a donde se vuelve si la sala se abrió directo (sin historial).
+const AGENDA_BY_ROLE = { admin: '/admin/grupos', teacher: '/teacher/agenda', student: '/student/agenda' };
+
 const ROLE_LABELS = { admin: 'Administrador', teacher: 'Docente', student: 'Estudiante' };
 
 const scheduleLineFor = (s) => {
@@ -19,6 +22,12 @@ const LiveClassRoom = () => {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  // Salir vuelve a la pantalla de donde se entró (Agenda, Inicio, curso...); si la sala se abrió
+  // directo desde un enlace, cae en la agenda del rol.
+  const exitRoom = () => {
+    if (window.history.state?.idx > 0) navigate(-1);
+    else navigate(AGENDA_BY_ROLE[currentUser?.role] || '/', { replace: true });
+  };
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +46,7 @@ const LiveClassRoom = () => {
     return (
       <div className="view active" style={{ padding: '40px', textAlign: 'center' }}>
         <p style={{ color: 'var(--text2)', marginBottom: '16px' }}>No se encontró esta clase en vivo.</p>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/live')}>← Volver a Clases en vivo</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => exitRoom()}>← Volver</button>
       </div>
     );
   }
@@ -47,7 +56,7 @@ const LiveClassRoom = () => {
       <div className="view active" style={{ padding: '40px', textAlign: 'center' }}>
         <p style={{ fontWeight: 600, marginBottom: '8px' }}>{session.title}</p>
         <p style={{ color: 'var(--text2)', marginBottom: '16px' }}>❌ Esta clase en vivo fue cancelada por el docente.</p>
-        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/live')}>← Volver a Clases en vivo</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => exitRoom()}>← Volver</button>
       </div>
     );
   }
@@ -55,7 +64,7 @@ const LiveClassRoom = () => {
   return (
     <div className="view active live-room">
       <div className="live-room-header" style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 16px', background: 'var(--bg)' }}>
-        <button className="btn-icon" title="Salir" onClick={() => navigate('/live')}><X size={16} /></button>
+        <button className="btn-icon" title="Salir" onClick={() => exitRoom()}><X size={16} /></button>
       </div>
       <div className="live-room-stage" style={{ padding: '0 20px 20px', background: 'var(--bg)' }}>
         <LiveRoom
@@ -63,7 +72,7 @@ const LiveClassRoom = () => {
           currentUser={currentUser}
           roleLabel={ROLE_LABELS[currentUser?.role] || 'Invitado'}
           scheduleLine={scheduleLineFor(session)}
-          onExit={() => navigate('/live')}
+          onExit={() => exitRoom()}
         />
       </div>
     </div>
