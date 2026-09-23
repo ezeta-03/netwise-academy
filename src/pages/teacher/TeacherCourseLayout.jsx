@@ -71,13 +71,19 @@ const TeacherCourseLayout = () => {
     }
   }, [coursesLoaded, course, isAssigned, navigate, addToast]);
 
+  // Se consulta con el id numérico del curso (el que guardan las matrículas) y
+  // solo cuando el curso está asignado: las reglas rechazan la consulta a un
+  // docente ajeno.
+  const canLoad = coursesLoaded && !!course && isAssigned;
+  const numericCourseId = course?.id;
   useEffect(() => {
-    Promise.all([fetchGroups(), fetchAllEnrollments(courseId)]).then(([groups, enrollments]) => {
+    if (!canLoad) return;
+    Promise.all([fetchGroups(), fetchAllEnrollments(numericCourseId)]).then(([groups, enrollments]) => {
       setGroup(groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
       const courseEnrollments = enrollments.filter((e) => e.courseId?.toString() === courseId?.toString());
       setAvgProgress(courseEnrollments.length ? Math.round(courseEnrollments.reduce((s, e) => s + (e.progress || 0), 0) / courseEnrollments.length) : 0);
-    });
-  }, [courseId]);
+    }).catch(() => {});
+  }, [canLoad, numericCourseId, courseId]);
 
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';

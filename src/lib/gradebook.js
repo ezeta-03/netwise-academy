@@ -40,9 +40,10 @@ export const computeGradeSummary = (rows) => {
   const promedioParcial = rawAverage !== null ? Math.round(rawAverage * 100) / 100 : null;
   return {
     promedioParcial,
-    rendimientoPct: rawAverage !== null ? Math.round((rawAverage / MAX_GRADE) * 100) : null,
-    // Sin redondear: 15.9/20 es 79.5%, que NO llega al 80%.
-    rendimientoRaw: rawAverage !== null ? (rawAverage / MAX_GRADE) * 100 : null,
+    rendimientoPct: promedioParcial !== null ? Math.round((promedioParcial / MAX_GRADE) * 100) : null,
+    // Sobre el promedio a 2 decimales (el que ve el alumno): 15.9/20 es 79.5%, que NO
+    // llega al 80%, y un 16.00 en pantalla nunca queda como 'no cumple'.
+    rendimientoRaw: promedioParcial !== null ? (promedioParcial / MAX_GRADE) * 100 : null,
     allGraded: rows.length > 0 && graded.length === rows.length,
     gradedCount: graded.length,
     totalCount: rows.length,

@@ -9,6 +9,7 @@ import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import DownloadProgramModal from '../components/DownloadProgramModal';
+import { downloadProgramPdf, getProgramPdf } from '../lib/programDownloads';
 
 const OUTCOME_ICONS = { sparkles: Sparkles, fingerprint: Fingerprint, 'trending-up': TrendingUp, rocket: Rocket };
 
@@ -22,7 +23,10 @@ const hoursOfRange = (range) => {
   return (toMinutes(to) - toMinutes(from)) / 60;
 };
 
+// Con PDF real del curso (lib/programDownloads.js) se descarga ese; sin PDF cae al
+// resumen de texto armado con el temario.
 const downloadProgram = (course, modules) => {
+  if (downloadProgramPdf(course)) return;
   const lines = [
     `${course.title} — Programa del curso`,
     '',
@@ -183,7 +187,7 @@ const CourseDetail = () => {
                 </div>
               )}
 
-              {modules.length > 0 && (
+              {(modules.length > 0 || getProgramPdf(course.id)) && (
                 <div className="cd-download-wrap">
                   <button className="cd-download-btn" onClick={() => setDownloadModalOpen(true)}><Download size={16} /> Descargar programa del curso</button>
                   <p className="cd-download-caption">Consulta los contenidos y entregables de cada módulo en el programa completo.</p>

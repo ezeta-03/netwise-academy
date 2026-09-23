@@ -58,7 +58,7 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
         await adminCreateEnrollment({
           uid: selectedUid || undefined,
           studentName: studentName.trim(), studentEmail: studentEmail.trim(),
-          courseId, courseTitle: course?.title || '', groupId: group?.id, groupName: group?.name,
+          courseId: course?.id ?? courseId, courseTitle: course?.title || '', groupId: group?.id, groupName: group?.name,
           status, reason,
         });
         await logChange(adminName, `Matriculó a ${studentName} en "${course?.title}".`);

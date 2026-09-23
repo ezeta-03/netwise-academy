@@ -37,7 +37,7 @@ describe('rubricTemplates', () => {
     }
   });
 
-  test('las claves heredadas de Object.prototype no son plantillas', { todo: 'BAJO rubricTemplates.js:66 - RUBRIC_TEMPLATES["constructor"] es truthy: getRubricTemplate("constructor") devuelve la función Object. Usar Object.hasOwn' }, () => {
+  test('las claves heredadas de Object.prototype no son plantillas', () => {
     assert.equal(getRubricTemplate('constructor'), null);
     assert.equal(getRubricTemplate('toString'), null);
   });

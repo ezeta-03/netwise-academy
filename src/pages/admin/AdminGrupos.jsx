@@ -130,7 +130,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
     try {
       const course = courses.find((c) => c.id.toString() === courseId.toString());
       const payload = {
-        name: name.trim(), courseId, courseTitle: course?.title || '',
+        name: name.trim(), courseId: course?.id ?? courseId, courseTitle: course?.title || '',
         startDate: startDate || null, endDate: endDate || null,
         schedule: cleanSlots, scheduleTime: buildScheduleLabel(cleanSlots), instructor: instructor.trim(), instructorUid: instructorUid || null,
         capacity: Number(capacity) || 0, status, classLink: classLink.trim() || null,
@@ -145,7 +145,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
           if (canCreate) {
             for (const e of plan.toCreate) {
               await scheduleLiveSession({
-                courseId, courseTitle: course?.title || '', title: e.title, instructor: instructor.trim(), instructorUid,
+                courseId: course?.id ?? courseId, courseTitle: course?.title || '', title: e.title, instructor: instructor.trim(), instructorUid,
                 startsAt: e.startsAt, durationMin: e.durationMin, groupId: group.id, generated: true,
               });
             }
@@ -170,7 +170,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
           const entries = buildRecurringSessions({ slots: cleanSlots, weeksLabel: String(weeks) }, startDate);
           for (const entry of entries) {
             await scheduleLiveSession({
-              courseId, courseTitle: course?.title || '', title: entry.title,
+              courseId: course?.id ?? courseId, courseTitle: course?.title || '', title: entry.title,
               instructor: instructor.trim(), instructorUid,
               startsAt: entry.startsAt, durationMin: entry.durationMin, groupId: created.id, generated: true,
             });

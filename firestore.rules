@@ -94,7 +94,8 @@ service cloud.firestore {
       // aula, a nombre del docente del aula); un docente solo las de SU curso
       // y a su nombre.
       allow create: if isAdmin() || (isCourseTeacher(string(request.resource.data.courseId)) && request.resource.data.instructorUid == request.auth.uid);
-      allow update, delete: if canManageCourse(string(resource.data.courseId));
+      allow update: if canManageCourse(string(resource.data.courseId)) && canManageCourse(string(request.resource.data.courseId));
+      allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
     // Preinscripciones ("me interesa este taller"): un alumno solo puede
@@ -189,7 +190,11 @@ service cloud.firestore {
     // al confirmar su compra.
     match /coupons/{couponId} {
       allow read: if true;
-      allow update: if isSignedIn();
+      // El admin edita todo; cualquier otro usuario logueado solo puede sumar
+      // un uso (canje) -- no cambiar el porcentaje, el estado ni el tope.
+      allow update: if isAdmin() || (isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount'])
+        && request.resource.data.usedCount == resource.data.get('usedCount', 0) + 1);
       allow create, delete: if isAdmin();
     }
 
@@ -239,7 +244,7 @@ service cloud.firestore {
         && !('grade' in request.resource.data)
         && !('feedback' in request.resource.data)
       );
-      allow update: if canManageCourse(string(resource.data.courseId)) || (
+      allow update: if (canManageCourse(string(resource.data.courseId)) && canManageCourse(string(request.resource.data.courseId))) || (
         isSignedIn()
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid
@@ -255,7 +260,10 @@ service cloud.firestore {
     // admin o el docente asignado al curso; el alumno lee únicamente la suya.
     match /courseGrades/{gradeId} {
       allow read: if isSignedIn() && (canManageCourse(string(resource.data.courseId)) || resource.data.uid == request.auth.uid);
-      allow create, update: if canManageCourse(string(request.resource.data.courseId));
+      allow create: if canManageCourse(string(request.resource.data.courseId));
+      // Al actualizar, el doc existente también debe ser de un curso del docente
+      // (no basta declarar un courseId propio para pisar el de otro curso).
+      allow update: if canManageCourse(string(resource.data.courseId)) && canManageCourse(string(request.resource.data.courseId));
       allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
@@ -263,7 +271,8 @@ service cloud.firestore {
     // (columna clicable en Asistencia); el alumno solo la lee (Mi asistencia).
     match /attendance/{attendanceId} {
       allow read: if isSignedIn() && (canManageCourse(string(resource.data.courseId)) || resource.data.uid == request.auth.uid);
-      allow create, update: if canManageCourse(string(request.resource.data.courseId));
+      allow create: if canManageCourse(string(request.resource.data.courseId));
+      allow update: if canManageCourse(string(resource.data.courseId)) && canManageCourse(string(request.resource.data.courseId));
       allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
@@ -284,7 +293,12 @@ service cloud.firestore {
       allow read: if isSignedIn();
       // Anuncios: solo el admin o el docente asignado a ese curso.
       allow create: if canManageCourse(string(request.resource.data.courseId));
-      allow update: if isSignedIn();
+      // Un usuario común solo agrega comentarios; editar el post o marcarlo
+      // como anuncio es del admin o del docente asignado.
+      allow update: if isSignedIn() && (
+        canManageCourse(string(resource.data.courseId)) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments'])
+      );
       allow delete: if false;
     }
 
@@ -313,7 +327,8 @@ service cloud.firestore {
     // de que el alumno haya definido su proyecto todavía.
     match /projectProfiles/{profileId} {
       allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || canManageCourse(string(resource.data.courseId)));
-      allow write: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
     }
 
     // Avances de práctica del proyecto (qué puntos de un módulo ya aplicó
@@ -322,7 +337,8 @@ service cloud.firestore {
     // antes de que exista el doc.
     match /projectAdvances/{advanceId} {
       allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || canManageCourse(string(resource.data.courseId)));
-      allow write: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
     }
 
     // Salas privadas de estudio armadas por un alumno. Cualquier usuario

@@ -148,7 +148,7 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
                 <p className="admin-cell-sub" style={{ marginBottom: 10 }}>{sub.note}</p>
               )
             ) : (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Aún no presentas esta entregable.</p>
+              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Aún no presentas este entregable.</p>
             )}
             <button className="admin-btn-edit" style={{ marginBottom: 12 }} onClick={() => setSubmitModule(m)}><Send size={13} /> {sub ? 'Reemplazar entrega' : 'Presentar entrega'}</button>
             <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 2 }}>Retroalimentación del docente</p>
@@ -243,7 +243,7 @@ const MiAsistencia = ({ course, modules, attendance }) => {
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card"><div className="admin-stat-label">Asistencia</div><div className="admin-stat-value">{pct === null ? '—' : `${pct}%`}</div><div className="admin-cell-sub">{pct === null ? 'Aún sin sesiones registradas' : pct >= APPROVAL.minAttendancePct ? `Cumples el mínimo de ${APPROVAL.minAttendancePct}%` : `Por debajo del mínimo de ${APPROVAL.minAttendancePct}%`}</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Sesiones</div><div className="admin-stat-value">{stats.taken}/{sessions.length}</div><div className="admin-cell-sub">Asistidas de las dictadas</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Sesiones</div><div className="admin-stat-value">{stats.present}/{stats.taken}</div><div className="admin-cell-sub">Asistidas de las dictadas</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Faltas</div><div className="admin-stat-value">{stats.absent}</div><div className="admin-cell-sub">{stats.unregistered > 0 ? `${stats.unregistered} sin registro cuentan como falta` : 'Incluye las sesiones sin registro'}</div></div>
       </div>
 
@@ -255,11 +255,11 @@ const MiAsistencia = ({ course, modules, attendance }) => {
             <div className="session-chip-row">
               {g.sessions.map((s) => {
                 const a = attendance.find((x) => x.sessionId === s.id);
-                const cls = !a ? 'pending' : a.present ? 'present' : 'absent';
+                const cls = !a ? (s.done ? 'absent' : 'pending') : a.present ? 'present' : 'absent';
                 return (
                   <div key={s.id} className={`session-chip ${cls}`}>
                     <span className="session-chip-label">{s.label}</span>
-                    <span>{s.dateLabel || (!a ? 'Por dictar' : '')}</span>
+                    <span>{s.dateLabel || (!a ? (s.done ? 'Sin registro' : 'Por dictar') : '')}</span>
                   </div>
                 );
               })}

@@ -478,7 +478,21 @@ export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, co
     return payload;
   }
 
-  const ref = doc(collection(db, 'enrollments'));
+  // Un alumno con cuenta usa el id determinístico `${uid}_${courseId}` (el mismo
+  // de enrollInCourse/markLessonComplete): así hay una sola matrícula por
+  // alumno+curso y las reglas le dejan ver a sus compañeros. Un alta manual sin
+  // cuenta (uid `manual-...`) sigue con id automático.
+  const ref = uid ? doc(db, 'enrollments', `${uid}_${courseId}`) : doc(collection(db, 'enrollments'));
+  if (uid) {
+    // Si el alumno ya tenía matrícula, no se le borra el avance.
+    const existing = await getDoc(ref);
+    if (existing.exists()) {
+      const rest = { ...payload };
+      ['completedLessonIds', 'progress', 'enrolledAt'].forEach((k) => delete rest[k]);
+      await setDoc(ref, rest, { merge: true });
+      return { id: ref.id, ...existing.data(), ...rest };
+    }
+  }
   await setDoc(ref, payload);
   return { id: ref.id, ...payload };
 };
