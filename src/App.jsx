@@ -13,6 +13,7 @@ import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
 import Player from './pages/Player';
+import BackGuard from './components/BackGuard';
 import LiveClassRoom from './pages/LiveClassRoom';
 
 // Alumno (panel propio con su sidebar, ver src/pages/student/StudentLayout.jsx)
@@ -126,6 +127,7 @@ function App() {
           {/* Navbar hides itself on login/player routes internally via useLocation */}
           <Navbar />
           <WhatsAppButton />
+          <BackGuard />
         <div className="main-content">
         <Routes>
           {/* Public Routes */}

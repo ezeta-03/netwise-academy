@@ -1728,6 +1728,12 @@ body::before {
 .admin-field-checkbox { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: #4A4860; }
 .admin-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
+/* Modal "¿Realmente quieres salir?" (BackGuard.jsx) */
+.back-guard-modal { max-width: 360px; text-align: center; }
+.back-guard-icon { width: 46px; height: 46px; border-radius: 50%; background: #F1EAFF; color: var(--accent); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+.back-guard-actions { justify-content: center; }
+.back-guard-actions .btn { flex: 1; }
+
 /* Modales anchos de 2 columnas (Crear cupón, Crear aula) */
 .admin-modal-lg { max-width: 720px; padding: 36px 40px; }
 .admin-modal-lg .admin-field-row { gap: 24px; }
