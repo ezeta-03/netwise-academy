@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Lock, Calendar, UploadCloud, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, UploadCloud, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
+import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -459,56 +460,13 @@ const TeacherCourseContenido = () => {
         </div>
 
         <div>
-          <div className="admin-panel" style={{ marginBottom: 20 }}>
-            <div className="admin-panel-head"><span className="admin-panel-title">Módulos</span></div>
-            <div className="dash-modules-rail">
-              {modules.map((m, i) => (
-                <div
-                  key={m.id}
-                  className={`dash-module-item ${m.id === selectedId ? 'active' : ''} ${m.deliverable?.open === false ? 'done' : ''}`}
-                  onClick={() => { setSelectedId(m.id); setEditingModule(false); setSearchParams({}); }}
-                >
-                  <div className="dash-module-num">{String(i + 1).padStart(2, '0')}</div>
-                  <div className="dash-module-item-body">
-                    <div className="dash-module-title">{m.title}</div>
-                    <div className="dash-module-sub">{m.deliverable?.open === false ? 'Completado' : (m.weeksLabel || '')}</div>
-                  </div>
-                  {m.deliverable?.open === false && <div className="dash-module-check"><CheckCircle2 size={13} /></div>}
-                </div>
-              ))}
-            </div>
-            <button className="admin-btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={addModule}>
-              <Plus size={14} /> Agregar módulo
-            </button>
-            {modules.length > 1 && (
-              <button className="admin-btn-ghost" style={{ width: '100%', justifyContent: 'center', marginTop: 8, color: 'var(--rose)' }} onClick={() => deleteModule(selectedId)}>
-                <Trash2 size={14} /> Eliminar módulo actual
-              </button>
-            )}
-          </div>
-
-          {/* Solo el docente ve esta guía -- el estudiante no tiene acceso a
-              cronograma de evaluación, guion de clase ni rúbrica. */}
-          <div className="dash-guide-panel">
-            <div className="dash-guide-head">
-              <span className="dash-guide-title">Guía docente</span>
-              <span className="dash-guide-badge"><Lock size={11} /> Solo docente</span>
-            </div>
-            <div className="dash-guide-row">
-              <div className="dash-guide-row-icon"><Check size={15} /></div>
-              <div>
-                <div className="dash-guide-row-title">Rúbrica de evaluación</div>
-                <div className="dash-guide-row-sub">Criterios comunes a todo el curso</div>
-              </div>
-            </div>
-            <div className="dash-guide-row">
-              <div className="dash-guide-row-icon"><Calendar size={15} /></div>
-              <div>
-                <div className="dash-guide-row-title">Cronograma de evaluación</div>
-                <div className="dash-guide-row-sub">Fechas, pesos y requisitos</div>
-              </div>
-            </div>
-          </div>
+          <ModulesRailPanel
+            courseId={course.id} modules={modules} activeModuleId={selectedId}
+            onModuleClick={(id) => { setSelectedId(id); setEditingModule(false); setSearchParams({}); }}
+            onAddModule={addModule}
+            onDeleteModule={modules.length > 1 ? () => deleteModule(selectedId) : null}
+          />
+          <GuidePanel courseId={course.id} />
         </div>
       </div>
     </div>

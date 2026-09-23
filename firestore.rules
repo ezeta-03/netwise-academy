@@ -47,6 +47,14 @@ service cloud.firestore {
       allow write: if isTeacherOrAdmin();
     }
 
+    // Rúbrica de evaluación del curso (ver TeacherCourseRubrica.jsx): a
+    // diferencia de courseContent, es exclusiva del docente -- el estudiante
+    // nunca la lee, ni siquiera los descriptores de nivel.
+    match /courseRubrics/{courseId} {
+      allow read: if isTeacherOrAdmin();
+      allow write: if isTeacherOrAdmin();
+    }
+
     // Copia pública del temario (solo título/semanas de cada módulo, sin
     // links de video ni materiales) -- se muestra en /course/:id a un
     // visitante sin sesión, junto con el botón de descarga del programa que

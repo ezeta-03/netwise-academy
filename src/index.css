@@ -1784,6 +1784,37 @@ body::before {
 .dash-upload-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: #8B8A9B; font-size: .78rem; }
 .dash-upload-divider::before, .dash-upload-divider::after { content: ''; flex: 1; height: 1px; background: #ECEAF3; }
 
+/* Aviso destacado (candado, notas) -- ver TeacherCourseRubrica */
+.dash-notice {
+  display: flex; gap: 10px; align-items: flex-start; background: var(--accent-bg); color: var(--accent2);
+  border-radius: 12px; padding: 14px 16px; font-size: .85rem; line-height: 1.4; margin-bottom: 20px;
+}
+.dash-notice svg { flex-shrink: 0; margin-top: 2px; }
+
+.dash-rubric-criterion { border: 1px solid #ECEAF3; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+.dash-rubric-criterion-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.dash-rubric-criterion-num {
+  width: 24px; height: 24px; border-radius: 50%; background: var(--accent-bg); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: .76rem; font-weight: 700; flex-shrink: 0;
+}
+.dash-rubric-criterion-title { font-size: .95rem; font-weight: 700; color: #14141F; flex: 1; }
+.dash-rubric-levels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dash-rubric-level { background: #F8F7FB; border-radius: 10px; padding: 12px 14px; border-top: 3px solid; }
+.dash-rubric-level.destacado { border-color: #15803D; }
+.dash-rubric-level.logrado { border-color: var(--accent); }
+.dash-rubric-level.enproceso { border-color: #B45309; }
+.dash-rubric-level.inicial { border-color: #8B8A9B; }
+.dash-rubric-level-label { font-size: .78rem; font-weight: 700; margin-bottom: 4px; }
+.dash-rubric-level.destacado .dash-rubric-level-label { color: #15803D; }
+.dash-rubric-level.logrado .dash-rubric-level-label { color: var(--accent); }
+.dash-rubric-level.enproceso .dash-rubric-level-label { color: #B45309; }
+.dash-rubric-level.inicial .dash-rubric-level-label { color: #6B6980; }
+.dash-rubric-level-desc { font-size: .82rem; color: #4A4860; line-height: 1.4; }
+.dash-rubric-applies-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-top: 1px solid #F0EEF6; font-size: .85rem; color: #14141F; }
+.dash-rubric-applies-row:first-child { border-top: none; }
+.dash-rubric-applies-row svg { color: var(--accent); flex-shrink: 0; margin-top: 3px; }
+.dash-rubric-applies-weight { color: #8B8A9B; }
+
 .dash-session-card { background: #fff; border: 1px solid #ECEAF3; border-radius: 14px; padding: 16px 20px; margin-bottom: 12px; }
 .dash-session-head { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .dash-session-check {
@@ -1858,6 +1889,7 @@ body::before {
 }
 .dash-guide-row-title { font-size: .86rem; font-weight: 600; color: #14141F; }
 .dash-guide-row-sub { font-size: .76rem; color: #8B8A9B; margin-top: 2px; }
+.dash-guide-row.active .dash-guide-row-icon { background: var(--accent); color: #fff; }
 
 /* Calendario (Agenda) */
 .dash-calendar { }

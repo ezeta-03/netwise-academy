@@ -297,6 +297,31 @@ export const saveCourseContent = async (courseId, modules, teacherUid) => {
   return payload;
 };
 
+// Rúbrica de evaluación del curso (ver TeacherCourseRubrica.jsx) -- una sola
+// por curso, exclusiva del docente. `status` es 'pending' | 'validated'
+// (si coordinación ya la revisó).
+const EMPTY_COURSE_RUBRIC = { criteria: [], status: 'pending' };
+
+export const fetchCourseRubric = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_course_rubric_${courseId}`);
+    return raw ? JSON.parse(raw) : EMPTY_COURSE_RUBRIC;
+  }
+  const docRef = doc(db, 'courseRubrics', courseId.toString());
+  const docSnap = await getDoc(docRef);
+  return docSnap.exists() ? docSnap.data() : EMPTY_COURSE_RUBRIC;
+};
+
+export const saveCourseRubric = async (courseId, rubric, teacherUid) => {
+  const payload = { ...rubric, updatedAt: new Date().toISOString(), updatedBy: teacherUid };
+  if (!isConfigValid) {
+    localStorage.setItem(`mock_course_rubric_${courseId}`, JSON.stringify(payload));
+    return payload;
+  }
+  await setDoc(doc(db, 'courseRubrics', courseId.toString()), payload);
+  return payload;
+};
+
 // Versión pública del temario (solo título y semanas de cada módulo, sin
 // links de video ni materiales) -- para mostrar el programa a un visitante
 // sin sesión en /course/:id, donde puede descargarlo dejando su contacto
