@@ -3,7 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { Lock, Plus, Pencil, Trash2, Save, Check, CheckSquare } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchCourseRubric, saveCourseRubric } from '../../lib/db';
+import { fetchCourseContent, fetchCourseRubric, saveCourseRubric, saveCourseContent } from '../../lib/db';
+import { getRubricTemplate } from '../../lib/rubricTemplates';
 import { resolveWeights, deliverableLabel } from '../../lib/weights';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
@@ -57,9 +58,30 @@ const CriterionForm = ({ initial, onSave, onCancel }) => {
   );
 };
 
+// Carga la rúbrica estándar del curso (lib/rubricTemplates.js) y, si los
+// entregables no tienen peso definido, los pesos que coordinación fijó para ese
+// curso. Devuelve la rúbrica y los módulos ya guardados.
+const seedFromTemplate = async ({ courseId, template, modules, rubric, uid }) => {
+  const next = { ...rubric, criteria: template.criteria, status: rubric.status || 'pending' };
+  await saveCourseRubric(courseId, next, uid);
+
+  let mods = modules;
+  const withDeliverable = modules.filter((m) => m.deliverable?.description);
+  const noWeights = withDeliverable.every((m) => m.deliverable?.weight == null || m.deliverable.weight === '');
+  if (template.weights && withDeliverable.length === template.weights.length && noWeights) {
+    mods = modules.map((m) => {
+      const i = withDeliverable.indexOf(m);
+      return i === -1 ? m : { ...m, deliverable: { ...m.deliverable, weight: template.weights[i] } };
+    });
+    await saveCourseContent(courseId, mods, uid);
+  }
+  return { next, mods };
+};
+
 const TeacherCourseRubrica = () => {
   const { course, group } = useOutletContext();
   const { currentUser } = useAuth();
+  const teacherUid = currentUser?.uid;
   const { addToast } = useUI();
   const [modules, setModules] = useState([]);
   const [rubric, setRubric] = useState({ criteria: [], status: 'pending' });
@@ -69,12 +91,22 @@ const TeacherCourseRubrica = () => {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id)]).then(([content, rub]) => {
-      setModules(content.modules || []);
-      setRubric(rub);
+    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id)]).then(async ([content, rub]) => {
+      let mods = content.modules || [];
+      let current = rub;
+      // Primera vez (nunca se guardó): se carga la rúbrica estándar del curso.
+      const template = getRubricTemplate(course.id);
+      if (template && rub.criteria.length === 0 && !rub.updatedAt) {
+        try {
+          const seeded = await seedFromTemplate({ courseId: course.id, template, modules: mods, rubric: rub, uid: teacherUid });
+          current = seeded.next; mods = seeded.mods;
+        } catch { /* sin permiso o sin red: queda el estado vacío con el botón manual */ }
+      }
+      setModules(mods);
+      setRubric(current);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [course.id]);
+  }, [course.id, teacherUid]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mismo patrón load() que el resto de páginas de curso (ver TeacherCourseContenido)
   useEffect(() => { load(); }, [load]);
@@ -102,6 +134,19 @@ const TeacherCourseRubrica = () => {
   const deleteCriterion = (id) => {
     if (!confirm('¿Eliminar este criterio de la rúbrica?')) return;
     persist({ ...rubric, criteria: rubric.criteria.filter((c) => c.id !== id) });
+  };
+
+  const loadStandardRubric = async () => {
+    const template = getRubricTemplate(course.id);
+    if (!template) return;
+    try {
+      const seeded = await seedFromTemplate({ courseId: course.id, template, modules, rubric, uid: currentUser?.uid });
+      setRubric(seeded.next);
+      setModules(seeded.mods);
+      addToast('Rúbrica estándar cargada.', 'success');
+    } catch {
+      addToast('No se pudo cargar la rúbrica estándar. Intenta de nuevo.', 'error');
+    }
   };
 
   const toggleStatus = () => {
@@ -138,7 +183,12 @@ const TeacherCourseRubrica = () => {
             </div>
 
             {rubric.criteria.length === 0 && !adding && (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no defines los criterios de esta rúbrica.</p>
+              <>
+                <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no hay criterios en esta rúbrica.</p>
+                {getRubricTemplate(course.id) && (
+                  <button className="admin-btn-edit" style={{ marginBottom: 12 }} onClick={loadStandardRubric}>Cargar la rúbrica estándar de este curso</button>
+                )}
+              </>
             )}
 
             {rubric.criteria.map((c, i) => (
