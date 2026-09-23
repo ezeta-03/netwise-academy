@@ -651,6 +651,24 @@ export const uploadPaymentProof = async (uid, courseId, file) => {
   return getDownloadURL(ref);
 };
 
+// Archivo que el docente sube para "Materiales de este módulo" (PDF/DOCX/PPT)
+// -- misma idea que uploadPaymentProof: en modo mock no hay Storage, así que
+// se guarda como data URL en localStorage junto con el resto del contenido.
+export const uploadCourseMaterial = async (courseId, moduleId, file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+  const path = `courseMaterials/${courseId}/${moduleId}_${Date.now()}_${file.name}`;
+  const ref = storageRef(storage, path);
+  await uploadBytes(ref, file);
+  return getDownloadURL(ref);
+};
+
 export const createOrder = async ({ uid, studentName, studentEmail, courseId, courseTitle, amount, status, paymentMethod, couponId, proofCode, proofUrl }) => {
   const base = {
     uid, studentName, studentEmail: studentEmail || null, courseId, courseTitle, amount,

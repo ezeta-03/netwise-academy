@@ -101,17 +101,16 @@ const StudentCourseContenido = () => {
           </div>
 
           <div className="admin-panel" style={{ marginBottom: 20 }}>
-            <div className="admin-panel-head">
-              <span className="admin-panel-title">Sesiones grabadas</span>
-              <span className="admin-status admin-status-gray">{selected.lessons.length} sesión{selected.lessons.length === 1 ? '' : 'es'}</span>
-            </div>
-            {selected.lessons.length === 0 ? (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no hay grabaciones para este módulo.</p>
-            ) : selected.lessons.map((les, li) => (
+            <div className="admin-panel-head"><span className="admin-panel-title">Sesiones grabadas</span></div>
+            <p className="admin-panel-caption" style={{ marginTop: 0 }}>
+              {selected.lessons.length === 0 ? 'Todavía no hay grabaciones para este módulo.' : 'Vuelve a ver las clases pasadas de este módulo a tu ritmo.'}
+            </p>
+            {selected.lessons.map((les, li) => (
               <div key={les.id} className="dash-list-row">
                 <div>
+                  <div className="dash-list-row-eyebrow">Sesión {String(li + 1).padStart(2, '0')}</div>
                   <div className="dash-list-row-title">{les.title}</div>
-                  <div className="dash-list-row-sub">{les.duration || 'Sin duración'}</div>
+                  <div className="dash-list-row-sub">{les.date ? `${les.date} · ` : ''}{les.duration || 'Sin duración'}</div>
                 </div>
                 <button className="admin-btn-ghost" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-${li + 1}`)}><Video size={13} /> Ver grabación</button>
               </div>

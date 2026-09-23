@@ -1,12 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Lock, Calendar, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Lock, Calendar, UploadCloud, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, saveCourseContent } from '../../lib/db';
+import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+const MAX_MATERIAL_SIZE = 2 * 1024 * 1024;
+const MATERIAL_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx';
+const MATERIAL_TYPE_RE = /application\/(pdf|msword|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation))/;
 
 const emptyModule = (n) => ({
   id: uid('m'), title: `Módulo ${n}`, weeksLabel: '', objective: '', practiceIntro: '', practiceBullets: [],
@@ -17,18 +21,20 @@ const SessionForm = ({ initial, onSave, onCancel }) => {
   const [title, setTitle] = useState(initial?.title || '');
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl || '');
   const [duration, setDuration] = useState(initial?.duration || '');
+  const [date, setDate] = useState(initial?.date || '');
   const canSave = title.trim() && videoUrl.trim();
 
   return (
     <div className="admin-panel" style={{ marginBottom: 10, background: '#F6F5FA' }}>
+      <div className="admin-field"><label>Título de la sesión</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Definición del propósito de marca" /></div>
       <div className="admin-field-row">
-        <div className="admin-field"><label>Título de la sesión</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Definición del propósito de marca" /></div>
+        <div className="admin-field"><label>Fecha</label><input value={date} onChange={(e) => setDate(e.target.value)} placeholder="Ej. 10 ago. 2026" /></div>
         <div className="admin-field"><label>Duración</label><input value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="Ej. 108 min" /></div>
       </div>
       <div className="admin-field"><label>Link de la grabación</label><input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." /></div>
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
-        <button className="admin-btn-edit" disabled={!canSave} onClick={() => onSave({ id: initial?.id || uid('l'), title: title.trim(), videoUrl: videoUrl.trim(), duration: duration.trim(), resources: initial?.resources || [] })}>
+        <button className="admin-btn-edit" disabled={!canSave} onClick={() => onSave({ id: initial?.id || uid('l'), title: title.trim(), videoUrl: videoUrl.trim(), duration: duration.trim(), date: date.trim(), resources: initial?.resources || [] })}>
           <Save size={13} /> Guardar sesión
         </button>
       </div>
@@ -78,16 +84,40 @@ const SessionDetailForm = ({ initial, onSave, onCancel }) => {
   );
 };
 
-const MaterialForm = ({ onSave, onCancel }) => {
+const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
+  const { addToast } = useUI();
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('Material de clase');
   const [url, setUrl] = useState('');
-  const canSave = title.trim() && url.trim();
+  const [file, setFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
+  const canSave = title.trim() && (file || url.trim());
+
+  const applyFile = (f) => {
+    if (!f) return;
+    if (!MATERIAL_TYPE_RE.test(f.type)) { addToast('Solo se aceptan archivos PDF, DOCX o PPT.', 'error'); return; }
+    if (f.size > MAX_MATERIAL_SIZE) { addToast('El archivo pesa más de 2.0MB.', 'error'); return; }
+    setFile(f);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const finalUrl = file ? await uploadCourseMaterial(courseId, moduleId, file) : url.trim();
+      onSave({ id: uid('mat'), title: title.trim(), category, url: finalUrl });
+    } catch {
+      addToast('No se pudo subir el archivo. Intenta de nuevo.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="admin-panel" style={{ marginBottom: 10, background: '#F6F5FA' }}>
       <div className="admin-field-row">
-        <div className="admin-field"><label>Título</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Guía de clase · Identidad Visual" /></div>
+        <div className="admin-field"><label>Título</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Identidad Visual" /></div>
         <div className="admin-field">
           <label>Categoría</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -97,10 +127,42 @@ const MaterialForm = ({ onSave, onCancel }) => {
           </select>
         </div>
       </div>
-      <div className="admin-field"><label>Enlace</label><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." /></div>
+
+      <div className="admin-field">
+        <label>Sube tu archivo</label>
+        <input
+          ref={fileInputRef} type="file" accept={MATERIAL_ACCEPT} style={{ display: 'none' }}
+          onChange={(e) => applyFile(e.target.files?.[0])}
+        />
+        <div
+          className={`dash-upload-zone ${dragOver ? 'dragover' : ''}`}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => { e.preventDefault(); setDragOver(false); applyFile(e.dataTransfer.files?.[0]); }}
+        >
+          {file ? (
+            <div className="dash-upload-zone-file">
+              <FileText size={16} /> {file.name}
+              <button type="button" className="admin-icon-btn" onClick={(e) => { e.stopPropagation(); setFile(null); }}><X size={13} /></button>
+            </div>
+          ) : (
+            <>
+              <div className="dash-upload-zone-icon"><UploadCloud size={22} /></div>
+              <div className="dash-upload-zone-text">Arrastra y suelta o <span className="dash-upload-zone-link">elige el archivo</span> a subir.</div>
+              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT. Máx 2.0MB</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="dash-upload-divider">o</div>
+
+      <div className="admin-field"><label>Envía desde un enlace</label><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." disabled={!!file} /></div>
+
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
-        <button className="admin-btn-edit" disabled={!canSave} onClick={() => onSave({ id: uid('mat'), title: title.trim(), category, url: url.trim() })}><Save size={13} /> Guardar material</button>
+        <button className="admin-btn-edit" disabled={!canSave || saving} onClick={handleSave}><Save size={13} /> {saving ? 'Guardando...' : 'Guardar material'}</button>
       </div>
     </div>
   );
@@ -326,7 +388,7 @@ const TeacherCourseContenido = () => {
                   <span className="admin-panel-title">Materiales de este módulo</span>
                   {!addingMaterial && <button className="admin-btn-edit" onClick={() => setAddingMaterial(true)}><Plus size={13} /> Subir material</button>}
                 </div>
-                {addingMaterial && <MaterialForm onSave={saveMaterial} onCancel={() => setAddingMaterial(false)} />}
+                {addingMaterial && <MaterialForm courseId={course.id} moduleId={selected.id} onSave={saveMaterial} onCancel={() => setAddingMaterial(false)} />}
                 {(selected.materials || []).length === 0 && !addingMaterial ? (
                   <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no subes materiales para este módulo.</p>
                 ) : selected.materials?.map((mat) => (
@@ -349,16 +411,18 @@ const TeacherCourseContenido = () => {
               <div className="admin-panel" style={{ marginBottom: 20 }}>
                 <div className="admin-panel-head">
                   <span className="admin-panel-title">Sesiones grabadas</span>
-                  <span className="admin-status admin-status-gray">{selected.lessons.length} sesión{selected.lessons.length === 1 ? '' : 'es'}</span>
+                  {!addingSession && <button className="admin-btn-edit" onClick={() => setAddingSession(true)}><Plus size={13} /> Subir sesión</button>}
                 </div>
-                {selected.lessons.map((les) => (
+                <p className="admin-panel-caption" style={{ marginTop: 0 }}>Vuelve a ver las clases pasadas de este módulo a tu ritmo.</p>
+                {selected.lessons.map((les, li) => (
                   editingSessionId === les.id ? (
                     <SessionForm key={les.id} initial={les} onSave={saveSession} onCancel={() => setEditingSessionId(null)} />
                   ) : (
                     <div key={les.id} className="dash-list-row">
                       <div>
+                        <div className="dash-list-row-eyebrow">Sesión {String(li + 1).padStart(2, '0')}</div>
                         <div className="dash-list-row-title">{les.title}</div>
-                        <div className="dash-list-row-sub">{les.duration || 'Sin duración'}</div>
+                        <div className="dash-list-row-sub">{les.date ? `${les.date} · ` : ''}{les.duration || 'Sin duración'}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <a className="admin-btn-ghost" href={les.videoUrl} target="_blank" rel="noreferrer"><Video size={13} /> Ver grabación</a>
@@ -368,11 +432,7 @@ const TeacherCourseContenido = () => {
                     </div>
                   )
                 ))}
-                {addingSession ? (
-                  <SessionForm onSave={saveSession} onCancel={() => setAddingSession(false)} />
-                ) : (
-                  <button className="admin-btn-ghost" style={{ marginTop: 10 }} onClick={() => setAddingSession(true)}><Plus size={13} /> Agregar sesión</button>
-                )}
+                {addingSession && <SessionForm onSave={saveSession} onCancel={() => setAddingSession(false)} />}
               </div>
 
               <div className="admin-panel">
@@ -388,10 +448,10 @@ const TeacherCourseContenido = () => {
                 )}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button className="admin-btn-edit" onClick={() => navigate(`../evaluacion?vista=entregas&modulo=${selected.id}`)}><CheckCircle2 size={14} /> Revisar entregas</button>
-                  <button className="admin-btn-ghost" onClick={() => setEditingModule(true)}><Pencil size={14} /> Editar módulo</button>
                   <button className="admin-btn-ghost" onClick={toggleDeliverableOpen}>
-                    <CheckCircle2 size={14} /> Marcar como {selected.deliverable?.open === false ? 'activo' : 'pendiente'}
+                    <CheckCircle2 size={14} /> Marcar como {selected.deliverable?.open === false ? 'activo' : 'completado'}
                   </button>
+                  <button className="admin-btn-ghost" onClick={() => setEditingModule(true)}><Pencil size={14} /> Editar módulo</button>
                 </div>
               </div>
             </>
@@ -434,24 +494,17 @@ const TeacherCourseContenido = () => {
               <span className="dash-guide-badge"><Lock size={11} /> Solo docente</span>
             </div>
             <div className="dash-guide-row">
-              <div className="dash-guide-row-icon"><Calendar size={15} /></div>
-              <div>
-                <div className="dash-guide-row-title">Cronograma de evaluación</div>
-                <div className="dash-guide-row-sub">Fechas, pesos y aprobación</div>
-              </div>
-            </div>
-            <div className="dash-guide-row">
-              <div className="dash-guide-row-icon"><BookOpen size={15} /></div>
-              <div>
-                <div className="dash-guide-row-title">Indicaciones de clase</div>
-                <div className="dash-guide-row-sub">Guion de cada sesión</div>
-              </div>
-            </div>
-            <div className="dash-guide-row">
               <div className="dash-guide-row-icon"><Check size={15} /></div>
               <div>
                 <div className="dash-guide-row-title">Rúbrica de evaluación</div>
-                <div className="dash-guide-row-sub">Criterios y niveles de logro</div>
+                <div className="dash-guide-row-sub">Criterios comunes a todo el curso</div>
+              </div>
+            </div>
+            <div className="dash-guide-row">
+              <div className="dash-guide-row-icon"><Calendar size={15} /></div>
+              <div>
+                <div className="dash-guide-row-title">Cronograma de evaluación</div>
+                <div className="dash-guide-row-sub">Fechas, pesos y requisitos</div>
               </div>
             </div>
           </div>

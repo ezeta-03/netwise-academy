@@ -18,5 +18,20 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*|application/pdf');
       allow delete: if false;
     }
+
+    // Materiales que el docente sube en "Contenido" (ver uploadCourseMaterial
+    // en lib/db.js). Cualquier usuario logueado puede leer (el alumno del
+    // curso descarga el material); solo docente/admin puede escribir --
+    // mismo modelo de confianza que courseContent en Firestore, donde
+    // ningún docente está limitado a "sus" cursos.
+    match /courseMaterials/{courseId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'admin']
+                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document|application/vnd.ms-powerpoint|application/vnd.openxmlformats-officedocument.presentationml.presentation');
+      allow delete: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'admin'];
+    }
   }
 }

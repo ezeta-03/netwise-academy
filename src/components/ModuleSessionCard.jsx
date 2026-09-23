@@ -29,8 +29,8 @@ const ModuleSessionCard = ({ session, number, defaultOpen = false, onEdit, onDel
         </div>
         <div className="dash-session-main">
           <div className="dash-session-meta">
-            {number != null && `Sesión ${String(number).padStart(2, '0')} · `}
-            {session.dateLabel}{session.time ? ` · ${session.time}` : ''}
+            {number != null && `Sesión ${String(number).padStart(2, '0')}`}
+            {session.dateLabel && ` · ${session.dateLabel}${session.time ? ` · ${session.time}` : ''}`}
           </div>
           <div className="dash-session-title">{session.title}</div>
         </div>
