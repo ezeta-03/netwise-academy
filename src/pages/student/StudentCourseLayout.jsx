@@ -47,7 +47,7 @@ const StudentCourseLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
-  const { toggleSidebar, unreadCount } = useUI();
+  const { toggleSidebar, unreadCount, addToast } = useUI();
   const { courses } = useCourseOfferings();
   const [group, setGroup] = useState(null);
   const [enrollment, setEnrollment] = useState(null);
@@ -71,13 +71,20 @@ const StudentCourseLayout = () => {
       setGroup(groups.find((g) => g.id === enr?.groupId) || groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
       setEnrollment(enr);
       setLoading(false);
+      // Sin matrícula en este curso no hay nada que ver: se vuelve a "Cursos"
+      // en vez de mostrar el curso vacío (o el de otro alumno) por URL directa.
+      if (!enr) {
+        addToast('No estás inscrito en este curso.', 'warning');
+        navigate('/student/cursos', { replace: true });
+      }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, currentUser]);
 
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
 
-  if (!course || loading) return <div className="admin-empty-hint">Cargando curso...</div>;
+  if (!course || loading || !enrollment) return <div className="admin-empty-hint">Cargando curso...</div>;
 
   return (
     <div className="admin-shell">

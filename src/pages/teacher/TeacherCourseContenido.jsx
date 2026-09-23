@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
+import { isPendingUrl } from '../../lib/placeholders';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -402,7 +403,7 @@ const TeacherCourseContenido = () => {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer">Descargar</a>
+                      {isPendingUrl(mat.url) ? <span className="admin-status admin-status-gray">Pendiente de subir</span> : <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer">Descargar</a>}
                       <button className="admin-icon-btn" onClick={() => removeMaterial(mat.id)}><Trash2 size={13} /></button>
                     </div>
                   </div>
@@ -426,7 +427,7 @@ const TeacherCourseContenido = () => {
                         <div className="dash-list-row-sub">{les.date ? `${les.date} · ` : ''}{les.duration || 'Sin duración'}</div>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <a className="admin-btn-ghost" href={les.videoUrl} target="_blank" rel="noreferrer"><Video size={13} /> Ver grabación</a>
+                        {isPendingUrl(les.videoUrl) ? <span className="admin-status admin-status-gray">Pendiente de grabar</span> : <a className="admin-btn-ghost" href={les.videoUrl} target="_blank" rel="noreferrer"><Video size={13} /> Ver grabación</a>}
                         <button className="admin-icon-btn" onClick={() => setEditingSessionId(les.id)}><Pencil size={13} /></button>
                         <button className="admin-icon-btn" onClick={() => deleteSession(les.id)}><Trash2 size={13} /></button>
                       </div>

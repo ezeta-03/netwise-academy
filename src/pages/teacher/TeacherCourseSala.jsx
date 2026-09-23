@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
+import { toPeruIso } from '../../lib/liveScheduleGenerator';
 import LiveRoom from '../../components/LiveRoom';
 
 const scheduleLineFor = (s) => {
@@ -40,7 +41,7 @@ const TeacherCourseSala = () => {
       await scheduleLiveSession({
         courseId: course.id, courseTitle: course.title, title,
         instructor: currentUser?.displayName || 'Docente', instructorUid: currentUser?.uid,
-        startsAt, durationMin: Number(durationMin),
+        startsAt: toPeruIso(startsAt), durationMin: Number(durationMin),
       });
       setTitle(''); setStartsAt('');
       addToast('Clase en vivo programada.', 'success');
@@ -116,7 +117,7 @@ const TeacherCourseSala = () => {
         <div className="admin-panel-head"><span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Programar clase suelta</span></div>
         <div className="admin-field"><label>Título de la sesión</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Q&A: dudas del módulo 3" /></div>
         <div className="admin-field-row">
-          <div className="admin-field"><label>Fecha y hora</label><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} /></div>
+          <div className="admin-field"><label>Fecha y hora (hora de Perú)</label><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} /></div>
           <div className="admin-field"><label>Duración (min)</label><input type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} /></div>
         </div>
         <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={handleSchedule} disabled={saving}>

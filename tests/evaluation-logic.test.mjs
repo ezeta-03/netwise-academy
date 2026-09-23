@@ -6,24 +6,19 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildGradebookRows, computeGradeSummary } from '../src/lib/gradebook.js';
 import { getOrderedSessions } from '../src/lib/courseSessions.js';
-import { parseScheduleLabel, lastClassDate } from '../src/lib/liveScheduleGenerator.js';
-import { resolveWeights, deliverableLabel, equalWeight } from '../src/lib/weights.js';
+import { deliverableDueDate } from '../src/lib/deliveryDates.js';
+import { resolveWeights, deliverableLabel } from '../src/lib/weights.js';
 import { APPROVAL, evaluateApproval } from '../src/lib/approval.js';
 
 // ---------------------------------------------------------------------------
-// TeacherCourseCronograma.jsx (endWeekOf y bloque de filas)
+// TeacherCourseCronograma.jsx (bloque de filas; endWeekOf/fechas: lib/deliveryDates.js)
 // ---------------------------------------------------------------------------
-const endWeekOf = (weeksLabel, fallback) => {
-  const m = String(weeksLabel || '').match(/semanas?\s*(\d+)(?:\s*[-–a]\s*(\d+))?/i);
-  return m ? Number(m[2] || m[1]) : fallback;
-};
 const cronograma = (modules, group) => {
-  const dayNames = parseScheduleLabel(group?.scheduleTime || group?.scheduleDays);
   const resolved = resolveWeights(modules);
   const firstOpenIdx = resolved.rows.findIndex((r) => r.module.deliverable?.open !== false);
   const rows = resolved.rows.map((r, i) => {
     const m = r.module;
-    const dueIso = m.deliverable?.dueDate || lastClassDate(group?.startDate, dayNames, endWeekOf(m.weeksLabel, i + 1));
+    const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
     const status = m.deliverable?.open === false ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
     return { id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit, name: `${deliverableLabel(i, resolved.rows.length)} · ${m.title}` };
   });
@@ -31,48 +26,12 @@ const cronograma = (modules, group) => {
   const totalWeight = resolved.total;
   const formula = rows.length > 0 ? `PF = ${rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ')}` : null;
   const warnings = { sumNot100: rows.length > 0 && !resolved.sumsTo100, missingWeights: rows.length > 0 && !resolved.allExplicit };
-  return { rows, nextRow, totalWeight, formula, dayNames, warnings };
+  return { rows, nextRow, totalWeight, formula, warnings };
 };
 
 const M = (id, weeksLabel, deliverable) => ({ id, title: `T-${id}`, weeksLabel, ...(deliverable ? { deliverable } : {}) });
 const D = (weight, extra = {}) => ({ description: 'desc', ...(weight !== undefined ? { weight } : {}), ...extra });
 const GROUP = { startDate: '2026-03-10', scheduleTime: 'Martes y Jueves · 19:00-21:00' };
-
-describe('Cronograma: endWeekOf', () => {
-  test('etiquetas típicas', () => {
-    assert.equal(endWeekOf('Semana 3', 9), 3);
-    assert.equal(endWeekOf('Semanas 5-6', 9), 6);
-    assert.equal(endWeekOf('Semanas 1 - 2', 9), 2);
-    assert.equal(endWeekOf('Semanas 1–2', 9), 2);
-    assert.equal(endWeekOf('Semanas 5 a 6', 9), 6);
-    assert.equal(endWeekOf('Semanas 10-12', 9), 12);
-    assert.equal(endWeekOf('Semana 12', 9), 12);
-    assert.equal(endWeekOf('SEMANA 3', 9), 3);
-  });
-  test('números extra después de la semana no cambian el resultado', () => {
-    assert.equal(endWeekOf('Semana 3 (4 horas)', 1), 3);
-    assert.equal(endWeekOf('Semanas 1-2 · 8 h', 1), 2);
-    assert.equal(endWeekOf('Semanas 5-6 (16 h)', 1), 6);
-  });
-  test('ausente / sin "semana" / sin número -> fallback (i+1)', () => {
-    assert.equal(endWeekOf(undefined, 4), 4);
-    assert.equal(endWeekOf('', 4), 4);
-    assert.equal(endWeekOf(null, 4), 4);
-    assert.equal(endWeekOf('Semana', 4), 4);
-    assert.equal(endWeekOf('Módulo 3', 4), 4);
-    assert.equal(endWeekOf('5-6', 4), 4);
-  });
-  test('rango invertido "6-5" toma el segundo número; "Semana 0" se respeta', () => {
-    assert.equal(endWeekOf('Semanas 6-5', 1), 5);
-    assert.equal(endWeekOf('Semana 0', 1), 0);
-  });
-  test('"Semanas 5 y 6" debería dar 6', { todo: 'BAJO TeacherCourseCronograma.jsx:17 - el separador "y" no se reconoce y devuelve 5 (la entrega cae una semana antes)' }, () => {
-    assert.equal(endWeekOf('Semanas 5 y 6', 1), 6);
-  });
-  test('abreviaturas "Sem. 3" deberían reconocerse', { todo: 'BAJO TeacherCourseCronograma.jsx:17 - exige la palabra "semana(s)"; "Sem. 3" cae al fallback i+1 sin aviso' }, () => {
-    assert.equal(endWeekOf('Sem. 3', 9), 3);
-  });
-});
 
 describe('Cronograma: filas, estado, pesos y fórmula', () => {
   const branding = [
@@ -97,7 +56,6 @@ describe('Cronograma: filas, estado, pesos y fórmula', () => {
   test('horario con días en minúscula / sin tilde ya calcula las fechas de entrega', () => {
     for (const label of ['martes y jueves · 19:00-21:00', 'Martes y jueves', 'MARTES Y JUEVES', 'Martes/Jueves']) {
       const c = cronograma(branding, { startDate: '2026-03-10', scheduleTime: label });
-      assert.deepEqual(c.dayNames, ['Martes', 'Jueves'], label);
       assert.deepEqual(c.rows.map((r) => r.dueIso), ['2026-03-12', '2026-03-19', '2026-03-26', '2026-04-02'], label);
     }
   });
@@ -194,10 +152,11 @@ describe('Cronograma: filas, estado, pesos y fórmula', () => {
       const c = cronograma(mods, GROUP);
       assert.deepEqual(c.rows.map((r) => r.dueIso), ['2026-03-12', '2026-03-26']);
     });
-    test('sin weeksLabel el fallback es la posición entre ENTREGABLES, no entre módulos', { todo: 'BAJO TeacherCourseCronograma.jsx:56 - endWeekOf(m.weeksLabel, i + 1) usa el índice de fila filtrada; con módulos sin entregable antes, la semana de respaldo no coincide con la del módulo' }, () => {
+    test('sin weeksLabel el fallback es la posición del módulo entre TODOS los módulos', () => {
       const c = cronograma([M('a', undefined, D(50)), M('b', 'Semana 2'), M('c', undefined, D(50))], GROUP);
-      // "c" es el 3.er módulo => semana 3 => 2026-03-26; hoy usa 2 (2026-03-19)
+      // "c" es el 3.er módulo => semana 3 => 2026-03-26
       assert.equal(c.rows[1].dueIso, '2026-03-26');
+      assert.equal(c.rows[0].dueIso, '2026-03-12');
     });
   });
 });
@@ -452,7 +411,8 @@ describe('Resumen del aula (estudiantes en riesgo, promedio)', () => {
 // RegistroNotas :266 (cabecera de peso por módulo)
 // ---------------------------------------------------------------------------
 const misNotasFormula = (rows) => rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ');
-const registroHeaderWeight = (m, count) => m.deliverable?.weight ?? equalWeight(count);
+// TeacherCourseEvaluacion.jsx:195 -> resolveWeights(withDeliverable).rows.find(id).weight
+const registroHeaderWeight = (m, all) => resolveWeights(all).rows.find((r) => r.module.id === m.id)?.weight;
 
 describe('Mis notas: fórmula PF y pesos mostrados', () => {
   test('la fórmula usa M1, M2... igual que el Cronograma (no la primera palabra del entregable)', () => {
@@ -470,18 +430,27 @@ describe('Mis notas: fórmula PF y pesos mostrados', () => {
 });
 
 describe('Registro de notas (docente): cabecera de peso por módulo', () => {
-  test('con pesos explícitos completos coincide con resolveWeights', () => {
-    const mods = [M('a', 'S1', D(20)), M('b', 'S2', D(80))];
-    assert.deepEqual(mods.map((m) => registroHeaderWeight(m, 2)), resolveWeights(mods).rows.map((r) => r.weight));
+  test('coincide con resolveWeights y con el peso que usa el cálculo, en varios escenarios', () => {
+    const scenarios = [
+      [M('a', 'S1', D(20)), M('b', 'S2', D(80))],
+      [M('a', 'S1', D()), M('b', 'S2', D()), M('c', 'S3', D())],
+      [M('a', 'S1', D(30)), M('b', 'S2', D(30)), M('c', 'S3', D())],
+      [M('a', 'S1', D('')), M('b', 'S2', D(100))],
+      [M('a', 'S1', D(0)), M('b', 'S2', D())],
+    ];
+    for (const mods of scenarios) {
+      const header = mods.map((m) => registroHeaderWeight(m, mods));
+      assert.deepEqual(header, resolveWeights(mods).rows.map((r) => r.weight));
+      assert.deepEqual(header, buildGradebookRows(mods, {}).map((r) => r.weight));
+    }
   });
-  test('sin pesos: coincide con el reparto equitativo', () => {
-    const mods = [M('a', 'S1', D()), M('b', 'S2', D()), M('c', 'S3', D())];
-    assert.deepEqual(mods.map((m) => registroHeaderWeight(m, 3)), resolveWeights(mods).rows.map((r) => r.weight));
-  });
-  test('pesos mixtos / "" : la cabecera debería mostrar el peso efectivo (resolveWeights) que usa el cálculo', { todo: 'BUG TeacherCourseEvaluacion.jsx:266 - usa m.deliverable?.weight ?? equalWeight(N) en vez de resolveWeights: con [30, 30, faltante] muestra 33.33 y el cálculo usa 40; con weight "" muestra "%"' }, () => {
+  test('pesos mixtos [30, 30, faltante]: la cabecera muestra 40 (ya no 33.33)', () => {
     const mods = [M('a', 'S1', D(30)), M('b', 'S2', D(30)), M('c', 'S3', D())];
-    assert.deepEqual(mods.map((m) => registroHeaderWeight(m, 3)), resolveWeights(mods).rows.map((r) => r.weight));
-    const empty = [M('a', 'S1', D('')), M('b', 'S2', D(100))];
-    assert.deepEqual(empty.map((m) => registroHeaderWeight(m, 2)), resolveWeights(empty).rows.map((r) => r.weight));
+    assert.equal(registroHeaderWeight(mods[2], mods), 40);
+  });
+  test('los módulos sin entregable no se cuentan en el reparto de la cabecera', () => {
+    const all = [M('a', 'S1', D()), M('z', 'S2'), M('b', 'S3', D())];
+    const withDeliverable = all.filter((m) => m.deliverable?.description);
+    assert.deepEqual(withDeliverable.map((m) => registroHeaderWeight(m, withDeliverable)), [50, 50]);
   });
 });

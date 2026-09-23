@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
 import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions } from '../../lib/db';
-import { parseScheduleLabel, lastClassDate } from '../../lib/liveScheduleGenerator';
-import { resolveWeights, deliverableLabel } from '../../lib/weights';
+import { deliverableDueDate } from '../../lib/deliveryDates';
+import { resolveWeights, deliverableLabel, deliverableModules } from '../../lib/weights';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const fmtDate = (iso, withTime) => {
@@ -11,12 +11,6 @@ const fmtDate = (iso, withTime) => {
   const d = new Date(`${iso}T00:00:00`);
   const label = d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '');
   return withTime ? `${label} · 23:59` : label;
-};
-
-// "Semanas 5-6" -> 6 (la entrega cae al cierre del módulo); "Semana 3" -> 3.
-const endWeekOf = (weeksLabel, fallback) => {
-  const m = String(weeksLabel || '').match(/sem(?:anas?|\.)?\s*(\d+)(?:\s*(?:[-–]|a|y)\s*(\d+))?/i);
-  return m ? Number(m[2] || m[1]) : fallback;
 };
 
 const STATUS_BADGE = {
@@ -37,7 +31,8 @@ const TeacherCourseCronograma = () => {
     Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id)]).then(([content, rubric, subs]) => {
       setModules(content.modules || []);
       setPolicy(rubric.policy || null);
-      setPendingCount(subs.filter((s) => s.status === 'submitted').length);
+      const deliverableIds = new Set(deliverableModules(content.modules).map((m) => m.id));
+      setPendingCount(subs.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [course.id]);
@@ -47,14 +42,13 @@ const TeacherCourseCronograma = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando cronograma...</div>;
 
-  const dayNames = parseScheduleLabel(group?.scheduleTime || group?.scheduleDays);
   // Mismos entregables y pesos que el Registro de notas (ver lib/weights.js).
   const resolved = resolveWeights(modules);
   const firstOpenIdx = resolved.rows.findIndex((r) => r.module.deliverable?.open !== false);
 
   const rows = resolved.rows.map((r, i) => {
     const m = r.module;
-    const dueIso = m.deliverable?.dueDate || lastClassDate(group?.startDate, dayNames, endWeekOf(m.weeksLabel, modules.indexOf(m) + 1));
+    const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
     const status = m.deliverable?.open === false ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
     return {
       id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit,

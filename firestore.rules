@@ -117,8 +117,11 @@ service cloud.firestore {
                     exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + string(resource.data.courseId)))
                   );
       allow create: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isAdmin());
+      // Un alumno solo actualiza su avance (lecciones completadas / progreso):
+      // no puede cambiarse el estado, el aula ni el seguimiento de su matrícula.
       allow update: if isSignedIn() && (
-                      (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid) ||
+                      (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'courseId', 'completedLessonIds', 'progress', 'updatedAt'])) ||
                       isTeacherOrAdmin()
                     );
       // Solo el admin borra -- para limpiar matrículas de prueba desde

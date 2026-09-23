@@ -1,9 +1,10 @@
 // Tests de src/lib/liveScheduleGenerator.js
+// startsAt lleva el offset de Perú (-05:00) y todo el cálculo es en UTC.
 // Fechas de referencia (verificadas): 2026-03-10 = martes, 2026-03-11 = miércoles,
 // 2026-12-29 = martes, 2028-02-28 = lunes.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRecurringSessions, parseScheduleLabel, lastClassDate } from '../src/lib/liveScheduleGenerator.js';
+import { buildRecurringSessions, parseScheduleLabel, lastClassDate, toPeruIso, PERU_OFFSET } from '../src/lib/liveScheduleGenerator.js';
 
 const TJ = { scheduleDays: ['Martes', 'Jueves'], scheduleTime: '19:00-21:00', weeksLabel: '8 semanas' };
 
@@ -66,8 +67,20 @@ describe('parseScheduleLabel', () => {
     assert.deepEqual(parseScheduleLabel('Martes y Foo'), ['Martes']);
     assert.deepEqual(parseScheduleLabel('Mar y Jue'), []);
   });
-  test('rangos "Lunes a Viernes" deberían expandirse', { todo: 'PENDIENTE liveScheduleGenerator.js:73 - "Lunes a Viernes" no se divide ni se expande: devuelve []' }, () => {
+  test('rangos: "Lunes a Viernes" se expande a 5 días (con o sin hora, cualquier casing)', () => {
     assert.deepEqual(parseScheduleLabel('Lunes a Viernes · 19:00-21:00'), ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+    assert.deepEqual(parseScheduleLabel('lunes a viernes'), ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+    assert.deepEqual(parseScheduleLabel('Sábado a Domingo'), ['Sábado', 'Domingo']);
+  });
+  test('rangos que cruzan el domingo -> vuelta a la semana; mismo día -> un solo día', () => {
+    assert.deepEqual(parseScheduleLabel('Viernes a Lunes'), ['Viernes', 'Sábado', 'Domingo', 'Lunes']);
+    assert.deepEqual(parseScheduleLabel('Martes a Martes'), ['Martes']);
+  });
+  test('rango con un extremo inválido -> []', () => {
+    assert.deepEqual(parseScheduleLabel('Lunes a Foo'), []);
+  });
+  test('un rango combinado con otro día ("Lunes a Miércoles y Viernes") debería expandirse', { todo: 'BAJO liveScheduleGenerator.js:102 - el rango sólo se reconoce si es todo el texto; combinado con "y" se pierde el rango y sólo queda "Viernes"' }, () => {
+    assert.deepEqual(parseScheduleLabel('Lunes a Miércoles y Viernes'), ['Lunes', 'Martes', 'Miércoles', 'Viernes']);
   });
 });
 
@@ -106,8 +119,13 @@ describe('lastClassDate', () => {
     assert.equal(lastClassDate('2026-03-10', undefined, 1), null);
   });
 
-  test('inicio no alineado (miércoles, mar/jue): la última clase de la semana 1 debería ser el jueves 03-12', { todo: 'DISEÑO liveScheduleGenerator.js:85 - maxOffset asume que startDate es el primer día de clase; si no lo es, week 1 se desplaza 6 días' }, () => {
-    assert.equal(lastClassDate('2026-03-11', ['Martes', 'Jueves'], 1), '2026-03-12');
+  test('inicio no alineado: la semana 1 se ancla en la PRIMERA clase real', () => {
+    // miércoles 08-12 con mar/jue: primera clase = jueves 08-13; semana 1 = jue 13 y mar 18.
+    assert.equal(lastClassDate('2026-08-12', ['Martes', 'Jueves'], 1), '2026-08-18');
+    assert.equal(lastClassDate('2026-08-12', ['Martes', 'Jueves'], 2), '2026-08-25');
+    // martes 08-11 (día de clase): semana 3 termina el jueves 08-27.
+    assert.equal(lastClassDate('2026-08-11', ['Martes', 'Jueves'], 3), '2026-08-27');
+    assert.equal(lastClassDate('2026-03-11', ['Martes', 'Jueves'], 1), '2026-03-17');
   });
   test('inicio no alineado: lastClassDate coincide con la última sesión "Semana N" que genera buildRecurringSessions', () => {
     const e = buildRecurringSessions({ ...TJ, weeksLabel: '4' }, '2026-03-11');
@@ -120,7 +138,11 @@ describe('lastClassDate', () => {
   test('día desconocido / startDate inválido -> null', () => {
     assert.equal(lastClassDate('2026-03-10', ['Foo'], 1), null);
     assert.equal(lastClassDate('no-es-fecha', ['Martes'], 1), null);
+    assert.equal(lastClassDate('', ['Martes'], 1), null);
+  });
+  test('fechas de calendario imposibles ("2026-13-45", "2026-02-31") deberían dar null', { todo: 'BAJO liveScheduleGenerator.js:48-53 - parseDate valida el formato con regex pero Date.UTC "rueda" los excesos (2026-02-31 -> 2026-03-03)' }, () => {
     assert.equal(lastClassDate('2026-13-45', ['Martes'], 1), null);
+    assert.equal(lastClassDate('2026-02-31', ['Martes'], 1), null);
   });
   test('ignora nombres inválidos mezclados con válidos y acepta minúsculas', () => {
     assert.equal(lastClassDate('2026-03-10', ['Foo', 'Martes'], 1), '2026-03-10');
@@ -135,9 +157,9 @@ describe('buildRecurringSessions', () => {
   test('caso base: mar/jue 19:00-21:00 x 8 semanas', () => {
     const e = buildRecurringSessions(TJ, '2026-03-10');
     assert.equal(e.length, 16);
-    assert.deepEqual(e[0], { startsAt: '2026-03-10T19:00', durationMin: 120, title: 'Semana 1 · Martes' });
-    assert.deepEqual(e[1], { startsAt: '2026-03-12T19:00', durationMin: 120, title: 'Semana 1 · Jueves' });
-    assert.equal(e[15].startsAt, '2026-04-30T19:00');
+    assert.deepEqual(e[0], { startsAt: '2026-03-10T19:00-05:00', durationMin: 120, title: 'Semana 1 · Martes' });
+    assert.deepEqual(e[1], { startsAt: '2026-03-12T19:00-05:00', durationMin: 120, title: 'Semana 1 · Jueves' });
+    assert.equal(e[15].startsAt, '2026-04-30T19:00-05:00');
     assert.equal(e[15].title, 'Semana 8 · Jueves');
   });
   test('coherente con lastClassDate para todas las semanas (inicio alineado)', () => {
@@ -152,7 +174,7 @@ describe('buildRecurringSessions', () => {
   });
   test('un día -> N entradas, una por semana', () => {
     const e = buildRecurringSessions({ ...TJ, scheduleDays: ['Sábado'], weeksLabel: '4 semanas' }, '2026-03-14');
-    assert.deepEqual(e.map((x) => x.startsAt), ['2026-03-14T19:00', '2026-03-21T19:00', '2026-03-28T19:00', '2026-04-04T19:00']);
+    assert.deepEqual(e.map((x) => x.startsAt), ['2026-03-14T19:00-05:00', '2026-03-21T19:00-05:00', '2026-03-28T19:00-05:00', '2026-04-04T19:00-05:00']);
   });
   test('tres días', () => {
     const e = buildRecurringSessions({ ...TJ, scheduleDays: ['Viernes', 'Lunes', 'Miércoles'], weeksLabel: '2' }, '2026-03-09');
@@ -182,13 +204,13 @@ describe('buildRecurringSessions', () => {
   describe('scheduleTime', () => {
     const one = (time) => buildRecurringSessions({ scheduleDays: ['Martes'], scheduleTime: time, weeksLabel: '1' }, '2026-03-10')[0];
     test('minutos y hora de 1 dígito', () => {
-      assert.deepEqual(one('9:30-10:45'), { startsAt: '2026-03-10T09:30', durationMin: 75, title: 'Semana 1 · Martes' });
+      assert.deepEqual(one('9:30-10:45'), { startsAt: '2026-03-10T09:30-05:00', durationMin: 75, title: 'Semana 1 · Martes' });
     });
     test('espacios alrededor del guion', () => {
       assert.equal(one('19:00 - 21:00').durationMin, 120);
     });
     test('21:00-23:00 (aulas noche)', () => {
-      assert.equal(one('21:00-23:00').startsAt, '2026-03-10T21:00');
+      assert.equal(one('21:00-23:00').startsAt, '2026-03-10T21:00-05:00');
     });
     test('guion largo (–, —) y "a" como separador', () => {
       assert.equal(one('19:00–21:00').durationMin, 120);
@@ -208,7 +230,7 @@ describe('buildRecurringSessions', () => {
     test('clase que cruza medianoche 22:00-01:00 dura 180 min', () => {
       const e = one('22:00-01:00');
       assert.equal(e.durationMin, 180);
-      assert.equal(e.startsAt, '2026-03-10T22:00');
+      assert.equal(e.startsAt, '2026-03-10T22:00-05:00');
     });
   });
 
@@ -265,9 +287,61 @@ describe('buildRecurringSessions', () => {
       assert.deepEqual(e.map((x) => x.startsAt.slice(0, 10)), ['2026-03-14', '2026-03-15']);
       assert.deepEqual(e.map((x) => x.title), ['Semana 1 · Sábado', 'Semana 1 · Domingo']);
     });
-    test('la "Semana 1" del inicio no alineado debería empezar en la primera clase real', { todo: 'DISEÑO liveScheduleGenerator.js:56-61 - "Semana N" = ventana de 7 días desde firstDate; si firstDate no es día de clase, "Semana 1" mezcla el jueves 03-12 con el martes 03-17' }, () => {
+    test('2 clases por semana y títulos "Semana n · Día" con inicio no alineado (miércoles + mar/jue)', () => {
       const e = buildRecurringSessions({ ...TJ, weeksLabel: '2' }, '2026-03-11');
-      assert.deepEqual(e.map((x) => x.title), ['Semana 1 · Jueves', 'Semana 2 · Martes', 'Semana 2 · Jueves', 'Semana 3 · Martes']);
+      assert.deepEqual(e.map((x) => x.title), ['Semana 1 · Jueves', 'Semana 1 · Martes', 'Semana 2 · Jueves', 'Semana 2 · Martes']);
+      assert.deepEqual(e.map((x) => x.startsAt.slice(0, 10)), ['2026-03-12', '2026-03-17', '2026-03-19', '2026-03-24']);
+    });
+    test('la primera sesión generada es SIEMPRE la primera clase real (>= firstDate, a menos de 7 días)', () => {
+      const days = ['Lunes', 'Miércoles', 'Viernes'];
+      for (let d = 1; d <= 14; d++) {
+        const first = `2026-09-${String(d).padStart(2, '0')}`;
+        const e = buildRecurringSessions({ scheduleDays: days, scheduleTime: '19:00-21:00', weeksLabel: '1' }, first);
+        const firstDay = e[0].startsAt.slice(0, 10);
+        const diff = (Date.parse(firstDay) - Date.parse(first)) / 86400000;
+        assert.ok(diff >= 0 && diff < 7, `${first} -> ${firstDay}`);
+        assert.equal(e.length, 3);
+      }
+    });
+  });
+});
+
+describe('offset de Perú', () => {
+  test('PERU_OFFSET es -05:00 y todas las sesiones lo llevan', () => {
+    assert.equal(PERU_OFFSET, '-05:00');
+    const e = buildRecurringSessions(TJ, '2026-08-11');
+    assert.ok(e.every((x) => x.startsAt.endsWith('T19:00-05:00')));
+    assert.equal(e[0].startsAt, '2026-08-11T19:00-05:00');
+  });
+  test('startsAt es un ISO válido que representa 19:00 hora de Lima = 00:00 UTC del día siguiente', () => {
+    const [first] = buildRecurringSessions(TJ, '2026-08-11');
+    assert.equal(new Date(first.startsAt).toISOString(), '2026-08-12T00:00:00.000Z');
+  });
+  describe('toPeruIso', () => {
+    test('agrega -05:00 a una hora local sin offset', () => {
+      assert.equal(toPeruIso('2026-08-11T19:00'), '2026-08-11T19:00-05:00');
+      assert.equal(toPeruIso('2026-08-11T19:00:30'), '2026-08-11T19:00:30-05:00');
+    });
+    test('respeta "Z" y offsets existentes (+hh:mm / -hh:mm)', () => {
+      assert.equal(toPeruIso('2026-08-11T19:00Z'), '2026-08-11T19:00Z');
+      assert.equal(toPeruIso('2026-08-11T19:00:00.000Z'), '2026-08-11T19:00:00.000Z');
+      assert.equal(toPeruIso('2026-08-11T19:00-05:00'), '2026-08-11T19:00-05:00');
+      assert.equal(toPeruIso('2026-08-11T19:00+01:00'), '2026-08-11T19:00+01:00');
+    });
+    test('vacío / null / undefined se devuelven tal cual', () => {
+      assert.equal(toPeruIso(''), '');
+      assert.equal(toPeruIso(null), null);
+      assert.equal(toPeruIso(undefined), undefined);
+    });
+    test('es idempotente', () => {
+      const once = toPeruIso('2026-08-11T19:00');
+      assert.equal(toPeruIso(once), once);
+    });
+    test('el resultado se interpreta como Lima en cualquier zona (instante fijo)', () => {
+      assert.equal(new Date(toPeruIso('2026-08-11T19:00')).toISOString(), '2026-08-12T00:00:00.000Z');
+    });
+    test('una fecha sin hora ("2026-08-11") no debería convertirse en un ISO inválido', { todo: 'BAJO liveScheduleGenerator.js:46 - devuelve "2026-08-11-05:00" (Invalid Date); validar que haya hora' }, () => {
+      assert.ok(!Number.isNaN(new Date(toPeruIso('2026-08-11')).getTime()));
     });
   });
 });

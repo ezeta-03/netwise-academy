@@ -18,6 +18,8 @@ const STATUS_BADGE = {
   reviewed: { label: 'Calificada', cls: 'admin-status-green' },
 };
 
+const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
 const formatDate = (iso) => {
   if (!iso) return null;
   return new Date(`${iso}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -78,7 +80,7 @@ const StudentEntregas = () => {
                 <div className="admin-cell-sub" style={{ color: 'var(--accent)', fontWeight: 600 }}>{item.courseTitle}</div>
                 <div className="dash-list-row-title">{item.deliverableTitle}</div>
                 <div className="dash-list-row-sub">{enrollment?.groupName ? `Grupo ${enrollment.groupName}` : item.moduleTitle}</div>
-                {item.dueDate && <div className="dash-list-row-sub">Fecha límite: {formatDate(item.dueDate)}</div>}
+                {item.dueDate && <div className="dash-list-row-sub" style={item.status === 'pending' && item.dueDate < todayIso() ? { color: '#BE123C', fontWeight: 600 } : undefined}>Fecha límite: {formatDate(item.dueDate)}{item.status === 'pending' && item.dueDate < todayIso() ? ' · Vencida' : ''}</div>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className={`admin-status ${badge.cls}`}>{badge.label}</span>

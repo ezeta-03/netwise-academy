@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Search, Download } from 'lucide-react';
 import { fetchCourseContent } from '../../lib/db';
+import { isPendingUrl } from '../../lib/placeholders';
 
 const StudentCourseMateriales = () => {
   const { course } = useOutletContext();
@@ -54,7 +55,7 @@ const StudentCourseMateriales = () => {
               <span className="admin-status admin-status-gray" style={{ marginBottom: 12, display: 'inline-block' }}>{mat.category}</span>
               <div className="dash-list-row-title" style={{ marginBottom: 4 }}>{mat.title}</div>
               <div className="admin-cell-sub" style={{ marginBottom: 14 }}>{mat.moduleTitle} · Netwise Academy</div>
-              <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer"><Download size={13} /> Descargar</a>
+              {isPendingUrl(mat.url) ? <span className="admin-status admin-status-gray">Pendiente de subir</span> : <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer"><Download size={13} /> Descargar</a>}
             </div>
           ))}
         </div>

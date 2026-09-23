@@ -44,13 +44,31 @@ describe('getLiveSessionStatus', () => {
     at(startMs + 90 * MIN);
     assert.equal(getLiveSessionStatus({ startsAt: STARTS, durationMin: '90' }), 'live');
   });
-  test('CARACTERIZACIÓN: durationMin 0 se trata como 60 (0 es falsy)', () => {
+  test('durationMin 0 se trata como 60', () => {
     at(startMs + 30 * MIN);
     assert.equal(getLiveSessionStatus({ startsAt: STARTS, durationMin: 0 }), 'live');
   });
-  test('durationMin negativo (dato legado del bug de medianoche) debería tratarse como 60', { todo: 'PENDIENTE liveSessionStatus.js:166 - Number(-1260) || 60 conserva el negativo y la clase nace "ended"; validar durationMin > 0' }, () => {
-    at(startMs + 1);
-    assert.equal(getLiveSessionStatus({ startsAt: STARTS, durationMin: -1260 }), 'live');
+  test('durationMin negativo, 0, vacío, NaN o no numérico se trata como 60 min', () => {
+    for (const d of [-1260, 0, -1, '', null, undefined, 'abc', NaN]) {
+      mock.timers.reset(); at(startMs + 30 * MIN);
+      assert.equal(getLiveSessionStatus({ startsAt: STARTS, durationMin: d }), 'live', `durationMin=${d}`);
+      mock.timers.reset(); at(startMs + 60 * MIN + 1);
+      assert.equal(getLiveSessionStatus({ startsAt: STARTS, durationMin: d }), 'ended', `durationMin=${d} (fin)`);
+    }
+  });
+  test('canJoin también usa 60 min cuando la duración es <= 0', () => {
+    at(startMs + 60 * MIN);
+    assert.equal(canJoinLiveSession({ startsAt: STARTS, durationMin: -1260 }), true);
+    mock.timers.reset(); at(startMs + 60 * MIN + 1);
+    assert.equal(canJoinLiveSession({ startsAt: STARTS, durationMin: -1260 }), false);
+  });
+  test('un startsAt con offset -05:00 se evalúa como un instante fijo', () => {
+    const iso = '2026-03-10T19:00-05:00';
+    const ms = Date.parse('2026-03-11T00:00:00Z');
+    at(ms - 1);
+    assert.equal(getLiveSessionStatus({ startsAt: iso, durationMin: 120 }), 'upcoming');
+    mock.timers.reset(); at(ms);
+    assert.equal(getLiveSessionStatus({ startsAt: iso, durationMin: 120 }), 'live');
   });
   test('startsAt inválido devuelve el status guardado o upcoming', () => {
     at(startMs);

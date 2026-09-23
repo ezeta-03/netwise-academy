@@ -4,7 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deliverableModules, equalWeight, resolveWeights, deliverableLabel } from '../src/lib/weights.js';
-import { APPROVAL, evaluateApproval } from '../src/lib/approval.js';
+import { APPROVAL, evaluateApproval, evaluateSubstitute } from '../src/lib/approval.js';
 import { buildGradebookRows, computeGradeSummary } from '../src/lib/gradebook.js';
 
 const mod = (id, weight, desc = 'x') => ({ id, title: `T-${id}`, deliverable: { description: desc, ...(weight !== undefined ? { weight } : {}) } });
@@ -101,10 +101,18 @@ describe('weights.js', () => {
     test('pesos negativos se aceptan tal cual (sin validación)', () => {
       assert.equal(resolveWeights([mod('a', -10), mod('b', 110)]).total, 100);
     });
-    test('un solo peso 0 y el resto sin definir debería repartir 100 entre los faltantes', { todo: 'BUG weights.js:75 - explicitTotal === 0 se usa como "ninguno definido" y reparte equalWeight(N) aunque exista un 0 explícito: [0, faltante] da [0, 50], total 50' }, () => {
+    test('un peso 0 explícito con el resto sin definir: los faltantes se reparten el 100', () => {
+      assert.deepEqual(weightsOf([mod('a', 0), mod('b')]), [0, 100]);
+      assert.deepEqual(weightsOf([mod('a', 0), mod('b'), mod('c')]), [0, 50, 50]);
       const r = resolveWeights([mod('a', 0), mod('b')]);
-      assert.deepEqual(r.rows.map((x) => x.weight), [0, 100]);
+      assert.equal(r.total, 100);
       assert.equal(r.sumsTo100, true);
+      assert.deepEqual(r.rows.map((x) => x.explicit), [true, false]);
+    });
+    test('todos los pesos en 0 explícito: total 0 y no suma 100', () => {
+      const r = resolveWeights([mod('a', 0), mod('b', 0)]);
+      assert.equal(r.total, 0);
+      assert.equal(r.sumsTo100, false);
     });
   });
 
@@ -183,8 +191,9 @@ describe('approval.js (evaluateApproval)', () => {
 
   describe('pendiente hasta que todo esté calificado', () => {
     test('sin resumen / resumen vacío -> todo pendiente', () => {
-      assert.deepEqual(evaluateApproval(undefined, null), { finalGrade: 'pending', performance: 'pending', attendance: 'pending' });
-      assert.deepEqual(evaluateApproval(computeGradeSummary([]), null), { finalGrade: 'pending', performance: 'pending', attendance: 'pending' });
+      const allPending = { finalGrade: 'pending', performance: 'pending', attendance: 'pending', overall: 'pending' };
+      assert.deepEqual(evaluateApproval(undefined, null), allPending);
+      assert.deepEqual(evaluateApproval(computeGradeSummary([]), null), allPending);
     });
     test('una sola nota 20 de 4 entregables sigue pendiente (no aprueba por adelantado)', () => {
       const s = summaryOf([20, null, null, null]);
@@ -275,7 +284,54 @@ describe('approval.js (evaluateApproval)', () => {
     });
   });
 
-  test('no existe veredicto para la vía sustitutoria (nota >= 16) ni un "aprobado global"', { todo: 'PENDIENTE approval.js:108-122 - APPROVAL.minSubstituteGrade sólo se usa en el texto; no hay estado que combine notas + asistencia' }, () => {
-    assert.ok('overall' in evaluateApproval(summaryOf([16]), { pct: 100, taken: 4 }));
+  describe('overall (veredicto global sólo de notas)', () => {
+    test('pending mientras falten notas, aunque las que hay sean 20 o 0', () => {
+      assert.equal(evaluateApproval(summaryOf([20, null]), null).overall, 'pending');
+      assert.equal(evaluateApproval(summaryOf([0, null]), null).overall, 'pending');
+      assert.equal(evaluateApproval(undefined, null).overall, 'pending');
+    });
+    test('"regular" si finalGrade y performance son ok (16+), "substitute" en otro caso', () => {
+      assert.equal(evaluateApproval(summaryOf([16, 16]), null).overall, 'regular');
+      assert.equal(evaluateApproval(summaryOf([20]), null).overall, 'regular');
+      assert.equal(evaluateApproval(summaryOf([15]), null).overall, 'substitute'); // 75% < 80%
+      assert.equal(evaluateApproval(summaryOf([15.9]), null).overall, 'substitute'); // 79.5% < 80%
+      assert.equal(evaluateApproval(summaryOf([10, 12]), null).overall, 'substitute');
+      assert.equal(evaluateApproval(summaryOf([0]), null).overall, 'substitute');
+    });
+    test('la asistencia no cambia el veredicto global (da la constancia, no el certificado)', () => {
+      assert.equal(evaluateApproval(summaryOf([16]), { pct: 0, taken: 10 }).overall, 'regular');
+      assert.equal(evaluateApproval(summaryOf([10]), { pct: 100, taken: 10 }).overall, 'substitute');
+    });
+    test('coherente con los veredictos individuales en una malla de notas', () => {
+      for (let g = 0; g <= 20; g += 0.25) {
+        const v = evaluateApproval(summaryOf([g]), null);
+        assert.equal(v.overall === 'regular', v.finalGrade === 'ok' && v.performance === 'ok', `g=${g}`);
+      }
+    });
+    test('las claves de evaluateApproval son finalGrade, performance, attendance y overall', () => {
+      assert.deepEqual(Object.keys(evaluateApproval(summaryOf([16]), null)).sort(), ['attendance', 'finalGrade', 'overall', 'performance']);
+    });
+  });
+
+  describe('evaluateSubstitute (evaluación sustitutoria, nota mínima 16)', () => {
+    test('null / undefined / "" / NaN / no numérico -> pending', () => {
+      for (const g of [null, undefined, '', NaN, 'abc']) assert.equal(evaluateSubstitute(g), 'pending', String(g));
+    });
+    test('>= 16 -> ok (16 exacto, 20, "16" como string, 16.0)', () => {
+      for (const g of [16, 20, '16', '17.5', 16.0]) assert.equal(evaluateSubstitute(g), 'ok', String(g));
+    });
+    test('< 16 -> fail (15.99, 15, 0, "0")', () => {
+      for (const g of [15.99, 15, 0, '0']) assert.equal(evaluateSubstitute(g), 'fail', String(g));
+    });
+    test('usa APPROVAL.minSubstituteGrade', () => {
+      assert.equal(APPROVAL.minSubstituteGrade, 16);
+      assert.equal(evaluateSubstitute(APPROVAL.minSubstituteGrade), 'ok');
+      assert.equal(evaluateSubstitute(APPROVAL.minSubstituteGrade - 0.01), 'fail');
+    });
+    test('notas fuera de 0-20 son inválidas (pendiente), no aprueban ni desaprueban', () => {
+      assert.equal(evaluateSubstitute(25), 'pending');
+      assert.equal(evaluateSubstitute(-1), 'pending');
+      assert.equal(evaluateSubstitute(20), 'ok');
+    });
   });
 });

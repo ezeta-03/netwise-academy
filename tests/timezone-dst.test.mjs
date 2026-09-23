@@ -1,4 +1,4 @@
-// Robustez de las fechas ante zona horaria / horario de verano. Cada zona corre
+// Independencia de zona horaria / horario de verano. Cada zona corre
 // tests/helpers/tz-probe.mjs en un proceso hijo con su propio process.env.TZ.
 // El "oráculo" calcula las fechas esperadas con aritmética UTC (independiente de la TZ).
 import { test, describe } from 'node:test';
@@ -7,15 +7,19 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const PROBE = fileURLToPath(new URL('./helpers/tz-probe.mjs', import.meta.url));
+const cache = new Map();
 const probe = (tz) => {
-  const r = spawnSync(process.execPath, [PROBE, tz], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
-  return JSON.parse(r.stdout);
+  if (!cache.has(tz)) {
+    const r = spawnSync(process.execPath, [PROBE, tz], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr);
+    cache.set(tz, JSON.parse(r.stdout));
+  }
+  return cache.get(tz);
 };
 
 const pad = (n) => String(n).padStart(2, '0');
 const isoUtc = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; };
-// lun(1)/mié(3) desde lunes 2026-01-05, semana w (0-based), por ventanas de 7 días.
+// lun(1)/mié(3) desde lunes 2026-01-05, semana w (0-based), ventanas de 7 días.
 const oracleDates = (weeks) => {
   const base = Date.UTC(2026, 0, 5);
   const days = [];
@@ -27,45 +31,51 @@ const ZONES = [
   'America/Lima',            // sin DST (zona real del producto)
   'America/New_York',        // DST 2026-03-08 / 2026-11-01
   'Europe/London',           // DST 2026-03-29 / 2026-10-25
+  'Europe/Madrid',
   'America/Santiago',        // DST 2026-09-06 (la medianoche no existe)
   'Pacific/Auckland',        // hemisferio sur
   'Pacific/Kiritimati',      // UTC+14
   'Pacific/Pago_Pago',       // UTC-11
 ];
 
-describe('cruce de horario de verano', () => {
+describe('las fechas generadas no dependen de la zona ni del horario de verano', () => {
   for (const tz of ZONES) {
-    test(`${tz}: 104 clases lun/mié 19:00 en las fechas correctas y siempre a las 19:00`, () => {
+    test(`${tz}: 104 clases lun/mié en las fechas correctas, siempre T19:00-05:00`, () => {
       const { sessions } = probe(tz);
       assert.deepEqual(sessions.map((s) => s.slice(0, 10)), oracleDates(52));
-      assert.ok(sessions.every((s) => s.endsWith('T19:00')), 'alguna clase cambió de hora por el DST');
+      assert.ok(sessions.every((s) => s.endsWith('T19:00-05:00')), 'alguna clase cambió de hora u offset');
     });
     test(`${tz}: lastClassDate == miércoles de cada semana (52 semanas)`, () => {
-      const { lastClass } = probe(tz);
-      assert.deepEqual(lastClass, oracleDates(52).filter((_, i) => i % 2 === 1));
+      assert.deepEqual(probe(tz).lastClass, oracleDates(52).filter((_, i) => i % 2 === 1));
+    });
+    test(`${tz}: resultado idéntico byte a byte al de Lima`, () => {
+      const a = probe(tz); const b = probe('America/Lima');
+      assert.deepEqual(a.sessions, b.sessions);
+      assert.deepEqual(a.lastClass, b.lastClass);
+      assert.deepEqual(a.gapClass, b.gapClass);
     });
   }
 });
 
 describe('casos límite de DST', () => {
-  test('CARACTERIZACIÓN: clase a las 02:30 en el día del cambio (New York) se guarda como 03:30', () => {
-    const { gapClass } = probe('America/New_York');
-    assert.deepEqual(gapClass, ['2026-03-08T03:30']);
-  });
-  test('la hora programada (02:30) debería conservarse tal cual en el string', { todo: 'BUG menor liveScheduleGenerator.js:35-36 - setHours en día de salto DST reescribe la hora; usar el startHour/startMinute originales para armar el string' }, () => {
-    const { gapClass } = probe('America/New_York');
-    assert.deepEqual(gapClass, ['2026-03-08T02:30']);
-  });
+  for (const tz of ZONES) {
+    test(`${tz}: clase a las 02:30 el 2026-03-08 (hora inexistente en Nueva York) conserva 02:30`, () => {
+      assert.deepEqual(probe(tz).gapClass, ['2026-03-08T02:30-05:00']);
+    });
+  }
 });
 
-describe('startsAt es una cadena "naive" interpretada en la TZ de cada visitante', () => {
-  test('en Lima (19:00 locales) la clase está "live"', () => {
-    assert.equal(probe('America/Lima').statusAtLima1900, 'live');
+describe('startsAt con offset es un instante fijo para cualquier visitante', () => {
+  for (const tz of ZONES) {
+    test(`${tz}: a las 19:00 de Lima la clase está "live"`, () => {
+      assert.equal(probe(tz).statusOffset, 'live');
+    });
+  }
+  test('datos legados SIN offset siguen dependiendo de la zona del visitante (Lima "live", Madrid "ended")', () => {
+    assert.equal(probe('America/Lima').statusNaive, 'live');
+    assert.equal(probe('Europe/Madrid').statusNaive, 'ended');
   });
-  test('CARACTERIZACIÓN: el mismo instante en Madrid ya la marca "ended" (la hora no está anclada a Lima)', () => {
-    assert.equal(probe('Europe/Madrid').statusAtLima1900, 'ended');
-  });
-  test('la clase debería estar "live" para cualquier visitante en el mismo instante real', { todo: 'DISEÑO liveScheduleGenerator.js:36 / liveSessionStatus.js:9 - startsAt sin offset ("Hora de Perú" en AdminGrupos); alumnos/docentes fuera de UTC-5 ven horas y estados distintos. Guardar ISO con offset -05:00' }, () => {
-    assert.equal(probe('Europe/Madrid').statusAtLima1900, 'live');
+  test('getLiveSessionStatus debería tratar los startsAt legados sin offset como hora de Perú', { todo: 'BAJO liveSessionStatus.js:14 - las clases ya guardadas sin "-05:00" se ven distinto según la zona; aplicar toPeruIso al leer o migrar los datos' }, () => {
+    assert.equal(probe('Europe/Madrid').statusNaive, 'live');
   });
 });

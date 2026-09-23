@@ -7,6 +7,7 @@ import { fetchCourseContent, fetchCourseSubmissions, upsertSubmission, fetchCour
 import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
 import { getOrderedSessions } from '../../lib/courseSessions';
 import { APPROVAL, evaluateApproval } from '../../lib/approval';
+import { deliverableDueDate } from '../../lib/deliveryDates';
 import ModalPortal from '../../components/ModalPortal';
 
 const formatDate = (iso) => {
@@ -41,7 +42,7 @@ const EvalSidePanel = ({ vista, setVista, summary }) => (
       <div className="dash-profile-stats" style={{ gridTemplateColumns: '1fr', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia</span><strong>{summary.asistenciaPct === null ? '—' : `${summary.asistenciaPct}%`}</strong></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estado</span><span className="admin-status admin-status-violet">En curso</span></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estado</span><span className={`admin-status ${summary.overall === 'regular' ? 'admin-status-green' : summary.overall === 'substitute' ? 'admin-status-amber' : 'admin-status-violet'}`}>{summary.overall === 'regular' ? 'Aprobado' : summary.overall === 'substitute' ? 'Sustitutoria' : 'En curso'}</span></div>
       </div>
     </div>
   </>
@@ -87,7 +88,7 @@ const SubmitModal = ({ course, module, onClose, onSaved }) => {
   );
 };
 
-const EntregasNotas = ({ course, modules, submissions, onSubmitted }) => {
+const EntregasNotas = ({ course, group, modules, submissions, onSubmitted }) => {
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
   const [submitModule, setSubmitModule] = useState(null);
 
@@ -95,7 +96,10 @@ const EntregasNotas = ({ course, modules, submissions, onSubmitted }) => {
   const gradeRows = buildGradebookRows(withDeliverable, Object.fromEntries(withDeliverable.map((m) => [m.id, subFor(m.id)])));
   const summary = computeGradeSummary(gradeRows);
   const calificados = gradeRows.filter((r) => r.grade !== null).length;
-  const proxima = withDeliverable.filter((m) => m.deliverable?.dueDate && !subFor(m.id)).sort((a, b) => new Date(a.deliverable.dueDate) - new Date(b.deliverable.dueDate))[0];
+  const dueOf = (m) => deliverableDueDate(m, modules.indexOf(m), group);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const proxima = withDeliverable.filter((m) => dueOf(m) && !subFor(m.id)).sort((a, b) => new Date(dueOf(a)) - new Date(dueOf(b)))[0];
 
   const statusBadge = (sub) => {
     if (sub?.status === 'reviewed') return { label: 'Calificado', cls: 'admin-status-green' };
@@ -108,9 +112,9 @@ const EntregasNotas = ({ course, modules, submissions, onSubmitted }) => {
       <div className="admin-page-head"><div><h1 className="admin-page-title">Entregas y notas</h1><p className="admin-page-sub">{course.title} · Tu nota, retroalimentación y las instrucciones de tu docente en cada módulo.</p></div></div>
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
-        <div className="admin-stat-card"><div className="admin-stat-label">Promedio parcial</div><div className="admin-stat-value">{summary.promedioParcial ?? '—'}</div><div className="admin-cell-sub">Sobre 20 · mínimo aprobatorio 15</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Promedio parcial</div><div className="admin-stat-value">{summary.promedioParcial ?? '—'}</div><div className="admin-cell-sub">Sobre 20 · mínimo aprobatorio {APPROVAL.minFinalGrade}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Calificados</div><div className="admin-stat-value">{calificados}/{gradeRows.length}</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Próxima entrega</div><div className="admin-stat-value" style={{ fontSize: '1rem' }}>{proxima ? formatDate(proxima.deliverable.dueDate) : 'Al día'}</div>{proxima && <div className="admin-cell-sub">{proxima.title}</div>}</div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Próxima entrega</div><div className="admin-stat-value" style={{ fontSize: '1rem' }}>{proxima ? formatDate(dueOf(proxima)) : 'Al día'}</div>{proxima && <div className="admin-cell-sub">{proxima.title}</div>}</div>
       </div>
 
       <div className="dash-eyebrow" style={{ marginBottom: 8 }}>Tus entregables</div>
@@ -122,7 +126,7 @@ const EntregasNotas = ({ course, modules, submissions, onSubmitted }) => {
             <div className="admin-panel-head">
               <div>
                 <div className="dash-list-row-title">{m.title}</div>
-                <div className="admin-cell-sub">{m.weeksLabel}{m.deliverable?.dueDate ? ` · Entrega ${formatDate(m.deliverable.dueDate)}` : ''}</div>
+                <div className="admin-cell-sub">{m.weeksLabel}{dueOf(m) ? ` · Entrega ${formatDate(dueOf(m))}` : ''}{dueOf(m) && !sub && dueOf(m) < today ? ' · Vencida' : ''}</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className={`admin-status ${badge.cls}`}>{badge.label}</span>
@@ -191,6 +195,11 @@ const MisNotas = ({ course, modules, submissions, attendance }) => {
 
       <div className="admin-panel">
         <div className="admin-panel-head"><span className="admin-panel-title">Para aprobar y certificarte</span></div>
+        {verdicts.overall !== 'pending' && (
+          <div className={`dash-notice ${verdicts.overall === 'regular' ? '' : 'warn'}`} style={{ marginBottom: 12 }}>
+            <span>{verdicts.overall === 'regular' ? '¡Aprobaste de forma regular! Ya cumples los requisitos para el certificado.' : `No alcanzas los mínimos de la vía regular: puedes rendir la evaluación sustitutoria (nota mínima ${APPROVAL.minSubstituteGrade}) para obtener el certificado.`}</span>
+          </div>
+        )}
         <p className="admin-panel-caption" style={{ marginTop: 0 }}>Se confirma al completar todas tus notas; <Clock3 size={11} style={{ verticalAlign: -1 }} /> indica que aún está en curso.</p>
         {checks.map((c) => (
           <div key={c.label} className="dash-list-row">
@@ -248,7 +257,7 @@ const MiAsistencia = ({ course, modules, attendance }) => {
 };
 
 const StudentCourseEvaluacion = () => {
-  const { course } = useOutletContext();
+  const { course, group } = useOutletContext();
   const { currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modules, setModules] = useState([]);
@@ -280,7 +289,8 @@ const StudentCourseEvaluacion = () => {
     const sessions = getOrderedSessions(modules);
     const taken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
     const present = taken.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-    return { promedioParcial: g.promedioParcial, asistenciaPct: taken.length ? Math.round((present / taken.length) * 100) : null };
+    const overall = evaluateApproval(g, { taken: taken.length, pct: taken.length ? (present / taken.length) * 100 : null }).overall;
+    return { promedioParcial: g.promedioParcial, overall, asistenciaPct: taken.length ? Math.round((present / taken.length) * 100) : null };
   }, [modules, submissions, attendance]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu evaluación...</div>;
@@ -288,7 +298,7 @@ const StudentCourseEvaluacion = () => {
   return (
     <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
       <div>
-        {vista === 'entregas' && <EntregasNotas course={course} modules={modules} submissions={submissions} onSubmitted={load} />}
+        {vista === 'entregas' && <EntregasNotas course={course} group={group} modules={modules} submissions={submissions} onSubmitted={load} />}
         {vista === 'notas' && <MisNotas course={course} modules={modules} submissions={submissions} attendance={attendance} />}
         {vista === 'asistencia' && <MiAsistencia course={course} modules={modules} attendance={attendance} />}
       </div>

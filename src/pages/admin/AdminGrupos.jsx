@@ -8,6 +8,7 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, scheduleLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions } from '../../lib/liveScheduleGenerator';
+import { courseWeeksFromModules } from '../../lib/deliveryDates';
 
 const GROUP_STATUS = {
   open: { label: 'Abierto', cls: 'admin-status-green' },
@@ -77,7 +78,12 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
         // tenga todo listo al entrar, en vez de tener que armarlo él mismo.
         const scheduleOpt = scheduleOptions.find((o) => o.label === scheduleTime.trim());
         if (startDate && scheduleOpt && instructorUid) {
-          const entries = buildRecurringSessions({ scheduleDays: scheduleOpt.days, scheduleTime: scheduleOpt.time, weeksLabel: course?.duration }, startDate);
+          // Las semanas salen de los módulos del curso (así el calendario cubre
+          // exactamente lo que el contenido dicta); sin módulos, la duración
+          // publicada del curso.
+          const content = await fetchCourseContent(courseId).catch(() => ({ modules: [] }));
+          const weeks = courseWeeksFromModules(content.modules) || course?.duration;
+          const entries = buildRecurringSessions({ scheduleDays: scheduleOpt.days, scheduleTime: scheduleOpt.time, weeksLabel: String(weeks) }, startDate);
           for (const entry of entries) {
             await scheduleLiveSession({
               courseId, courseTitle: course?.title || '', title: entry.title,

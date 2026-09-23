@@ -6,6 +6,7 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { fetchLiveSessions, fetchAllEnrollments, fetchCourseContent, fetchSubmissions } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
+import { deliverableModules } from '../../lib/weights';
 
 const weekRangeLabel = () => {
   const now = new Date();
@@ -35,9 +36,9 @@ const TeacherInicio = () => {
         const content = await fetchCourseContent(c.id);
         const modules = content.modules || [];
         let pending = 0;
-        for (const m of modules) {
+        for (const m of deliverableModules(modules)) {
           const subs = await fetchSubmissions(c.id, m.id);
-          pending += subs.filter((s) => s.status !== 'reviewed').length;
+          pending += subs.filter((s) => s.status === 'submitted').length;
         }
         return { course: c, pending, firstModuleId: modules[0]?.id };
       })),

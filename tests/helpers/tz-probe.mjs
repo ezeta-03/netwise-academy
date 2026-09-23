@@ -20,10 +20,12 @@ out.gapClass = buildRecurringSessions(
   { scheduleDays: ['Domingo'], scheduleTime: '02:30-04:00', weeksLabel: '1' }, '2026-03-08',
 ).map((s) => s.startsAt);
 
-// Misma cadena naive "2026-03-10T19:00" (120 min) evaluada en el instante 2026-03-11T00:00:00Z (= 19:00 en Lima).
+// Instante fijo 2026-03-11T00:00:00Z (= 19:00 en Lima). La clase de 120 min empieza a las 19:00 de Lima.
 const RealNow = Date.now;
 Date.now = () => Date.UTC(2026, 2, 11, 0, 0, 0);
-out.statusAtLima1900 = getLiveSessionStatus({ startsAt: '2026-03-10T19:00', durationMin: 120 });
+out.statusOffset = getLiveSessionStatus({ startsAt: '2026-03-10T19:00-05:00', durationMin: 120 });
+// Dato legado sin offset ("naive"): se interpreta en la zona del visitante.
+out.statusNaive = getLiveSessionStatus({ startsAt: '2026-03-10T19:00', durationMin: 120 });
 Date.now = RealNow;
 
 console.log(JSON.stringify(out));

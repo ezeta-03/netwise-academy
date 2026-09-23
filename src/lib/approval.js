@@ -23,9 +23,19 @@ export const evaluateApproval = (summary, attendance) => {
   const attendanceState = !attendance || attendance.taken === 0
     ? 'pending'
     : (attendance.pct >= APPROVAL.minAttendancePct ? 'ok' : 'fail');
-  return {
-    finalGrade: verdict(summary?.promedioParcial, APPROVAL.minFinalGrade),
-    performance: verdict(summary?.rendimientoRaw ?? summary?.rendimientoPct, APPROVAL.minPerformancePct),
-    attendance: attendanceState,
-  };
+  const finalGrade = verdict(summary?.promedioParcial, APPROVAL.minFinalGrade);
+  const performance = verdict(summary?.rendimientoRaw ?? summary?.rendimientoPct, APPROVAL.minPerformancePct);
+  // Veredicto global (solo notas, la asistencia es aparte porque da la
+  // constancia, no el certificado): 'pending' mientras falten notas;
+  // 'regular' si cumple ambos mínimos; 'substitute' si no -- le queda la
+  // evaluación sustitutoria (nota mínima APPROVAL.minSubstituteGrade).
+  const overall = !settled ? 'pending' : (finalGrade === 'ok' && performance === 'ok' ? 'regular' : 'substitute');
+  return { finalGrade, performance, attendance: attendanceState, overall };
+};
+
+// Resultado de la evaluación sustitutoria: solo importa si la nota alcanza el mínimo.
+export const evaluateSubstitute = (grade) => {
+  const n = Number(grade);
+  if (grade === null || grade === undefined || grade === '' || !Number.isFinite(n) || n < 0 || n > 20) return 'pending';
+  return n >= APPROVAL.minSubstituteGrade ? 'ok' : 'fail';
 };

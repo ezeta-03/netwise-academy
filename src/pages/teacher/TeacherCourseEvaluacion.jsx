@@ -7,9 +7,9 @@ import {
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance } from '../../lib/db';
 import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
-import { resolveWeights } from '../../lib/weights';
+import { resolveWeights, deliverableModules } from '../../lib/weights';
 import { downloadCsv as downloadCsvFile } from '../../lib/csv';
-import { APPROVAL } from '../../lib/approval';
+import { APPROVAL, evaluateApproval } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
 
 const getInitials = (name) => {
@@ -26,6 +26,12 @@ const formatDate = (iso) => {
 
 // Escapado, protección contra fórmulas y BOM viven en lib/csv.js.
 const downloadCsv = (filename, rows) => downloadCsvFile(filename, rows[0], rows.slice(1));
+
+const APPROVAL_BADGE = {
+  pending: { label: 'En curso', cls: 'admin-status-violet' },
+  regular: { label: 'Aprobado', cls: 'admin-status-green' },
+  substitute: { label: 'Sustitutoria', cls: 'admin-status-amber' },
+};
 
 const NAV_ITEMS = [
   { key: 'entregas', label: 'Entregas y revisión', sub: 'Revisa y califica', icon: ClipboardCheck },
@@ -276,7 +282,7 @@ const RegistroNotas = ({ course, modules, roster, submissions }) => {
                 <td className="admin-cell-name">{r.studentName}</td>
                 {r.gradeRows.map((g) => <td key={g.moduleId}>{g.grade ?? '—'}</td>)}
                 <td><strong>{r.summary.promedioParcial ?? '—'}</strong></td>
-                <td><span className="admin-status admin-status-violet">{r.status === 'completed' ? 'Completado' : 'En curso'}</span></td>
+                <td>{(() => { const v = evaluateApproval(r.summary, null).overall; const b = APPROVAL_BADGE[v]; return <span className={`admin-status ${b.cls}`}>{b.label}</span>; })()}</td>
               </tr>
             ))}
           </tbody>
@@ -424,7 +430,8 @@ const TeacherCourseEvaluacion = () => {
     }
   };
 
-  const pendingCount = submissions.filter((s) => s.status === 'submitted').length;
+  const deliverableIds = new Set(deliverableModules(modules).map((m) => m.id));
+  const pendingCount = submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length;
 
   const classSummary = useMemo(() => {
     const withDeliverable = modules.filter((m) => m.deliverable?.description);

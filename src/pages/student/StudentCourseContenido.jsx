@@ -4,6 +4,7 @@ import { Check, CheckCircle2, FileText, Sparkles, Target, Video } from 'lucide-r
 import { useAuth } from '../../context/AuthContext';
 import { fetchCourseContent, fetchProjectAdvances, fetchProjectProfile } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
+import { isPendingUrl } from '../../lib/placeholders';
 
 const StudentCourseContenido = () => {
   const { course } = useOutletContext();
@@ -95,7 +96,7 @@ const StudentCourseContenido = () => {
                     <div className="dash-list-row-sub">{mat.category} · {selected.title}</div>
                   </div>
                 </div>
-                <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer">Descargar</a>
+                {isPendingUrl(mat.url) ? <span className="admin-status admin-status-gray">Pendiente de subir</span> : <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer">Descargar</a>}
               </div>
             ))}
           </div>
@@ -112,7 +113,7 @@ const StudentCourseContenido = () => {
                   <div className="dash-list-row-title">{les.title}</div>
                   <div className="dash-list-row-sub">{les.date ? `${les.date} · ` : ''}{les.duration || 'Sin duración'}</div>
                 </div>
-                <button className="admin-btn-ghost" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-${li + 1}`)}><Video size={13} /> Ver grabación</button>
+                {isPendingUrl(les.videoUrl) ? <span className="admin-status admin-status-gray">Pendiente de grabar</span> : <button className="admin-btn-ghost" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-${li + 1}`)}><Video size={13} /> Ver grabación</button>}
               </div>
             ))}
           </div>
