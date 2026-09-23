@@ -6,7 +6,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchMyEnrollments } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
-import logoNetwise from '../../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
+import SidebarLogo from '../../components/SidebarLogo';
 
 const NAV_ITEMS = [
   { to: '/student/inicio', label: 'Inicio', icon: Home },
@@ -60,7 +60,7 @@ const StudentLayout = () => {
       <div className={`overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
       <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
-          <img src={logoNetwise} alt="Netwise Academy" className="admin-sidebar-logo-img" />
+          <SidebarLogo />
           <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expandir' : 'Colapsar'}>
             <ChevronLeft size={16} />
           </button>

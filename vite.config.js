@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
       devOptions: { enabled: true, type: 'module' },
       manifest: {
         name: 'Netwise Academy',
@@ -18,8 +18,8 @@ export default defineConfig({
         id: '/',
         lang: 'es',
         display: 'standalone',
-        background_color: '#0A0A0F',
-        theme_color: '#7C6AF7',
+        background_color: '#151223',
+        theme_color: '#151223',
         orientation: 'portrait-primary',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

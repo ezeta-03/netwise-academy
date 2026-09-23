@@ -6,7 +6,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { fetchGroups, fetchAllEnrollments } from '../../lib/db';
-import logoNetwise from '../../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
+import SidebarLogo from '../../components/SidebarLogo';
 
 // Mismos 4 enlaces que TeacherLayout.jsx -- este sidebar de curso reemplaza
 // por completo al de TeacherLayout mientras el docente está dentro de un
@@ -89,7 +89,7 @@ const TeacherCourseLayout = () => {
       <div className={`overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
       <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
-          <img src={logoNetwise} alt="Netwise Academy" className="admin-sidebar-logo-img" />
+          <SidebarLogo />
           <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)}><ChevronLeft size={16} /></button>
         </div>
 
