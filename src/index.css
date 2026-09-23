@@ -1729,6 +1729,7 @@ body::before {
   display: flex; align-items: center; gap: 10px; padding: 12px; margin: 4px 0 6px;
   border-top: 1px solid rgba(255,255,255,.08); border-bottom: 1px solid rgba(255,255,255,.08);
 }
+.dash-sidebar-divider { height: 1px; background: rgba(255,255,255,.08); margin: 8px 12px; }
 .dash-course-context img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
 .dash-course-context-title { font-size: .82rem; font-weight: 600; color: #fff; line-height: 1.25; }
 .dash-course-context-sub { font-size: .7rem; color: rgba(255,255,255,.4); }
@@ -1821,20 +1822,22 @@ body::before {
 
 .dash-modules-rail { display: flex; flex-direction: column; gap: 2px; }
 .dash-module-item {
-  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; cursor: pointer;
 }
 .dash-module-item:hover { background: #F6F5FA; }
 .dash-module-item.active { background: var(--accent-bg); }
-.dash-module-num {
-  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center; font-size: .74rem; font-weight: 700;
-  background: #F0EEF6; color: #8B8A9B;
-}
-.dash-module-item.done .dash-module-num { background: #E3F9EE; color: #15803D; }
-.dash-module-item.active .dash-module-num { background: var(--accent); color: #fff; }
+.dash-module-num { width: 18px; flex-shrink: 0; font-size: .78rem; font-weight: 700; color: var(--accent); }
+.dash-module-item-body { flex: 1; min-width: 0; }
 .dash-module-title { font-size: .86rem; font-weight: 600; color: #14141F; }
 .dash-module-item.active .dash-module-title { color: var(--accent); }
-.dash-module-sub { font-size: .74rem; color: #8B8A9B; }
+.dash-module-sub { font-size: .74rem; color: #8B8A9B; margin-top: 2px; }
+.dash-module-check {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; background: #E3F9EE; color: #15803D;
+  display: flex; align-items: center; justify-content: center;
+}
+.dash-module-item.done .dash-module-num,
+.dash-module-item.done .dash-module-title,
+.dash-module-item.done .dash-module-sub { color: #15803D; }
 
 /* Guía docente: panel visible solo en la vista de docente (ver
    TeacherCourseContenido) -- borde punteado para distinguirlo del resto. */

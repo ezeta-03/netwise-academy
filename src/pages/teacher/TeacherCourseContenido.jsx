@@ -468,11 +468,12 @@ const TeacherCourseContenido = () => {
                   className={`dash-module-item ${m.id === selectedId ? 'active' : ''} ${m.deliverable?.open === false ? 'done' : ''}`}
                   onClick={() => { setSelectedId(m.id); setEditingModule(false); setSearchParams({}); }}
                 >
-                  <div className="dash-module-num">{m.deliverable?.open === false ? <CheckCircle2 size={13} /> : i + 1}</div>
-                  <div>
+                  <div className="dash-module-num">{String(i + 1).padStart(2, '0')}</div>
+                  <div className="dash-module-item-body">
                     <div className="dash-module-title">{m.title}</div>
-                    {m.weeksLabel && <div className="dash-module-sub">{m.weeksLabel}</div>}
+                    <div className="dash-module-sub">{m.deliverable?.open === false ? 'Completado' : (m.weeksLabel || '')}</div>
                   </div>
+                  {m.deliverable?.open === false && <div className="dash-module-check"><CheckCircle2 size={13} /></div>}
                 </div>
               ))}
             </div>

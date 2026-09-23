@@ -1,12 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu } from 'lucide-react';
+import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { fetchGroups, fetchMyEnrollments } from '../../lib/db';
 import logoNetwise from '../../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
+
+// Mismos enlaces que StudentLayout.jsx -- este sidebar de curso lo reemplaza
+// por completo mientras el alumno está dentro de un curso, así que sin esto
+// perdía acceso directo a Inicio/Agenda/Mis entregas/Soporte. "Cursos" se
+// marca activo a mano porque la ruta real es /student/curso/:id.
+const MAIN_NAV = [
+  { to: '/student/inicio', label: 'Inicio', icon: Home },
+  { to: '/student/agenda', label: 'Agenda', icon: Calendar },
+  { to: '/student/cursos', label: 'Cursos', icon: BookOpen },
+  { to: '/student/entregas', label: 'Mis entregas', icon: CheckSquare },
+  { to: '/student/soporte', label: 'Soporte', icon: Headphones },
+];
 
 const SUB_NAV = [
   { to: 'contenido', label: 'Contenido', icon: BookOpen },
@@ -75,6 +87,21 @@ const StudentCourseLayout = () => {
           <img src={logoNetwise} alt="Netwise Academy" className="admin-sidebar-logo-img" />
           <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)}><ChevronLeft size={16} /></button>
         </div>
+
+        <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
+          {MAIN_NAV.map((item) => {
+            const Icon = item.icon;
+            const isCursos = item.to === '/student/cursos';
+            return (
+              <NavLink key={item.to} to={item.to} className={() => `admin-nav-link ${isCursos ? 'active' : ''}`}>
+                <Icon size={17} />
+                <span className="admin-nav-label">{item.label}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div className="dash-sidebar-divider"></div>
 
         <button className="dash-back-link" onClick={() => navigate('/student/cursos')}>
           <ArrowLeft size={14} /> <span className="admin-nav-label">Todos mis cursos</span>
