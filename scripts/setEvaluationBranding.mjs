@@ -63,7 +63,7 @@ const POLICY = {
     intro: 'Para aprobar de manera regular y obtener el certificado, el estudiante debe cumplir simultáneamente con:',
     requirements: [
       'Rendimiento ponderado mínimo de 80% en la suma de los entregables prácticos del programa.',
-      'Calificación final mínima de 15 (quince) en la escala vigesimal.',
+      'Calificación final mínima de 16 (dieciséis) en la escala vigesimal.',
     ],
     fallbackTitle: 'Si el estudiante no aprueba de forma regular',
     options: [
@@ -80,7 +80,7 @@ const POLICY = {
   accreditations: [
     {
       document: 'Certificado acreditativo de capacidades',
-      requirement: '80% ponderado en entregables y nota vigesimal ≥ 15 (vía regular), o nota vigesimal ≥ 16 en la evaluación sustitutoria.',
+      requirement: '80% ponderado en entregables y nota vigesimal ≥ 16 (vía regular), o nota vigesimal ≥ 16 en la evaluación sustitutoria.',
       scope: 'Acredita oficialmente las competencias y habilidades prácticas desarrolladas durante el curso, incluyendo la nota aprobatoria obtenida.',
     },
     {

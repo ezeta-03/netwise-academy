@@ -438,8 +438,8 @@ describe('propiedades: flujo de entregas y notas manuales -> promedio', () => {
 
 // -------------------------------------------------------------- aprobación --
 describe('propiedades: evaluateApproval sobre el flujo completo', () => {
-  test('constantes: 15 nota mínima, 80% -> 16, sustitutoria 16, asistencia 75', () => {
-    assert.deepEqual([APPROVAL.minFinalGrade, APPROVAL.minPerformancePct, APPROVAL.minSubstituteGrade, APPROVAL.minAttendancePct], [15, 80, 16, 75]);
+  test('constantes: 16 nota mínima, 80% -> 16, sustitutoria 16, asistencia 75', () => {
+    assert.deepEqual([APPROVAL.minFinalGrade, APPROVAL.minPerformancePct, APPROVAL.minSubstituteGrade, APPROVAL.minAttendancePct], [16, 80, 16, 75]);
     assert.equal(MIN_PERFORMANCE_GRADE, 16);
   });
   test('overall es "pending" salvo que allGraded; finalGrade y performance también', () => {
@@ -448,12 +448,12 @@ describe('propiedades: evaluateApproval sobre el flujo completo', () => {
       assert.deepEqual([st.approval.overall, st.approval.finalGrade, st.approval.performance], ['pending', 'pending', 'pending'], ctx);
     });
   });
-  test('con todo calificado: finalGrade ok iff promedio >= 15; performance ok iff rendimientoRaw >= 80', () => {
+  test('con todo calificado: finalGrade ok iff promedio >= 16; performance ok iff rendimientoRaw >= 80', () => {
     let settled = 0;
     forEachStudent((sc, st, ctx) => {
       if (!st.summary.allGraded) return;
       settled++;
-      assert.equal(st.approval.finalGrade, st.summary.promedioParcial >= 15 ? 'ok' : 'fail', ctx);
+      assert.equal(st.approval.finalGrade, st.summary.promedioParcial >= 16 ? 'ok' : 'fail', ctx);
       assert.equal(st.approval.performance, st.summary.rendimientoRaw >= 80 ? 'ok' : 'fail', ctx);
     });
     assert.ok(settled > 1000);
@@ -730,11 +730,11 @@ describe('escenarios manuales (valores calculados a mano)', () => {
     assert.equal(ok.rendimientoRaw, 80);
     assert.equal(ok.allGraded, true);
     assert.deepEqual(evaluateApproval(ok, null), { finalGrade: 'ok', performance: 'ok', attendance: 'pending', overall: 'regular' });
-    // proyecto 16.75 -> 40*16.75 = 670 -> 1590 / 100 = 15.9: pasa el piso de 15 pero no el 80%
+    // proyecto 16.75 -> 40*16.75 = 670 -> 1590 / 100 = 15.9: no llega ni a la nota mínima (16) ni al 80%
     const low = summaryOf(model, subs, { participacion: 15, caso1: 18, proyecto: 16.75 });
     assert.equal(low.promedioParcial, 15.9);
     assert.equal(low.rendimientoRaw, 79.5);
-    assert.deepEqual(evaluateApproval(low, null), { finalGrade: 'ok', performance: 'fail', attendance: 'pending', overall: 'substitute' });
+    assert.deepEqual(evaluateApproval(low, null), { finalGrade: 'fail', performance: 'fail', attendance: 'pending', overall: 'substitute' });
     // sin caso1: (260 + 300 + 680) / 80 = 15.5 y pendiente
     const partial = summaryOf(model, subs, { participacion: 15, proyecto: 17 });
     assert.equal(partial.promedioParcial, 15.5);

@@ -152,7 +152,7 @@ describe('MIN_PERFORMANCE_GRADE', () => {
     assert.equal(evaluateApproval(summaryOf(MIN_PERFORMANCE_GRADE), null).performance, 'ok');
     assert.equal(evaluateApproval(summaryOf(MIN_PERFORMANCE_GRADE - 0.01), null).performance, 'fail');
   });
-  test('la nota mínima de rendimiento es mayor que la nota final mínima (15), por lo que ésta no es vinculante', () => {
-    assert.ok(MIN_PERFORMANCE_GRADE > APPROVAL.minFinalGrade);
+  test('la nota mínima de rendimiento (80% de 20) coincide con la nota final mínima (16)', () => {
+    assert.equal(MIN_PERFORMANCE_GRADE, APPROVAL.minFinalGrade);
   });
 });

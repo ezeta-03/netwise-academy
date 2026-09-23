@@ -488,9 +488,9 @@ describe('Resumen del aula (estudiantes en riesgo, promedio)', () => {
   test('sin alumnos -> promedio null, asistencia null, 0 en riesgo', () => {
     assert.deepEqual(classSummary(dmods, [], [], []), { promedioParcial: null, asistenciaPromedio: null, enRiesgo: 0, total: 0 });
   });
-  test('nota exactamente 15 no está en riesgo; 14.99 sí', () => {
-    assert.equal(classSummary(dmods, [ROSTER[0]], [sub('u1', 'a', 15), sub('u1', 'b', 15)], []).enRiesgo, 0);
-    assert.equal(classSummary(dmods, [ROSTER[0]], [sub('u1', 'a', 14.99), sub('u1', 'b', 14.99)], []).enRiesgo, 1);
+  test('nota exactamente 16 no está en riesgo; 15.99 sí', () => {
+    assert.equal(classSummary(dmods, [ROSTER[0]], [sub('u1', 'a', 16), sub('u1', 'b', 16)], []).enRiesgo, 0);
+    assert.equal(classSummary(dmods, [ROSTER[0]], [sub('u1', 'a', 15.99), sub('u1', 'b', 15.99)], []).enRiesgo, 1);
   });
   test('sin notas ni asistencias no se considera en riesgo', () => {
     assert.equal(classSummary(dmods, ROSTER, [], []).enRiesgo, 0);
@@ -934,9 +934,9 @@ describe('Resumen del aula con esquema de calificación (classSummary)', () => {
     assert.equal(r.promedioParcial, 17);
     assert.equal(r.enRiesgo, 0);
   });
-  test('un alumno con SÓLO nota manual 14 (sin módulos) queda en riesgo; con 15 no', () => {
-    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 14 })], 1).enRiesgo, 1);
-    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 15 })], 1).enRiesgo, 0);
+  test('un alumno con SÓLO nota manual 15 (sin módulos) queda en riesgo; con 16 no', () => {
+    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 15 })], 1).enRiesgo, 1);
+    assert.equal(classSummary(four, [ROSTER[0]], [], [], [scoreOf('u1', { sustentacion: 16 })], 1).enRiesgo, 0);
   });
   test('el promedio del aula promedia los promedios individuales de quienes tienen alguna nota (manual o módulo)', () => {
     const r = classSummary(four, ROSTER, subsFor('u1', 10), [], [scoreOf('u1', { sustentacion: 10 }), scoreOf('u2', { sustentacion: 20 })], 1);

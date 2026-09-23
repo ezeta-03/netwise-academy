@@ -182,9 +182,9 @@ describe('approval.js (evaluateApproval)', () => {
 
   test('constantes coinciden con la política sembrada en scripts/setEvaluationBranding.mjs', () => {
     const src = readFileSync(new URL('../scripts/setEvaluationBranding.mjs', import.meta.url), 'utf8');
-    assert.deepEqual(APPROVAL, { minFinalGrade: 15, minPerformancePct: 80, minSubstituteGrade: 16, minAttendancePct: 75 });
+    assert.deepEqual(APPROVAL, { minFinalGrade: 16, minPerformancePct: 80, minSubstituteGrade: 16, minAttendancePct: 75 });
     assert.match(src, new RegExp(`mínimo de ${APPROVAL.minPerformancePct}%`));
-    assert.match(src, new RegExp(`mínima de ${APPROVAL.minFinalGrade} \\(quince\\)`));
+    assert.match(src, new RegExp(`mínima de ${APPROVAL.minFinalGrade} \\(dieciséis\\)`));
     assert.match(src, new RegExp(`mínima de ${APPROVAL.minSubstituteGrade} \\(dieciséis\\)`));
     assert.match(src, new RegExp(`mínimo de ${APPROVAL.minAttendancePct}% de asistencia`));
   });
@@ -215,26 +215,26 @@ describe('approval.js (evaluateApproval)', () => {
   });
 
   describe('umbrales con todo calificado', () => {
-    test('16 -> ok/ok; 15 -> ok/fail; 14.99 -> fail/fail; 0 -> fail/fail; 20 -> ok/ok', () => {
+    test('16 -> ok/ok; 15.99 -> fail/fail; 14.99 -> fail/fail; 0 -> fail/fail; 20 -> ok/ok', () => {
       const r = (g) => { const v = evaluateApproval(summaryOf([g]), null); return [v.finalGrade, v.performance]; };
       assert.deepEqual(r(16), ['ok', 'ok']);
       assert.deepEqual(r(20), ['ok', 'ok']);
-      assert.deepEqual(r(15), ['ok', 'fail']);
+      assert.deepEqual(r(15.99), ['fail', 'fail']);
       assert.deepEqual(r(14.99), ['fail', 'fail']);
       assert.deepEqual(r(0), ['fail', 'fail']);
     });
-    test('caso 79.5%: promedio 15.9 cumple la nota mínima pero NO el 80% (rendimiento sin redondear)', () => {
+    test('caso 79.5%: promedio 15.9 no cumple ni la nota mínima (16) ni el 80%', () => {
       const s = summaryOf([15.9]);
       assert.equal(s.rendimientoPct, 80); // valor para mostrar, redondeado
       const v = evaluateApproval(s, null);
-      assert.equal(v.finalGrade, 'ok');
+      assert.equal(v.finalGrade, 'fail');
       assert.equal(v.performance, 'fail');
     });
     test('un promedio de 16 exacto aprueba con cualquier cantidad de entregables iguales (sin error de coma flotante)', () => {
       for (let n = 1; n <= 12; n++) {
         const v = evaluateApproval(summaryOf(Array(n).fill(16)), null);
         assert.equal(v.performance, 'ok', `N=${n}`);
-        assert.equal(evaluateApproval(summaryOf(Array(n).fill(15)), null).finalGrade, 'ok', `N=${n} (15)`);
+        assert.equal(evaluateApproval(summaryOf(Array(n).fill(16)), null).finalGrade, 'ok', `N=${n} (16)`);
       }
     });
     test('promedio ponderado Branding 18/16/14/12 = 14.5 -> fail/fail', () => {
@@ -247,7 +247,7 @@ describe('approval.js (evaluateApproval)', () => {
       const legacy = { allGraded: true, promedioParcial: 16, rendimientoPct: 80 };
       assert.equal(evaluateApproval(legacy, null).performance, 'ok');
     });
-    test('con la política actual "nota >= 15" nunca es el requisito que decide (80% de 20 = 16)', () => {
+    test('la nota final mínima (16) y el 80% ponderado coinciden: uno cumple si y solo si el otro', () => {
       for (let g = 0; g <= 20; g += 0.1) {
         const v = evaluateApproval(summaryOf([Math.round(g * 10) / 10]), null);
         if (v.performance === 'ok') assert.equal(v.finalGrade, 'ok');

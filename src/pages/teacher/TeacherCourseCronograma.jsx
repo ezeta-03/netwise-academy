@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { resolveApprovalPolicy } from '../../lib/approvalPolicy';
 import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
 import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions, fetchAllEnrollments, fetchCourseGrades } from '../../lib/db';
 import { courseRoster } from '../../lib/roster';
@@ -38,7 +39,7 @@ const TeacherCourseCronograma = () => {
     setLoading(true);
     Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments(course.id), fetchCourseGrades(course.id)]).then(([content, rubric, submissions, enrollments, grades]) => {
       setModules(content.modules || []);
-      setPolicy(rubric.policy || null);
+      setPolicy(resolveApprovalPolicy(course.id, rubric.policy));
       const deliverableIds = new Set(deliverableModules(content.modules).map((m) => m.id));
       setPendingCount(submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length);
       setSubs(submissions);

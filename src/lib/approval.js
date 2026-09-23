@@ -3,10 +3,9 @@
 // para que docente y alumno evalúen exactamente lo mismo.
 
 export const APPROVAL = {
-  minFinalGrade: 15,       // nota vigesimal mínima (vía regular)
+  minFinalGrade: 16,       // nota vigesimal mínima (vía regular)
   // Rendimiento ponderado mínimo: 80% del puntaje máximo (20), o sea nota
-  // ponderada >= 16. Es la regla que decide en la vía regular; la nota final
-  // mínima de 15 queda como piso (siempre se cumple si se cumple el 80%).
+  // ponderada >= 16. Ambos requisitos del sílabo coinciden: 80% de 20 = 16.
   minPerformancePct: 80,
   minSubstituteGrade: 16,  // nota mínima en la evaluación sustitutoria
   minAttendancePct: 75,    // asistencia mínima para la constancia
