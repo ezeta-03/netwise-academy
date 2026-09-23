@@ -1,0 +1,193 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
+import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
+import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions } from '../../lib/db';
+import { parseScheduleLabel, lastClassDate } from '../../lib/liveScheduleGenerator';
+import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
+
+const fmtDate = (iso, withTime) => {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T00:00:00`);
+  const label = d.toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' }).replace(/\./g, '');
+  return withTime ? `${label} · 23:59` : label;
+};
+
+// "Semanas 5-6" -> 6 (la entrega cae al cierre del módulo); "Semana 3" -> 3.
+const endWeekOf = (weeksLabel, fallback) => {
+  const nums = (weeksLabel || '').match(/\d+/g);
+  return nums ? Number(nums[nums.length - 1]) : fallback;
+};
+
+const STATUS_BADGE = {
+  graded: { label: 'Calificado', cls: 'admin-status-green' },
+  current: { label: 'En curso', cls: 'admin-status-amber' },
+  scheduled: { label: 'Programado', cls: 'admin-status-violet' },
+};
+
+const TeacherCourseCronograma = () => {
+  const { course, group } = useOutletContext();
+  const [modules, setModules] = useState([]);
+  const [policy, setPolicy] = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id)]).then(([content, rubric, subs]) => {
+      setModules(content.modules || []);
+      setPolicy(rubric.policy || null);
+      setPendingCount(subs.filter((s) => s.status === 'submitted').length);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [course.id]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mismo patrón load() que el resto de páginas de curso
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="admin-empty-hint">Cargando cronograma...</div>;
+
+  const dayNames = parseScheduleLabel(group?.scheduleTime || group?.scheduleDays);
+  const lastIdx = modules.length - 1;
+  const firstOpenIdx = modules.findIndex((m) => m.deliverable?.open !== false);
+
+  const rows = modules.map((m, i) => {
+    const dueIso = m.deliverable?.dueDate || lastClassDate(group?.startDate, dayNames, endWeekOf(m.weeksLabel, i + 1));
+    const status = m.deliverable?.open === false ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
+    return {
+      id: m.id, m, dueIso, status, weight: m.deliverable?.weight,
+      name: `${i === lastIdx ? 'Trabajo final' : `Entregable M${i + 1}`} · ${m.title}`,
+    };
+  });
+
+  const nextRow = rows[firstOpenIdx];
+  const totalWeight = rows.reduce((s, r) => s + (Number(r.weight) || 0), 0);
+  const allWeighted = rows.length > 0 && rows.every((r) => r.weight != null);
+  const formula = allWeighted ? `PF = ${rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ')}` : null;
+  const scheduleLabel = group?.scheduleTime || group?.scheduleDays;
+
+  return (
+    <div className="anim-fade-up d1">
+      <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
+        <div>
+          <span className="dash-eyebrow">GUÍA DOCENTE · {group?.name ? `Aula ${group.name}` : 'Sin aula asignada'}</span>
+          <h1 className="admin-page-title">Cronograma de evaluación</h1>
+          <p className="admin-page-sub" style={{ marginBottom: 20 }}>{course.title}</p>
+
+          <div className="dash-notice">
+            <Lock size={16} />
+            <span>
+              {group?.name ? `Las fechas se calculan con el horario de Aula ${group.name}.` : 'Las fechas se calculan con el horario del aula; este curso todavía no tiene una asignada.'}
+              {' '}Solo tú ves esta información; no aparece en el campus de los estudiantes.
+            </span>
+          </div>
+
+          <div className="dash-stat-cards">
+            <div className="dash-stat-card">
+              <div className="dash-stat-card-label"><Calendar size={14} /> Próxima evaluación</div>
+              <div className="dash-stat-card-value">{nextRow ? fmtDate(nextRow.dueIso) : '—'}</div>
+              <div className="dash-stat-card-sub">{nextRow ? nextRow.name : 'Todos los entregables calificados'}</div>
+            </div>
+            <div className="dash-stat-card">
+              <div className="dash-stat-card-label">Aula</div>
+              <div className="dash-stat-card-value">{group?.name || 'Sin asignar'}</div>
+              <div className="dash-stat-card-sub">{scheduleLabel || 'Sin horario'}</div>
+            </div>
+            <div className="dash-stat-card">
+              <div className="dash-stat-card-label"><Check size={14} /> Por calificar</div>
+              <div className="dash-stat-card-value">{pendingCount}</div>
+              <div className="dash-stat-card-sub">Entregas de este curso</div>
+            </div>
+          </div>
+
+          <div className="admin-panel" style={{ marginBottom: 20 }}>
+            <div className="admin-panel-head">
+              <span className="admin-panel-title">Entregables del curso</span>
+              {policy?.weightsNote && <span className="admin-status admin-status-amber">Pesos provisionales</span>}
+            </div>
+            {policy?.weightsNote && <div className="dash-notice warn"><span>{policy.weightsNote}</span></div>}
+            {rows.length === 0 ? (
+              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este curso todavía no tiene módulos.</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table className="dash-cron-table">
+                  <thead>
+                    <tr><th>Entregable</th><th>Semanas</th><th>Fecha de entrega</th><th>Peso</th><th>Estado</th></tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.id}>
+                        <td><strong>{r.name}</strong><small>{r.m.deliverable?.description}</small></td>
+                        <td>{r.m.weeksLabel || '—'}</td>
+                        <td>{fmtDate(r.dueIso, true)}</td>
+                        <td>{r.weight != null ? `${r.weight}%` : '—'}</td>
+                        <td><span className={`admin-status ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].label}</span></td>
+                      </tr>
+                    ))}
+                    <tr className="dash-cron-total"><td>Promedio final</td><td></td><td></td><td>{totalWeight}%</td><td></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {policy?.approval && (
+            <div className="admin-panel" style={{ marginBottom: 20 }}>
+              <div className="admin-panel-head">
+                <span className="admin-panel-title">Requisitos de aprobación</span>
+                {policy.syllabusBadge && <span className="admin-status admin-status-green">{policy.syllabusBadge}</span>}
+              </div>
+              {formula && <div className="dash-cron-formula">{formula}</div>}
+              <p style={{ fontSize: '.85rem', color: '#4A4860', marginBottom: 6 }}>{policy.approval.intro}</p>
+              <ul className="dash-checklist">
+                {(policy.approval.requirements || []).map((req, i) => <li key={i}><Check size={15} />{req}</li>)}
+              </ul>
+              {policy.approval.options?.length > 0 && (
+                <>
+                  <p style={{ fontSize: '.88rem', fontWeight: 700, color: '#14141F', marginBottom: 0 }}>{policy.approval.fallbackTitle}</p>
+                  <div className="dash-cron-options">
+                    {policy.approval.options.map((o, i) => (
+                      <div className="dash-cron-option" key={i}>
+                        <div className="dash-cron-option-title">{o.title}</div>
+                        <div className="dash-cron-option-text">{o.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {policy?.accreditations?.length > 0 && (
+            <div className="admin-panel" style={{ marginBottom: 20 }}>
+              <div className="admin-panel-head"><span className="admin-panel-title">Acreditaciones</span></div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="dash-cron-table">
+                  <thead><tr><th>Documento</th><th>Requisito</th><th>Alcance</th></tr></thead>
+                  <tbody>
+                    {policy.accreditations.map((a, i) => (
+                      <tr key={i}><td><strong>{a.document}</strong></td><td>{a.requirement}</td><td>{a.scope}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!policy && (
+            <div className="dash-notice">
+              <CheckSquare size={16} />
+              <span>Este curso todavía no tiene cargados los requisitos de aprobación ni las acreditaciones.</span>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <ModulesRailPanel courseId={course.id} modules={modules} />
+          <GuidePanel courseId={course.id} active="cronograma" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TeacherCourseCronograma;

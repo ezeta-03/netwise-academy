@@ -39,3 +39,22 @@ export const buildRecurringSessions = ({ scheduleDays, scheduleTime, weeksLabel 
   }
   return entries;
 };
+
+// "Martes y Jueves · 19:00-21:00" (formato que guarda el aula) -> días
+// (["Martes","Jueves"]) para poder calcular fechas a partir del horario.
+export const parseScheduleLabel = (label) => {
+  const daysPart = (label || '').split('·')[0];
+  return daysPart.split(/\s+y\s+|,/).map((d) => d.trim()).filter((d) => d in DAY_INDEX);
+};
+
+// Fecha (YYYY-MM-DD) de la última clase de la semana `week` (1 = la semana
+// de `startDate`) según los días del horario -- es la fecha de entrega
+// calculada del entregable de un módulo (ver TeacherCourseCronograma).
+export const lastClassDate = (startDate, dayNames, week) => {
+  if (!startDate || !dayNames?.length) return null;
+  const base = new Date(`${startDate}T00:00:00`);
+  const baseDow = base.getDay();
+  const maxOffset = Math.max(...dayNames.map((d) => (DAY_INDEX[d] - baseDow + 7) % 7));
+  base.setDate(base.getDate() + (week - 1) * 7 + maxOffset);
+  return `${base.getFullYear()}-${pad2(base.getMonth() + 1)}-${pad2(base.getDate())}`;
+};

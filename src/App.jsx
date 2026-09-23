@@ -43,6 +43,7 @@ import TeacherSoporte from './pages/teacher/TeacherSoporte';
 import TeacherCourseLayout from './pages/teacher/TeacherCourseLayout';
 import TeacherCourseContenido from './pages/teacher/TeacherCourseContenido';
 import TeacherCourseRubrica from './pages/teacher/TeacherCourseRubrica';
+import TeacherCourseCronograma from './pages/teacher/TeacherCourseCronograma';
 import TeacherCourseSala from './pages/teacher/TeacherCourseSala';
 import TeacherCourseMateriales from './pages/teacher/TeacherCourseMateriales';
 import TeacherCourseProyecto from './pages/teacher/TeacherCourseProyecto';
@@ -166,6 +167,7 @@ function App() {
             <Route index element={<Navigate to="contenido" replace />} />
             <Route path="contenido" element={<TeacherCourseContenido />} />
             <Route path="rubrica" element={<TeacherCourseRubrica />} />
+            <Route path="cronograma" element={<TeacherCourseCronograma />} />
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />

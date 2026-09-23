@@ -1791,6 +1791,27 @@ body::before {
 }
 .dash-notice svg { flex-shrink: 0; margin-top: 2px; }
 
+.dash-notice.warn { background: #FEF3DC; color: #B45309; }
+
+/* Cronograma de evaluación */
+.dash-stat-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+.dash-stat-card { background: #fff; border: 1px solid #ECEAF3; border-radius: 14px; padding: 16px 18px; }
+.dash-stat-card-label { display: flex; align-items: center; gap: 6px; font-size: .76rem; color: #8B8A9B; margin-bottom: 8px; }
+.dash-stat-card-value { font-size: 1.15rem; font-weight: 700; color: #14141F; }
+.dash-stat-card-sub { font-size: .74rem; color: #8B8A9B; margin-top: 4px; line-height: 1.3; }
+.dash-cron-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.dash-cron-table th { text-align: left; font-weight: 500; color: #8B8A9B; font-size: .76rem; padding: 10px 8px; background: #F8F7FB; }
+.dash-cron-table td { padding: 14px 8px; border-top: 1px solid #F0EEF6; vertical-align: top; color: #4A4860; }
+.dash-cron-table td strong { display: block; color: #14141F; font-size: .84rem; }
+.dash-cron-table td small { display: block; color: #8B8A9B; font-size: .74rem; margin-top: 3px; line-height: 1.3; }
+.dash-cron-total td { font-weight: 700; color: #14141F; }
+.dash-cron-formula { font-weight: 700; font-size: .88rem; color: #14141F; margin-bottom: 10px; }
+.dash-cron-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.dash-cron-option { background: #F8F7FB; border-radius: 10px; padding: 12px 14px; }
+.dash-cron-option-title { font-size: .82rem; font-weight: 700; color: #14141F; margin-bottom: 4px; }
+.dash-cron-option-text { font-size: .8rem; color: #4A4860; line-height: 1.4; }
+@media (max-width: 640px) { .dash-stat-cards, .dash-cron-options { grid-template-columns: 1fr; } }
+
 .dash-rubric-criterion { border: 1px solid #ECEAF3; border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
 .dash-rubric-criterion-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .dash-rubric-criterion-num {

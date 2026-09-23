@@ -46,8 +46,8 @@ export const ModulesRailPanel = ({ courseId, modules, activeModuleId, onModuleCl
 
 // Panel "Guía docente" -- visible solo en la vista de docente, el estudiante
 // no tiene acceso a cronograma de evaluación ni rúbrica. `active` resalta el
-// ítem de la página en la que estás; "Cronograma de evaluación" todavía no
-// tiene página propia, así que no es clickeable.
+// ítem de la página en la que estás (Rúbrica: TeacherCourseRubrica,
+// Cronograma: TeacherCourseCronograma).
 export const GuidePanel = ({ courseId, active }) => {
   const navigate = useNavigate();
   return (
@@ -67,7 +67,11 @@ export const GuidePanel = ({ courseId, active }) => {
           <div className="dash-guide-row-sub">Criterios comunes a todo el curso</div>
         </div>
       </div>
-      <div className={`dash-guide-row ${active === 'cronograma' ? 'active' : ''}`}>
+      <div
+        className={`dash-guide-row ${active === 'cronograma' ? 'active' : ''}`}
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate(`/teacher/curso/${courseId}/cronograma`)}
+      >
         <div className="dash-guide-row-icon"><Calendar size={15} /></div>
         <div>
           <div className="dash-guide-row-title">Cronograma de evaluación</div>
