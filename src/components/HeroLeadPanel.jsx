@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
-import { ArrowLeft, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { captureProgramLead } from '../lib/db';
 import { useUI } from '../context/UIContext';
 
-// Pestaña "Descubre" del hero + el formulario de interés general que
-// despliega -- antes la pestaña solo hacía scroll a #metodologia (función
-// ya cubierta por el botón "Cómo es el método"), así que quedaba
-// duplicada; ahora abre/cierra este panel en vez de scrollear.
+// Formulario de interés general del hero: SIEMPRE visible (antes se abría con una
+// pestaña "Descubre" / un botón). En escritorio flota sobre la imagen; en teléfono
+// va debajo de ella (ver .home-lead-panel en index.css).
 const HeroLeadPanel = ({ courses }) => {
   const { addToast } = useUI();
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -35,7 +33,6 @@ const HeroLeadPanel = ({ courses }) => {
       });
       addToast('¡Gracias! Te contactaremos muy pronto.', 'success');
       setName(''); setLastName(''); setEmail(''); setPhone(''); setTopic('');
-      setOpen(false);
     } catch {
       addToast('No se pudo enviar. Intenta de nuevo.', 'error');
     } finally {
@@ -44,63 +41,43 @@ const HeroLeadPanel = ({ courses }) => {
   };
 
   return (
-    <>
-      <button
-        type="button"
-        className={`home-hero-discover ${open ? 'is-hidden' : ''}`}
-        onClick={() => setOpen(true)}
-        aria-expanded={open}
-      >
-        <ArrowLeft size={13} />
-        <span className="hd-desktop">Descubre</span>
-        <span className="hd-mobile">Solicita información</span>
-        <ArrowLeft size={13} />
-      </button>
+    <div className="home-lead-panel">
+      <h3 className="home-lead-panel-title">Da el siguiente paso</h3>
+      <p className="home-lead-panel-sub">Cuéntanos qué quieres aprender.</p>
 
-      <div className={`home-lead-backdrop ${open ? 'open' : ''}`} onClick={() => setOpen(false)} />
-
-      <div className={`home-lead-panel ${open ? 'open' : ''}`} aria-hidden={!open}>
-        <button type="button" className="home-lead-panel-close" onClick={() => setOpen(false)} aria-label="Cerrar formulario">
-          <X size={16} />
+      <form onSubmit={handleSubmit}>
+        <div className="home-lead-row">
+          <div className="home-lead-field">
+            <label>Nombre</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" required />
+          </div>
+          <div className="home-lead-field">
+            <label>Apellido</label>
+            <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Tu apellido" required />
+          </div>
+        </div>
+        <div className="home-lead-field">
+          <label>Correo electrónico</label>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" required />
+        </div>
+        <div className="home-lead-field">
+          <label>Teléfono</label>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Tu número de contacto" />
+        </div>
+        <div className="home-lead-field">
+          <label>¿Qué te gustaría aprender?</label>
+          <select value={topic} onChange={(e) => setTopic(e.target.value)} required>
+            <option value="" disabled>Selecciona un taller</option>
+            {visibleCourses.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </div>
+        <button type="submit" className="lead-submit-btn" disabled={saving}>
+          {saving ? <Loader2 size={16} className="spin" /> : 'Enviar información'}
         </button>
-        <span className="home-lead-panel-eyebrow">✦ Formulario/Forms</span>
-        <h3 className="home-lead-panel-title">Da el siguiente paso</h3>
-        <p className="home-lead-panel-sub">Cuéntanos qué quieres aprender.</p>
-
-        <form onSubmit={handleSubmit}>
-          <div className="home-lead-row">
-            <div className="home-lead-field">
-              <label>Nombre</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" required />
-            </div>
-            <div className="home-lead-field">
-              <label>Apellido</label>
-              <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Tu apellido" required />
-            </div>
-          </div>
-          <div className="home-lead-field">
-            <label>Correo electrónico</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" required />
-          </div>
-          <div className="home-lead-field">
-            <label>Teléfono</label>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Tu número de contacto" />
-          </div>
-          <div className="home-lead-field">
-            <label>¿Qué te gustaría aprender?</label>
-            <select value={topic} onChange={(e) => setTopic(e.target.value)} required>
-              <option value="" disabled>Selecciona un taller</option>
-              {visibleCourses.map((c) => (
-                <option key={c.id} value={c.id}>{c.title}</option>
-              ))}
-            </select>
-          </div>
-          <button type="submit" className="lead-submit-btn" disabled={saving}>
-            {saving ? <Loader2 size={16} className="spin" /> : 'Enviar información'}
-          </button>
-        </form>
-      </div>
-    </>
+      </form>
+    </div>
   );
 };
 

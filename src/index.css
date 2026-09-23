@@ -407,44 +407,13 @@ body::before {
   max-width: 1280px; margin: 0 auto; padding: 72px 40px 96px;
 }
 
-/* Pestaña "Descubre": colgada del borde derecho de la ventana, girada 90°.
-   Antes hacía scroll a #metodologia (ya cubierto por "Cómo es el método"),
-   ahora abre HeroLeadPanel -- se oculta con un fade mientras el panel está
-   abierto, y reaparece al cerrarlo. */
-.home-hero-discover {
-  position: absolute; top: 50%; right: 2%; z-index: 6;
-  display: inline-flex; align-items: center; gap: 8px;
-  background: #efeff2; color: #7d34ff; border: none; cursor: pointer;
-  padding: 10px 18px; border-radius: 10px 10px 0 0;
-  font-size: .78rem; font-weight: 600; letter-spacing: .02em; white-space: nowrap;
-  transform: translateY(-50%) rotate(-90deg); transform-origin: right center;
-  box-shadow: var(--shadow-lg);
-  opacity: 1; transition: opacity .3s ease;
-}
-.home-hero-discover svg { transform: rotate(90deg); }
-.home-hero-discover.is-hidden { opacity: 0; pointer-events: none; }
-
-/* Panel de interés general que despliega la pestaña "Descubre" -- se desliza
-   desde el borde derecho con una transición suavizada (transform + opacity),
-   queda siempre montado para poder animar tanto la entrada como la salida. */
+/* Formulario de interés del hero (HeroLeadPanel.jsx): siempre visible. En escritorio flota sobre
+   el borde derecho de la imagen; en teléfono se apila bajo ella, montado sobre su borde inferior. */
 .home-lead-panel {
-  position: absolute; top: 50%; right: 2%; z-index: 5;
+  position: absolute; top: 50%; right: 2%; z-index: 5; transform: translateY(-50%);
   width: min(360px, calc(100% - 40px));
   background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--r-xl);
   padding: 30px 28px; box-shadow: var(--shadow-lg);
-  transform: translateY(-50%) translateX(28px); opacity: 0; pointer-events: none;
-  transition: transform .45s cubic-bezier(.4,0,.2,1), opacity .35s ease;
-}
-.home-lead-panel.open { transform: translateY(-50%) translateX(0); opacity: 1; pointer-events: auto; }
-
-.home-lead-panel-close {
-  position: absolute; top: 20px; right: 20px; background: none; border: none; color: var(--text2); cursor: pointer;
-  display: flex; padding: 4px;
-}
-.home-lead-panel-close:hover { color: var(--text); }
-.home-lead-panel-eyebrow {
-  display: inline-block; color: var(--accent);
-  font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 16px;
 }
 .home-lead-panel-title { font-family: var(--ff-body); font-weight: 700; font-size: 1.5rem; color: var(--text); margin-bottom: 4px; }
 .home-lead-panel-sub { color: var(--text2); font-size: .86rem; margin-bottom: 24px; }
@@ -460,50 +429,13 @@ body::before {
 .home-lead-field input:focus, .home-lead-field select:focus { border-color: var(--accent); }
 .home-lead-field select option { background: var(--bg2); color: var(--text); }
 
-/* Pulso del botón "Solicita información" (teléfono): un anillo que se expande y se desvanece. */
-@keyframes hero-cta-pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(124,58,237,.55); }
-  70%  { box-shadow: 0 0 0 14px rgba(124,58,237,0); }
-  100% { box-shadow: 0 0 0 0 rgba(124,58,237,0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .home-hero-discover { animation: none !important; }
-}
-
-/* En escritorio solo se ve la pestaña girada; en teléfono es un botón bajo el hero. */
-.hd-mobile, .home-lead-backdrop { display: none; }
-
 @media (max-width: 900px) {
-  /* El botón queda en el flujo, bajo la imagen del hero, a todo el ancho. */
-  .home-hero-discover {
-    position: static; transform: none; transform-origin: center; box-shadow: none;
-    display: flex; align-items: center; justify-content: center; width: calc(100% - 40px); margin: 0 20px 40px;
-    border-radius: 12px; padding: 14px 18px; font-size: .9rem;
-    background: var(--accent); color: #fff;
-    /* Por encima del hero (que tiene su propio contexto de apilado por la animación de entrada):
-       si no, el hero intercepta el toque y el botón solo responde en su borde. */
-    position: relative; z-index: 7; cursor: pointer; touch-action: manipulation;
-    animation: hero-cta-pulse 2s ease-out infinite;
-  }
-  .home-hero-discover:active { transform: scale(.98); }
-  .home-hero-discover > * { pointer-events: none; }
-  .home-hero-discover svg { display: none; }
-  .hd-desktop { display: none; }
-  .hd-mobile { display: inline; }
-
-  /* El formulario sube como una hoja desde abajo, con fondo que oscurece la página. */
-  .home-lead-backdrop {
-    display: block; position: fixed; inset: 0; z-index: 1190; background: rgba(10,8,24,.55);
-    opacity: 0; pointer-events: none; transition: opacity .3s ease;
-  }
-  .home-lead-backdrop.open { opacity: 1; pointer-events: auto; }
   .home-lead-panel {
-    position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 1200; width: 100%;
-    max-height: 90vh; overflow-y: auto; border-radius: 20px 20px 0 0; padding: 28px 20px 32px;
-    transform: translateY(100%); opacity: 1;
+    position: relative; top: auto; right: auto; transform: none;
+    width: calc(100% - 64px); max-width: 420px; margin: -72px auto 48px; padding: 24px 22px 26px;
+    border-color: rgba(161,106,255,.35);
   }
-  .home-lead-panel.open { transform: translateY(0); }
-  .home-lead-row { grid-template-columns: 1fr; gap: 0; }
+  .home-lead-panel-sub { margin-bottom: 18px; }
 }
 
 /* Botón flotante de WhatsApp, site-wide (ver WhatsAppButton.jsx). */

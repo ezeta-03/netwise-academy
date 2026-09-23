@@ -114,8 +114,8 @@ const Navbar = () => {
             </div>
           ) : (
             <div className="nav-right-guest nav-desktop-only">
-              <button type="button" className="btn btn-ghost btn-sm" onClick={openLoginModal}>Plataforma</button>
               <button type="button" className="btn btn-primary btn-sm nav-cta" onClick={openLoginModal}>Inscribirme</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={openLoginModal}>Plataforma</button>
             </div>
           )}
 
@@ -175,8 +175,8 @@ const Navbar = () => {
             </button>
           ) : (
             <div className="mm-footer-guest">
-              <button type="button" className="btn btn-ghost btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Iniciar sesión</button>
               <button type="button" className="btn btn-primary btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Inscribirme</button>
+              <button type="button" className="btn btn-ghost btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Iniciar sesión</button>
             </div>
           )}
         </div>
