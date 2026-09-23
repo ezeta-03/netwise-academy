@@ -36,7 +36,8 @@ const TeacherInicio = () => {
   useEffect(() => {
     Promise.all([
       fetchLiveSessions(),
-      fetchAllEnrollments(),
+      // Un docente solo puede leer las matrículas de SUS cursos (reglas de Firestore).
+      fetchAllEnrollments(currentUser?.role === 'admin' ? undefined : courses.map((c) => c.id)),
       Promise.all(courses.map(async (c) => {
         const content = await fetchCourseContent(c.id);
         const modules = content.modules || [];
@@ -53,7 +54,7 @@ const TeacherInicio = () => {
       setPendingByCourse(byCourse.filter((b) => b.pending > 0));
       setLoading(false);
     });
-  }, [courses, myCourseIds]);
+  }, [courses, myCourseIds, currentUser?.role]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
 

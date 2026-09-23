@@ -403,7 +403,7 @@ const TeacherCourseEvaluacion = () => {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id)]).then(([content, enrollments, subs, att]) => {
+    Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id)]).then(([content, enrollments, subs, att]) => {
       setModules(content.modules || []);
       setRoster(courseRoster(enrollments, course.id));
       setSubmissions(subs);

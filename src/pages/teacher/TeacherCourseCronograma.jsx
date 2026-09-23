@@ -31,7 +31,7 @@ const TeacherCourseCronograma = () => {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments()]).then(([content, rubric, submissions, enrollments]) => {
+    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments(course.id)]).then(([content, rubric, submissions, enrollments]) => {
       setModules(content.modules || []);
       setPolicy(rubric.policy || null);
       const deliverableIds = new Set(deliverableModules(content.modules).map((m) => m.id));

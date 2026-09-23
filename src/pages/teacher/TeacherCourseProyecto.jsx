@@ -64,7 +64,7 @@ const TeacherCourseProyecto = () => {
   const [viewing, setViewing] = useState(null);
 
   const load = useCallback(() => {
-    Promise.all([fetchAllEnrollments(), fetchCourseContent(course.id)]).then(([enrollments, content]) => {
+    Promise.all([fetchAllEnrollments(course.id), fetchCourseContent(course.id)]).then(([enrollments, content]) => {
       const totalSessions = (content.modules || []).reduce((sum, m) => sum + m.lessons.length, 0) || 1;
       const courseEnrollments = enrollments.filter((e) => e.courseId?.toString() === course.id.toString());
       setRows(courseEnrollments.map((e) => ({

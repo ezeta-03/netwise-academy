@@ -90,13 +90,18 @@ export const fetchLiveSessionById = async (sessionId) => {
   return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
 };
 
-export const scheduleLiveSession = async ({ courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin }) => {
-  const roomName = `netwise-academy-${courseId}-${Date.now()}`;
+// `groupId` + `generated` marcan las clases que el sistema genera para un aula
+// (ver lib/scheduleSync.js): así, al editar el aula solo se ajustan ESAS clases
+// y nunca las que el docente programó a mano.
+export const scheduleLiveSession = async ({ courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin, groupId, generated }) => {
+  const roomName = `netwise-academy-${courseId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const payload = { courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin, roomName, status: 'upcoming' };
+  if (groupId) payload.groupId = groupId;
+  if (generated) payload.generated = true;
 
   if (!isConfigValid) {
     return new Promise((resolve) => {
-      const newSession = { id: `mock-${Date.now()}`, ...payload };
+      const newSession = { id: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...payload };
       LIVE_SESSIONS.push(newSession);
       setTimeout(() => resolve(newSession), 300);
     });
@@ -117,6 +122,16 @@ export const cancelLiveSession = async (sessionId) => {
     return;
   }
   await updateDoc(doc(db, 'liveSessions', sessionId), { status: 'cancelled' });
+};
+
+// Cambia campos de una clase existente (ej. el docente cuando se reasigna el aula).
+export const updateLiveSession = async (sessionId, patch) => {
+  if (!isConfigValid) {
+    const session = LIVE_SESSIONS.find((s) => s.id === sessionId);
+    if (session) Object.assign(session, patch);
+    return;
+  }
+  await updateDoc(doc(db, 'liveSessions', sessionId), patch);
 };
 
 export const deleteLiveSession = async (sessionId) => {
@@ -389,7 +404,12 @@ export const enrollInCourse = async (uid, course, user) => {
 // A diferencia de fetchMyEnrollments (filtrado por uid), esto trae TODOS
 // los registros de todos los alumnos, para "Alumnos y accesos".
 
-export const fetchAllEnrollments = async () => {
+// `courseIds` (opcional, un id o una lista): trae solo las matrículas de esos
+// cursos. Un docente SIEMPRE debe pasarlo con los cursos que le asignaron --
+// las reglas de Firestore solo le dejan leer matrículas de sus cursos; sin
+// filtro (Admin) trae todas.
+export const fetchAllEnrollments = async (courseIds) => {
+  const wanted = courseIds === undefined || courseIds === null ? null : (Array.isArray(courseIds) ? courseIds : [courseIds]).map((c) => c.toString());
   if (!isConfigValid) {
     const rows = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -399,9 +419,17 @@ export const fetchAllEnrollments = async () => {
         Object.values(map).forEach((e) => rows.push(e));
       }
     }
-    return rows;
+    return wanted ? rows.filter((e) => wanted.includes(e.courseId?.toString())) : rows;
   }
 
+  if (wanted) {
+    if (wanted.length === 0) return [];
+    // El courseId se guardó con el mismo tipo que trae el curso (número en
+    // los cursos actuales): se consulta con ese tipo, no como texto.
+    const typed = (Array.isArray(courseIds) ? courseIds : [courseIds]);
+    const snaps = await Promise.all(typed.map((c) => getDocs(query(collection(db, 'enrollments'), where('courseId', '==', c)))));
+    return snaps.flatMap((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }
   const snapshot = await getDocs(collection(db, 'enrollments'));
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };

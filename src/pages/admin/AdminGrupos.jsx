@@ -1,14 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, scheduleLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
+import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
+import { planScheduleSync } from '../../lib/scheduleSync';
 
 const GROUP_STATUS = {
   open: { label: 'Abierto', cls: 'admin-status-green' },
@@ -63,6 +64,23 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
   const [classLink, setClassLink] = useState(group?.classLink || '');
   const [saving, setSaving] = useState(false);
 
+  // Solo al EDITAR: qué clases tiene ya el aula, cuántas aulas tiene el curso y
+  // las semanas del contenido -- para calcular qué cambiaría en el calendario.
+  const [groupSessions, setGroupSessions] = useState([]);
+  const [siblingCount, setSiblingCount] = useState(1);
+  const [courseModules, setCourseModules] = useState([]);
+  const [syncChoice, setSyncChoice] = useState(null);
+
+  useEffect(() => {
+    if (!group) return;
+    Promise.all([fetchLiveSessions(), fetchGroups(), fetchCourseContent(group.courseId).catch(() => ({ modules: [] }))]).then(([sessions, groups, content]) => {
+      const same = (x) => x?.toString() === group.courseId?.toString();
+      setGroupSessions(sessions.filter((s) => same(s.courseId)));
+      setSiblingCount(groups.filter((g) => same(g.courseId)).length);
+      setCourseModules(content.modules || []);
+    });
+  }, [group]);
+
   useEffect(() => {
     fetchAllUsers().then((users) => setTeachers((users || []).filter((u) => u.role === 'teacher')));
   }, []);
@@ -72,6 +90,24 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
     setInstructorUid(uid);
     setInstructor(t ? (t.displayName || t.email) : '');
   };
+
+  const courseForPlan = courses.find((c) => c.id.toString() === courseId.toString());
+  const weeksForPlan = courseWeeksFromModules(courseModules) || courseForPlan?.duration;
+  const plan = useMemo(() => {
+    if (!group) return null;
+    const slotsOk = validSlots(slots);
+    const common = { existing: groupSessions, groupId: group.id, endDate: endDate || null, closed: status === 'closed', adoptLegacy: siblingCount <= 1, instructor: instructor.trim(), instructorUid };
+    // Sin fecha de inicio u horario válido no se sabe qué clases deberían existir:
+    // no se propone ningún cambio (borrar todo por un campo vacío sería peligroso).
+    if (!startDate || slotsOk.length === 0 || slotsOk.length < slots.length) {
+      return { ...planScheduleSync({ ...common, desired: [] }), toCreate: [], toDelete: [], toUpdate: [], hasChanges: false, invalid: true };
+    }
+    return planScheduleSync({ ...common, desired: buildRecurringSessions({ slots: slotsOk, weeksLabel: String(weeksForPlan) }, startDate) });
+  }, [group, slots, startDate, endDate, status, instructor, instructorUid, groupSessions, siblingCount, weeksForPlan]);
+  // Con calendario ya generado por el sistema se sincroniza por defecto; un aula
+  // sin calendario (o con clases antiguas sin aula asociada) solo si se pide.
+  const applySync = syncChoice ?? ((plan?.mineCount || 0) > 0);
+  const untaggedFuture = groupSessions.filter((s) => !s.groupId && getLiveSessionStatus(s) === 'upcoming').length;
 
   const updateSlot = (id, patch) => setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const addSlot = () => setSlots((prev) => {
@@ -102,9 +138,25 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
       if (group) {
         await updateGroup(group.id, payload);
         await logChange(adminName, `Editó el aula "${payload.name}".`);
-        addToast('Aula actualizada.', 'success');
+        if (applySync && plan?.hasChanges) {
+          // Solo se toca lo futuro y generado por el sistema (lib/scheduleSync.js).
+          const canCreate = !!instructorUid;
+          for (const s of plan.toDelete) await deleteLiveSession(s.id);
+          if (canCreate) {
+            for (const e of plan.toCreate) {
+              await scheduleLiveSession({
+                courseId, courseTitle: course?.title || '', title: e.title, instructor: instructor.trim(), instructorUid,
+                startsAt: e.startsAt, durationMin: e.durationMin, groupId: group.id, generated: true,
+              });
+            }
+          }
+          for (const s of plan.toUpdate) await updateLiveSession(s.id, { instructor: instructor.trim(), instructorUid });
+          addToast(`Aula actualizada. Calendario: ${canCreate ? plan.toCreate.length : 0} nuevas, ${plan.toDelete.length} eliminadas, ${plan.toUpdate.length} con nuevo docente.`, 'success');
+        } else {
+          addToast('Aula actualizada.', 'success');
+        }
       } else {
-        await createGroup(payload);
+        const created = await createGroup(payload);
         await logChange(adminName, `Creó el aula "${payload.name}".`);
 
         // Genera el calendario completo de una vez -- para que el docente ya
@@ -120,7 +172,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
             await scheduleLiveSession({
               courseId, courseTitle: course?.title || '', title: entry.title,
               instructor: instructor.trim(), instructorUid,
-              startsAt: entry.startsAt, durationMin: entry.durationMin,
+              startsAt: entry.startsAt, durationMin: entry.durationMin, groupId: created.id, generated: true,
             });
           }
           if (entries.length === 0) {
@@ -157,7 +209,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
           </div>
           <div className="admin-field">
             <label>Curso</label>
-            <select value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+            <select value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!!group} title={group ? 'Para cambiar de curso crea un aula nueva' : undefined}>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
             </select>
           </div>
@@ -165,7 +217,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
         <div className="admin-field-row">
           <div className="admin-field">
             <label>Fecha de inicio</label>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={!!plan?.hasStarted} title={plan?.hasStarted ? 'El aula ya inició: para un nuevo grupo crea otra aula' : undefined} />
           </div>
           <div className="admin-field">
             <label>Fecha de cierre</label>
@@ -226,6 +278,34 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
           <input value={classLink} onChange={(e) => setClassLink(e.target.value)} placeholder="https://..." />
         </div>
 
+        {group && plan && (
+          <div className={`dash-notice ${plan.mineCount > 0 && plan.futureCount === 0 ? 'warn' : ''}`} style={{ display: 'block', marginTop: 4 }}>
+            <strong style={{ display: 'block', marginBottom: 4 }}>Calendario de clases</strong>
+            {plan.mineCount === 0 ? (
+              <span>
+                Esta aula no tiene un calendario generado por el sistema.
+                {untaggedFuture > 0 ? ` El curso ya tiene ${untaggedFuture} clase(s) futuras sin aula asociada: generarlo podría duplicarlas.` : ''}
+              </span>
+            ) : plan.invalid ? (
+              <span>Completa la fecha de inicio y un horario válido para poder actualizar el calendario de clases.</span>
+            ) : plan.futureCount === 0 && !plan.hasChanges ? (
+              <span>Todas las clases de esta aula ya pasaron. Para un nuevo grupo o una nueva edición, crea otra aula en vez de editar esta.</span>
+            ) : plan.hasChanges ? (
+              <span>
+                Con estos cambios: {plan.toCreate.length} clase(s) nueva(s), {plan.toDelete.length} eliminada(s), {plan.toUpdate.length} con otro docente y {plan.unchanged} sin cambios.
+                Las {plan.pastCount} ya realizadas o canceladas no se tocan, ni las clases sueltas del docente.
+              </span>
+            ) : (
+              <span>Sin cambios en el calendario ({plan.unchanged} clases futuras al día).</span>
+            )}
+            {(plan.hasChanges || plan.mineCount === 0) && (
+              <label className="admin-field-checkbox" style={{ marginTop: 8 }}>
+                <input type="checkbox" checked={applySync} onChange={(e) => setSyncChoice(e.target.checked)} />
+                {plan.mineCount === 0 ? ' Generar el calendario ahora' : ' Aplicar estos cambios al calendario de clases'}
+              </label>
+            )}
+          </div>
+        )}
         <div className="admin-modal-actions">
           <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="admin-btn-edit" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'} <Check size={14} /></button>

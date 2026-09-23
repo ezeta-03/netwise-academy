@@ -72,7 +72,7 @@ const TeacherCourseLayout = () => {
   }, [coursesLoaded, course, isAssigned, navigate, addToast]);
 
   useEffect(() => {
-    Promise.all([fetchGroups(), fetchAllEnrollments()]).then(([groups, enrollments]) => {
+    Promise.all([fetchGroups(), fetchAllEnrollments(courseId)]).then(([groups, enrollments]) => {
       setGroup(groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
       const courseEnrollments = enrollments.filter((e) => e.courseId?.toString() === courseId?.toString());
       setAvgProgress(courseEnrollments.length ? Math.round(courseEnrollments.reduce((s, e) => s + (e.progress || 0), 0) / courseEnrollments.length) : 0);

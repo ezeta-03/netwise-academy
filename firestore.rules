@@ -18,6 +18,20 @@ service cloud.firestore {
       return isSignedIn() && (myRole() == 'teacher' || myRole() == 'admin');
     }
 
+    // Un docente solo gobierna los cursos que el Admin le asignó
+    // (courseOfferings/{curso}.teacherUid, ver Admin > Cursos). `courseIdStr`
+    // es el id del curso como texto (los ids de los docs guardan el número).
+    function isCourseTeacher(courseIdStr) {
+      return isSignedIn() && myRole() == 'teacher'
+        && exists(/databases/$(database)/documents/courseOfferings/$(courseIdStr))
+        && get(/databases/$(database)/documents/courseOfferings/$(courseIdStr)).data.teacherUid == request.auth.uid;
+    }
+
+    // Admin (cualquier curso) o el docente asignado a ese curso.
+    function canManageCourse(courseIdStr) {
+      return isAdmin() || isCourseTeacher(courseIdStr);
+    }
+
     // Catálogo público: cualquiera puede leer, solo un admin escribe
     // (la app hoy no tiene un flujo de escritura desde el cliente para
     // estas colecciones; se editan vía consola o el script scripts/seed.mjs).
@@ -44,15 +58,15 @@ service cloud.firestore {
     // reproductor, que ya requiere sesión); solo docentes/admin lo editan.
     match /courseContent/{courseId} {
       allow read: if isSignedIn();
-      allow write: if isTeacherOrAdmin();
+      allow write: if canManageCourse(courseId);
     }
 
     // Rúbrica de evaluación del curso (ver TeacherCourseRubrica.jsx): a
     // diferencia de courseContent, es exclusiva del docente -- el estudiante
     // nunca la lee, ni siquiera los descriptores de nivel.
     match /courseRubrics/{courseId} {
-      allow read: if isTeacherOrAdmin();
-      allow write: if isTeacherOrAdmin();
+      allow read: if canManageCourse(courseId);
+      allow write: if canManageCourse(courseId);
     }
 
     // Copia pública del temario (solo título/semanas de cada módulo, sin
@@ -62,7 +76,7 @@ service cloud.firestore {
     // junto con `courseContent`, así que mismo permiso de escritura.
     match /courseSummaries/{courseId} {
       allow read: if true;
-      allow write: if isTeacherOrAdmin();
+      allow write: if canManageCourse(courseId);
     }
 
     // Clases en vivo: cualquier usuario autenticado puede verlas. Solo
@@ -76,8 +90,11 @@ service cloud.firestore {
     // clase de otro, que sí seguimos evitando.
     match /liveSessions/{sessionId} {
       allow read: if isSignedIn();
-      allow create: if isTeacherOrAdmin() && request.resource.data.instructorUid == request.auth.uid;
-      allow update, delete: if isTeacherOrAdmin();
+      // Admin programa clases (incluido el calendario que genera al crear un
+      // aula, a nombre del docente del aula); un docente solo las de SU curso
+      // y a su nombre.
+      allow create: if isAdmin() || (isCourseTeacher(string(request.resource.data.courseId)) && request.resource.data.instructorUid == request.auth.uid);
+      allow update, delete: if canManageCourse(string(resource.data.courseId));
     }
 
     // Preinscripciones ("me interesa este taller"): un alumno solo puede
@@ -113,16 +130,19 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
                     resource == null ||
                     resource.data.uid == request.auth.uid ||
-                    isTeacherOrAdmin() ||
+                    canManageCourse(string(resource.data.courseId)) ||
                     exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + string(resource.data.courseId)))
                   );
       allow create: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isAdmin());
       // Un alumno solo actualiza su avance (lecciones completadas / progreso):
       // no puede cambiarse el estado, el aula ni el seguimiento de su matrícula.
+      // El docente asignado a ese curso solo puede tocar el seguimiento
+      // (followUp); estado/aula/acceso de la matrícula son del Admin.
       allow update: if isSignedIn() && (
                       (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid
                         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'courseId', 'completedLessonIds', 'progress', 'updatedAt'])) ||
-                      isTeacherOrAdmin()
+                      isAdmin() ||
+                      (isCourseTeacher(string(resource.data.courseId)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followUp']))
                     );
       // Solo el admin borra -- para limpiar matrículas de prueba desde
       // Admin > Alumnos y accesos (ver deleteEnrollment en lib/db.js).
@@ -210,8 +230,8 @@ service cloud.firestore {
     // suyo (el id lleva su uid) sin tocar nota ni comentario: nota y estado
     // 'reviewed' los pone solo el docente/admin.
     match /submissions/{submissionId} {
-      allow read: if isSignedIn() && (isTeacherOrAdmin() || resource.data.uid == request.auth.uid);
-      allow create: if isTeacherOrAdmin() || (
+      allow read: if isSignedIn() && (canManageCourse(string(resource.data.courseId)) || resource.data.uid == request.auth.uid);
+      allow create: if canManageCourse(string(request.resource.data.courseId)) || (
         isSignedIn()
         && request.resource.data.uid == request.auth.uid
         && submissionId.matches(request.auth.uid + '_.*')
@@ -219,7 +239,7 @@ service cloud.firestore {
         && !('grade' in request.resource.data)
         && !('feedback' in request.resource.data)
       );
-      allow update: if isTeacherOrAdmin() || (
+      allow update: if canManageCourse(string(resource.data.courseId)) || (
         isSignedIn()
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid
@@ -227,14 +247,15 @@ service cloud.firestore {
         && request.resource.data.get('grade', null) == resource.data.get('grade', null)
         && request.resource.data.get('feedback', null) == resource.data.get('feedback', null)
       );
-      allow delete: if isTeacherOrAdmin();
+      allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
     // Asistencia por sesión: un doc por alumno+sesión. La toma el docente
     // (columna clicable en Asistencia); el alumno solo la lee (Mi asistencia).
     match /attendance/{attendanceId} {
-      allow read: if isSignedIn() && (isTeacherOrAdmin() || resource.data.uid == request.auth.uid);
-      allow write: if isTeacherOrAdmin();
+      allow read: if isSignedIn() && (canManageCourse(string(resource.data.courseId)) || resource.data.uid == request.auth.uid);
+      allow create, update: if canManageCourse(string(request.resource.data.courseId));
+      allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
     // Grupos de trabajo del proyecto (equipos que arman los alumnos, o que
@@ -244,7 +265,7 @@ service cloud.firestore {
     match /workGroups/{groupId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn();
-      allow delete: if isTeacherOrAdmin();
+      allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
     // Comunidad de un curso/grupo. Cualquier alumno/docente del curso lee;
@@ -252,7 +273,8 @@ service cloud.firestore {
     // array `comments` vía update) los agrega cualquier usuario logueado.
     match /communityPosts/{postId} {
       allow read: if isSignedIn();
-      allow create: if isTeacherOrAdmin();
+      // Anuncios: solo el admin o el docente asignado a ese curso.
+      allow create: if canManageCourse(string(request.resource.data.courseId));
       allow update: if isSignedIn();
       allow delete: if false;
     }
@@ -281,7 +303,7 @@ service cloud.firestore {
     // `resource == null` cubre el `get()` que hace fetchProjectProfile antes
     // de que el alumno haya definido su proyecto todavía.
     match /projectProfiles/{profileId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || canManageCourse(string(resource.data.courseId)));
       allow write: if isSignedIn() && request.resource.data.uid == request.auth.uid;
     }
 
@@ -290,7 +312,7 @@ service cloud.firestore {
     // `resource == null` cubre el `get()` que hace toggleProjectAdvance
     // antes de que exista el doc.
     match /projectAdvances/{advanceId} {
-      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || isTeacherOrAdmin());
+      allow read: if isSignedIn() && (resource == null || resource.data.uid == request.auth.uid || canManageCourse(string(resource.data.courseId)));
       allow write: if isSignedIn() && request.resource.data.uid == request.auth.uid;
     }
 

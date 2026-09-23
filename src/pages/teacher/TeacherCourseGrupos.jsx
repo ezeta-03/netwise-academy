@@ -116,7 +116,7 @@ const TeacherCourseGrupos = () => {
   const [activeRoom, setActiveRoom] = useState(null);
 
   const load = useCallback(() => {
-    Promise.all([fetchAllEnrollments(), fetchWorkGroups(course.id), fetchPrivateRooms(course.id)]).then(([enrollments, wg, rms]) => {
+    Promise.all([fetchAllEnrollments(course.id), fetchWorkGroups(course.id), fetchPrivateRooms(course.id)]).then(([enrollments, wg, rms]) => {
       setRoster(enrollments.filter((e) => e.courseId?.toString() === course.id.toString()).map((e) => ({ uid: e.uid, studentName: e.studentName || e.uid })));
       setGroups(wg);
       setRooms(rms);
