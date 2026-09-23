@@ -16,7 +16,9 @@ import { courseRoster } from '../src/lib/roster.js';
 // ---------------------------------------------------------------------------
 // TeacherCourseCronograma.jsx (filas/estado; endWeekOf/fechas: lib/deliveryDates.js; roster: lib/roster.js)
 // ---------------------------------------------------------------------------
-const cronograma = (modules, group, roster = [], subs = [], scores = [], courseId = 99) => {
+// `now` fijo antes de las fechas de los casos (marzo 2026) para que nada esté vencido salvo que el caso lo pida.
+const BEFORE_ALL = new Date('2026-03-01T00:00:00-05:00').getTime();
+const cronograma = (modules, group, roster = [], subs = [], scores = [], courseId = 99, now = BEFORE_ALL) => {
   // Mismos componentes y pesos que el Registro de notas (lib/gradingScheme.js).
   const model = getGradingModel(courseId, modules);
   const resolved = resolveWeights(modules);
@@ -32,7 +34,9 @@ const cronograma = (modules, group, roster = [], subs = [], scores = [], courseI
   const moduleRows = moduleComps.map((c, i) => {
     const m = c.module;
     const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
-    const status = isGraded(m.id) ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
+    // Vence al final del día de entrega (23:59, hora de Perú); sin calificar y vencida -> 'overdue'.
+    const isOverdue = !!dueIso && now > new Date(`${dueIso}T23:59:59-05:00`).getTime();
+    const status = isGraded(m.id) ? 'graded' : (isOverdue ? 'overdue' : (i === firstOpenIdx ? 'current' : 'scheduled'));
     const label = moduleLabel(model, i, moduleComps.length);
     return { id: m.id, dueIso, status, weight: c.weight, explicit: model.hasScheme || resolved.rows[i]?.explicit, graded: gradedCount(m.id), name: `${label} · ${m.title}` };
   });
@@ -40,7 +44,9 @@ const cronograma = (modules, group, roster = [], subs = [], scores = [], courseI
     id: c.key, dueIso: null, status: isManualGraded(c.key) ? 'graded' : 'scheduled', weight: c.weight, explicit: true, graded: scoredUids(c.key).size, name: c.label,
   }));
   const rows = [...moduleRows, ...manualRows];
-  const nextRow = moduleRows[firstOpenIdx] || manualRows.find((r) => r.status !== 'graded');
+  const nextRow = moduleRows.find((r) => r.status === 'current' || r.status === 'scheduled')
+    || moduleRows.find((r) => r.status === 'overdue')
+    || manualRows.find((r) => r.status !== 'graded');
   const totalWeight = model.total;
   const weightsOk = Math.abs(totalWeight - 100) <= 0.05;
   const formula = rows.length > 0 ? `PF = ${model.components.map((c) => `${c.label} × ${c.weight}%`).join(' + ')}` : null;
@@ -132,6 +138,44 @@ describe('Cronograma: filas, estado, pesos y fórmula', () => {
       const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [rev('u1', 'b')]);
       assert.deepEqual(c.rows.map((r) => r.status), ['current', 'graded', 'scheduled']);
       assert.equal(c.nextRow.id, 'a');
+    });
+    describe('entregas vencidas (fecha pasada sin calificar)', () => {
+      // mods: fechas de entrega 2026-03-12, 03-19, 03-26 (GROUP: martes y jueves desde 2026-03-10).
+      const at = (iso) => new Date(iso).getTime();
+      test('el mismo día de la entrega, hasta las 23:59 (Perú), todavía no vence; un minuto después sí', () => {
+        const roster = [{ uid: 'u1' }];
+        assert.equal(cronograma(mods, GROUP, roster, [], [], 99, at('2026-03-12T23:59:00-05:00')).rows[0].status, 'current');
+        assert.equal(cronograma(mods, GROUP, roster, [], [], 99, at('2026-03-13T00:00:00-05:00')).rows[0].status, 'overdue');
+      });
+      test('lo ya calificado nunca es "Vencida"', () => {
+        const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [rev('u1', 'a')], [], 99, at('2026-06-01T00:00:00-05:00'));
+        assert.deepEqual(c.rows.map((r) => r.status), ['graded', 'overdue', 'overdue']);
+      });
+      test('próxima evaluación: salta a la primera vigente aunque haya vencidas antes', () => {
+        const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [], [], 99, at('2026-03-20T12:00:00-05:00'));
+        assert.deepEqual(c.rows.map((r) => r.status), ['overdue', 'overdue', 'scheduled']);
+        assert.equal(c.nextRow.id, 'c');
+      });
+      test('si todas vencieron sin calificar, la próxima es la primera pendiente (vencida)', () => {
+        const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [], [], 99, at('2026-09-23T12:00:00-05:00'));
+        assert.deepEqual(c.rows.map((r) => r.status), ['overdue', 'overdue', 'overdue']);
+        assert.equal(c.nextRow.id, 'a');
+      });
+      test('sin aula (sin fecha) no hay vencimiento', () => {
+        const c = cronograma(mods, null, [{ uid: 'u1' }], [], [], 99, at('2030-01-01T00:00:00-05:00'));
+        assert.ok(c.rows.every((r) => r.status !== 'overdue'));
+      });
+      test('una fecha manual del entregable (dueDate) también vence', () => {
+        const m2 = [M('a', 'Semana 1', D(100, { dueDate: '2026-05-01' }))];
+        assert.equal(cronograma(m2, GROUP, [{ uid: 'u1' }], [], [], 99, at('2026-05-02T00:00:00-05:00')).rows[0].status, 'overdue');
+        assert.equal(cronograma(m2, GROUP, [{ uid: 'u1' }], [], [], 99, at('2026-05-01T20:00:00-05:00')).rows[0].status, 'current');
+      });
+      test('las filas manuales no tienen fecha y nunca vencen', () => {
+        const four4 = ['a', 'b', 'c', 'd'].map((id, i) => M(id, `Semana ${i + 1}`, D()));
+        const c = cronograma(four4, GROUP, [{ uid: 'u1' }], [], [], 2, at('2030-01-01T00:00:00-05:00'));
+        assert.equal(c.manualRows[0].status, 'scheduled');
+        assert.equal(c.manualRows[0].dueIso, null);
+      });
     });
     test('todos los módulos calificados: ninguno "current" y no hay próxima evaluación', () => {
       const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [rev('u1', 'a'), rev('u1', 'b'), rev('u1', 'c')]);
@@ -879,10 +923,15 @@ describe('Cronograma con esquema de calificación', () => {
       assert.equal(cronograma(four, GROUP, [], [], [], 4).warnings.missingWeights, false);
       assert.equal(cronograma(four, GROUP, [], [], [], 99).warnings.missingWeights, true);
     });
-    test('con esquema y 3 de 4 entregables el docente debería ser avisado de que se ignoraron los pesos [20,25,25,30]', { todo: 'DISEÑO gradingScheme.js:79 / TeacherCourseCronograma.jsx - moduleWeights.length !== nº de entregables cae en silencio a partes iguales (total 99.99 pasa la tolerancia); no hay flag en el modelo ni aviso' }, () => {
+    test('con esquema y 3 de 4 entregables el modelo avisa (moduleCountMismatch) y reparte en partes iguales', () => {
       const three = [M('a', 'S1', D()), M('b', 'S2', D()), M('c', 'S3', D())];
       const c = cronograma(three, GROUP, [], [], [], 1);
-      assert.ok(c.model.blocks[0].components.some((x) => x.weightInBlock !== 33.33), 'se aplicó el reparto por defecto sin avisar');
+      assert.deepEqual(c.model.moduleCountMismatch, { expected: 4, actual: 3 });
+      assert.deepEqual(c.model.blocks[0].components.map((x) => x.weightInBlock), [33.33, 33.33, 33.33]);
+      // con el número de entregables previsto no hay aviso
+      assert.equal(cronograma(four, GROUP, [], [], [], 1).model.moduleCountMismatch, null);
+      // curso sin esquema tampoco avisa
+      assert.equal(cronograma(three, GROUP, [], [], [], 99).model.moduleCountMismatch, undefined);
     });
     test('una fila manual con nota no numérica ("") en el almacén cuenta como calificada en el Cronograma pero no en el Registro', { todo: 'BAJO TeacherCourseCronograma.jsx (scoredUids: != null) vs gradingScheme.js:106-108 (Number.isFinite): score "" cuenta como calificado en un lado y sin nota en el otro' }, () => {
       const c = cronograma(four, GROUP, [{ uid: 'u1' }], [], [{ uid: 'u1', scores: { sustentacion: '' } }], 2).manualRows[0];

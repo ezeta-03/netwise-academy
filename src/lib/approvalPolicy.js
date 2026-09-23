@@ -3,6 +3,11 @@
 // cálculo (lib/approval.js), así lo que se lee y lo que se evalúa no se separan.
 import { APPROVAL } from './approval.js';
 
+// Un curso aparece acá solo cuando coordinación confirma que le aplican estos
+// requisitos. Marketing Digital (3) y Creación de Negocios Digitales (4) se
+// suman el día que llegue su información: agregar `3: 'Según sílabo ...'` (y, si
+// sus reglas difieren, un `buildPolicy` propio) -- hasta entonces el Cronograma
+// avisa que aún no tiene requisitos cargados.
 const SYLLABUS_BADGE = {
   1: 'Según sílabo EDRRSS', // Estrategias de Redes Sociales
   2: 'Según sílabo BGM',    // Branding & Gestión de Marca
