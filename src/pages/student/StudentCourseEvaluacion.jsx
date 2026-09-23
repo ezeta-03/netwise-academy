@@ -45,6 +45,9 @@ const EvalSidePanel = ({ vista, setVista, summary }) => (
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia</span><strong>{summary.asistenciaPct === null ? '—' : `${summary.asistenciaPct}%`}</strong></div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estado</span><span className={`admin-status ${summary.overall === 'regular' ? 'admin-status-green' : summary.overall === 'substitute' ? 'admin-status-amber' : 'admin-status-violet'}`}>{summary.overall === 'regular' ? 'Aprobado' : summary.overall === 'substitute' ? 'Sustitutoria' : 'En curso'}</span></div>
+        {summary.asistenciaPct !== null && summary.asistenciaPct < APPROVAL.minAttendancePct && (
+          <span className="admin-cell-sub" style={{ color: 'var(--danger, #BE123C)' }}>Asistencia bajo el {APPROVAL.minAttendancePct}%: la nota no alcanza para la constancia de asistencia.</span>
+        )}
       </div>
     </div>
   </>

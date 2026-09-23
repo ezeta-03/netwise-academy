@@ -19,6 +19,7 @@ const STATUS_BADGE = {
   graded: { label: 'Calificado', cls: 'admin-status-green' },
   current: { label: 'En curso', cls: 'admin-status-amber' },
   scheduled: { label: 'Programado', cls: 'admin-status-violet' },
+  overdue: { label: 'Vencida', cls: 'admin-status-rose' },
 };
 
 const TeacherCourseCronograma = () => {
@@ -31,6 +32,8 @@ const TeacherCourseCronograma = () => {
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Fecha de referencia fija durante la sesión de la página (evita llamar Date.now() en el render).
+  const [now] = useState(() => Date.now());
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments(course.id), fetchCourseGrades(course.id)]).then(([content, rubric, submissions, enrollments, grades]) => {
@@ -68,7 +71,9 @@ const TeacherCourseCronograma = () => {
   const moduleRows = moduleComps.map((c, i) => {
     const m = c.module;
     const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
-    const status = isGraded(m.id) ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
+    // Vence al final del día de entrega (23:59, hora de Perú); sin calificar y vencida -> 'overdue'.
+    const isOverdue = !!dueIso && now > new Date(`${dueIso}T23:59:59-05:00`).getTime();
+    const status = isGraded(m.id) ? 'graded' : (isOverdue ? 'overdue' : (i === firstOpenIdx ? 'current' : 'scheduled'));
     const label = model.hasScheme ? `Entregable M${i + 1}` : deliverableLabel(i, moduleComps.length);
     return {
       id: m.id, sub: m.deliverable?.description, weeks: m.weeksLabel || '—', dueIso, status, weight: c.weight,
@@ -82,7 +87,11 @@ const TeacherCourseCronograma = () => {
   }));
   const rows = [...moduleRows, ...manualRows];
 
-  const nextRow = moduleRows[firstOpenIdx] || manualRows.find((r) => r.status !== 'graded');
+  // Próxima evaluación: el primer entregable sin calificar que aún no venció; si todos
+  // vencieron, el primero pendiente (que se muestra como vencido).
+  const nextRow = moduleRows.find((r) => r.status === 'current' || r.status === 'scheduled')
+    || moduleRows.find((r) => r.status === 'overdue')
+    || manualRows.find((r) => r.status !== 'graded');
   const totalWeight = model.total;
   const weightsOk = Math.abs(totalWeight - 100) <= 0.05;
   const formula = rows.length > 0 ? `PF = ${model.components.map((c) => `${c.label} × ${c.weight}%`).join(' + ')}` : null;

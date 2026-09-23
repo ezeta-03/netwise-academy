@@ -58,7 +58,7 @@ test('mulberry32: determinista, en [0,1) y con semillas distintas da secuencias 
 
 // ------------------------------------------------------ utilidades base ----
 const clamp = (n) => Math.min(20, Math.max(0, n));
-const round2 = (n) => Math.round(n * 100) / 100;
+const round2 = (n) => Math.round((n + 1e-9) * 100) / 100;
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
 const dm = (id, extra = {}) => ({ id, title: `T-${id}`, deliverable: { description: `d-${id}`, ...extra } });
 const mods = (n) => Array.from({ length: n }, (_, i) => dm(`m${i + 1}`));

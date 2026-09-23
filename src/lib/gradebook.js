@@ -37,7 +37,8 @@ export const computeGradeSummary = (rows) => {
   const rawAverage = weightSum > 0
     ? graded.reduce((s, r) => s + r.grade * (r.weight || 0), 0) / weightSum
     : (graded.length ? graded.reduce((s, r) => s + r.grade, 0) / graded.length : null);
-  const promedioParcial = rawAverage !== null ? Math.round(rawAverage * 100) / 100 : null;
+  // +1e-9: 17.525 (guardado como 17.52499...) debe redondear a 17.53, no a 17.52.
+  const promedioParcial = rawAverage !== null ? Math.round((rawAverage + 1e-9) * 100) / 100 : null;
   return {
     promedioParcial,
     rendimientoPct: promedioParcial !== null ? Math.round((promedioParcial / MAX_GRADE) * 100) : null,

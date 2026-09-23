@@ -134,7 +134,13 @@ service cloud.firestore {
                     canManageCourse(string(resource.data.courseId)) ||
                     exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + string(resource.data.courseId)))
                   );
-      allow create: if isSignedIn() && (request.resource.data.uid == request.auth.uid || isAdmin());
+      // El alumno solo crea SU matrícula (id `${uid}_${courseId}`) y solo con los campos
+      // de inscripción/avance: no puede fijarse estado, aula ni seguimiento.
+      allow create: if isSignedIn() && (isAdmin() || (
+        request.resource.data.uid == request.auth.uid
+        && enrollmentId == request.auth.uid + '_' + string(request.resource.data.courseId)
+        && request.resource.data.keys().hasOnly(['uid', 'courseId', 'courseTitle', 'studentName', 'studentEmail', 'enrolledAt', 'completedLessonIds', 'progress', 'updatedAt'])
+      ));
       // Un alumno solo actualiza su avance (lecciones completadas / progreso):
       // no puede cambiarse el estado, el aula ni el seguimiento de su matrícula.
       // El docente asignado a ese curso solo puede tocar el seguimiento
@@ -165,7 +171,8 @@ service cloud.firestore {
                             && resource.data.role == 'admin'
                             && request.resource.data.role != 'admin')) ||
                     (isSignedIn() && request.auth.uid == userId
-                     && request.resource.data.role == resource.data.role);
+                     && request.resource.data.role == resource.data.role
+                     && request.resource.data.get('disabled', false) == resource.data.get('disabled', false));
       // Solo el admin borra -- para limpiar cuentas de prueba desde
       // Admin > Equipo y permisos (ver deleteUserProfile en lib/db.js). Ojo:
       // esto borra el perfil/rol en Firestore, no la cuenta de Firebase Auth
