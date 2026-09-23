@@ -5,8 +5,9 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
+import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, scheduleLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
+import { buildRecurringSessions } from '../../lib/liveScheduleGenerator';
 
 const GROUP_STATUS = {
   open: { label: 'Abierto', cls: 'admin-status-green' },
@@ -16,9 +17,16 @@ const GROUP_STATUS = {
 
 // Horarios reales que ya dicta algún curso (data.js), para elegir en vez de
 // escribir uno nuevo a mano -- evita horarios inconsistentes entre aulas.
-const buildScheduleOptions = (courses) => [...new Set(
-  courses.filter((c) => c.scheduleDays?.length && c.scheduleTime).map((c) => `${c.scheduleDays.join(' y ')} · ${c.scheduleTime}`)
-)];
+// Se guardan días/hora por separado (no solo el texto) porque hacen falta
+// para generar el calendario de clases al crear el aula.
+const buildScheduleOptions = (courses) => {
+  const map = new Map();
+  courses.filter((c) => c.scheduleDays?.length && c.scheduleTime).forEach((c) => {
+    const label = `${c.scheduleDays.join(' y ')} · ${c.scheduleTime}`;
+    if (!map.has(label)) map.set(label, { label, days: c.scheduleDays, time: c.scheduleTime });
+  });
+  return [...map.values()];
+};
 
 const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
   const { addToast } = useUI();
@@ -27,9 +35,10 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
   const [startDate, setStartDate] = useState(group?.startDate || '');
   const [endDate, setEndDate] = useState(group?.endDate || '');
   const scheduleOptions = buildScheduleOptions(courses);
-  const [scheduleTime, setScheduleTime] = useState(group?.scheduleTime || group?.scheduleDays || scheduleOptions[0] || '');
+  const [scheduleTime, setScheduleTime] = useState(group?.scheduleTime || scheduleOptions[0]?.label || '');
   const [teachers, setTeachers] = useState([]);
   const [instructor, setInstructor] = useState(group?.instructor || '');
+  const [instructorUid, setInstructorUid] = useState(group?.instructorUid || '');
   const [capacity, setCapacity] = useState(group?.capacity ?? 30);
   const [status, setStatus] = useState(group?.status || 'to-open');
   const [classLink, setClassLink] = useState(group?.classLink || '');
@@ -39,6 +48,12 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
     fetchAllUsers().then((users) => setTeachers((users || []).filter((u) => u.role === 'teacher')));
   }, []);
 
+  const handleSelectInstructor = (uid) => {
+    const t = teachers.find((u) => u.uid === uid);
+    setInstructorUid(uid);
+    setInstructor(t ? (t.displayName || t.email) : '');
+  };
+
   const handleSave = async () => {
     if (!name.trim() || !instructor.trim()) { addToast('Nombre de aula y docente son obligatorios.', 'error'); return; }
     setSaving(true);
@@ -47,7 +62,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
       const payload = {
         name: name.trim(), courseId, courseTitle: course?.title || '',
         startDate: startDate || null, endDate: endDate || null,
-        scheduleTime: scheduleTime.trim(), instructor: instructor.trim(),
+        scheduleTime: scheduleTime.trim(), instructor: instructor.trim(), instructorUid: instructorUid || null,
         capacity: Number(capacity) || 0, status, classLink: classLink.trim() || null,
       };
       if (group) {
@@ -57,7 +72,23 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
       } else {
         await createGroup(payload);
         await logChange(adminName, `Creó el aula "${payload.name}".`);
-        addToast('Aula creada.', 'success');
+
+        // Genera el calendario completo de una vez -- para que el docente ya
+        // tenga todo listo al entrar, en vez de tener que armarlo él mismo.
+        const scheduleOpt = scheduleOptions.find((o) => o.label === scheduleTime.trim());
+        if (startDate && scheduleOpt && instructorUid) {
+          const entries = buildRecurringSessions({ scheduleDays: scheduleOpt.days, scheduleTime: scheduleOpt.time, weeksLabel: course?.duration }, startDate);
+          for (const entry of entries) {
+            await scheduleLiveSession({
+              courseId, courseTitle: course?.title || '', title: entry.title,
+              instructor: instructor.trim(), instructorUid,
+              startsAt: entry.startsAt, durationMin: entry.durationMin,
+            });
+          }
+          addToast(`Aula creada y ${entries.length} clases programadas.`, 'success');
+        } else {
+          addToast('Aula creada. Agrega fecha de inicio para generar el calendario de clases.', 'info');
+        }
       }
       onSaved();
       onClose();
@@ -104,7 +135,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
             <label>Horario · hora de Perú</label>
             <select value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}>
               {scheduleOptions.length === 0 && <option value="">Sin horarios definidos todavía</option>}
-              {scheduleOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              {scheduleOptions.map((s) => <option key={s.label} value={s.label}>{s.label}</option>)}
             </select>
           </div>
           <div className="admin-field">
@@ -115,9 +146,9 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
         <div className="admin-field-row">
           <div className="admin-field">
             <label>Docente responsable</label>
-            <select value={instructor} onChange={(e) => setInstructor(e.target.value)}>
+            <select value={instructorUid} onChange={(e) => handleSelectInstructor(e.target.value)}>
               <option value="">Sin asignar</option>
-              {teachers.map((t) => <option key={t.uid} value={t.displayName || t.email}>{t.displayName || t.email}</option>)}
+              {teachers.map((t) => <option key={t.uid} value={t.uid}>{t.displayName || t.email}</option>)}
             </select>
           </div>
           <div className="admin-field">
