@@ -6,6 +6,7 @@ import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
 import { isPendingUrl, isSafeLink } from '../../lib/placeholders';
+import { getGradingScheme } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -171,7 +172,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   );
 };
 
-const ModuleEditForm = ({ module, onSave, onCancel }) => {
+const ModuleEditForm = ({ module, weightLocked, onSave, onCancel }) => {
   const [title, setTitle] = useState(module.title);
   const [weeksLabel, setWeeksLabel] = useState(module.weeksLabel || '');
   const [objective, setObjective] = useState(module.objective || '');
@@ -196,7 +197,7 @@ const ModuleEditForm = ({ module, onSave, onCancel }) => {
       <div className="admin-field-row">
         <div className="admin-field" style={{ flex: 1 }}><label>Entregable</label><textarea rows={2} value={deliverable} onChange={(e) => setDeliverable(e.target.value)} /></div>
         <div className="admin-field"><label>Fecha límite (opcional)</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
-        <div className="admin-field"><label>Peso en la nota final (%)</label><input type="number" min="0" max="100" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="Ej. 25" /></div>
+        <div className="admin-field"><label>Peso en la nota final (%)</label><input type="number" min="0" max="100" value={weightLocked ? '' : weight} onChange={(e) => setWeight(e.target.value)} placeholder={weightLocked ? 'Lo fija el esquema de notas' : 'Ej. 25'} disabled={weightLocked} /></div>
       </div>
       <div className="admin-field"><label>Tu entregable debe incluir (uno por línea)</label><textarea rows={4} value={checklist} onChange={(e) => setChecklist(e.target.value)} /></div>
       <div className="admin-modal-actions">
@@ -339,7 +340,7 @@ const TeacherCourseContenido = () => {
       <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
         <div>
           {editingModule ? (
-            <ModuleEditForm module={selected} onSave={saveModule} onCancel={() => setEditingModule(false)} />
+            <ModuleEditForm module={selected} weightLocked={!!getGradingScheme(course.id)} onSave={saveModule} onCancel={() => setEditingModule(false)} />
           ) : (
             <>
               <span className="dash-eyebrow">{selected.weeksLabel ? `${selected.title.toUpperCase()} · ${selected.weeksLabel}` : selected.title.toUpperCase()}</span>

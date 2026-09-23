@@ -1556,6 +1556,24 @@ body::before {
    empujaba el panel lateral fuera de pantalla. Con min-width:0 la columna se
    queda en su sitio y la tabla se desplaza dentro de .admin-table-wrap. */
 .admin-two-col > * { min-width: 0; }
+
+/* Registro de notas (docente): bloques con peso, celdas editables */
+.grade-grid { min-width: 640px; }
+.grade-grid thead th { text-align: center; font-size: .7rem; line-height: 1.25; vertical-align: middle; }
+.grade-grid thead th.grade-grid-student { text-align: left; }
+.grade-block-head { background: var(--accent-bg); color: #14141F; text-transform: uppercase; letter-spacing: .02em; font-weight: 700; }
+.grade-block-head.manual { background: #EFE7FF; min-width: 110px; }
+.grade-sub-head span { display: block; color: #8B8A9B; font-weight: 400; text-transform: none; }
+.grade-grid td { text-align: center; }
+.grade-grid td.admin-cell-name { text-align: left; }
+.grade-grid .grade-grid-student { position: sticky; left: 0; z-index: 1; background: #fff; }
+.grade-grid thead .grade-grid-student { background: #FAFAFD; }
+.grade-grid-input {
+  width: 52px; text-align: center; border: 1px solid #E4E1EE; border-radius: 8px; padding: 7px 4px;
+  font: inherit; font-size: .82rem; background: #fff; color: #14141F;
+}
+.grade-grid-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.grade-grid-input::placeholder { color: #B4B2C4; }
 .admin-stats-grid > * { min-width: 0; }
 .admin-panel { background: #fff; border: 1px solid #ECEAF3; border-radius: 14px; padding: 22px 24px; }
 .admin-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -2171,3 +2189,5 @@ body::before {
 }
 .grade-cell-input:focus { border-color: var(--accent); outline: none; }
 
+
+.grade-student-block td { background: var(--accent-bg); color: #14141F; font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; }

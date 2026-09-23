@@ -5,11 +5,12 @@ import {
   Download, Save, ExternalLink,
 } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance } from '../../lib/db';
-import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
-import { resolveWeights, deliverableModules } from '../../lib/weights';
+import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore } from '../../lib/db';
+import { computeGradeSummary } from '../../lib/gradebook';
+import { getGradingModel, buildStudentRows, effectiveModuleWeights } from '../../lib/gradingScheme';
+import { deliverableModules } from '../../lib/weights';
 import { downloadCsv as downloadCsvFile } from '../../lib/csv';
-import { APPROVAL, evaluateApproval } from '../../lib/approval';
+import { APPROVAL } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
 import { attendanceStats } from '../../lib/attendance';
 import { courseRoster } from '../../lib/roster';
@@ -28,12 +29,6 @@ const formatDate = (iso) => {
 
 // Escapado, protección contra fórmulas y BOM viven en lib/csv.js.
 const downloadCsv = (filename, rows) => downloadCsvFile(filename, rows[0], rows.slice(1));
-
-const APPROVAL_BADGE = {
-  pending: { label: 'En curso', cls: 'admin-status-violet' },
-  regular: { label: 'Aprobado', cls: 'admin-status-green' },
-  substitute: { label: 'Sustitutoria', cls: 'admin-status-amber' },
-};
 
 const NAV_ITEMS = [
   { key: 'entregas', label: 'Entregas y revisión', sub: 'Revisa y califica', icon: ClipboardCheck },
@@ -194,7 +189,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
       <div className="admin-toolbar" style={{ gap: 8, marginBottom: 16 }}>
         {withDeliverable.map((m, i) => (
           <button key={m.id} className="admin-btn-ghost" style={m.id === module.id ? { background: 'var(--accent-bg)', color: 'var(--accent)', borderColor: 'transparent' } : undefined} onClick={() => setModuleId(m.id)}>
-            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{resolveWeights(withDeliverable).rows.find((r) => r.module.id === m.id)?.weight}%</span>
+            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{effectiveModuleWeights(course.id, modules)[m.id]}%</span>
           </button>
         ))}
       </div>
@@ -244,51 +239,120 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
 
 // --- Subvista: Registro de notas ---
 
-const RegistroNotas = ({ course, modules, roster, submissions }) => {
-  const withDeliverable = modules.filter((m) => m.deliverable?.description);
-  const weightById = Object.fromEntries(resolveWeights(withDeliverable).rows.map((r) => [r.module.id, r.weight]));
+const RegistroNotas = ({ course, modules, roster, submissions, attendance, scores, onGradeSaved }) => {
+  const { addToast } = useUI();
+  const model = getGradingModel(course.id, modules);
+  const sessions = getOrderedSessions(modules);
+  const scoresByUid = Object.fromEntries((scores || []).map((g) => [g.uid, g.scores || {}]));
 
   const rowsByStudent = roster.map((r) => {
-    const byModule = {};
-    withDeliverable.forEach((m) => { byModule[m.id] = submissions.find((s) => s.uid === r.uid && s.moduleId === m.id) || null; });
-    const gradeRows = buildGradebookRows(withDeliverable, byModule);
-    const summary = computeGradeSummary(gradeRows);
-    return { ...r, gradeRows, summary };
+    const gradeRows = buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid]);
+    return { ...r, gradeRows, summary: computeGradeSummary(gradeRows), att: attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)) };
   });
 
+  // Guarda la nota de una celda al salir del campo. Módulo -> queda como entrega
+  // revisada con esa nota; componente manual -> courseGrades. Vacío borra solo
+  // las manuales (la nota de un módulo se corrige, no se borra).
+  const saveCell = async (student, comp, text, current) => {
+    const clean = String(text).trim().replace(',', '.');
+    if (clean === '') {
+      if (comp.kind !== 'manual') return current === null; // la nota de un módulo no se borra: se restaura
+      if (current === null) return true;
+    }
+    // Solo decimales simples: nada de "0x10" ni "1e1" (Number() los aceptaría).
+    const n = clean === '' ? null : (/^\d+(\.\d+)?$/.test(clean) ? Number(clean) : NaN);
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 20)) {
+      addToast('La nota debe estar entre 0 y 20.', 'error');
+      return false;
+    }
+    if (n === current) return true;
+    try {
+      if (comp.kind === 'module') {
+        await upsertSubmission({
+          courseId: course.id, moduleId: comp.moduleId, moduleTitle: comp.module.title, uid: student.uid, studentName: student.studentName,
+          deliverableTitle: comp.module.deliverable?.description || comp.module.title, status: 'reviewed', grade: n,
+        });
+      } else {
+        await setCourseScore({ courseId: course.id, uid: student.uid, studentName: student.studentName, key: comp.key, value: n });
+      }
+      await onGradeSaved();
+      return true;
+    } catch {
+      addToast('No se pudo guardar la nota. Intenta de nuevo.', 'error');
+      return false;
+    }
+  };
+
   const exportCsv = () => {
-    const header = ['Estudiante', ...withDeliverable.map((m) => m.deliverable?.description || m.title), 'Promedio'];
-    const rows = rowsByStudent.map((r) => [r.studentName, ...r.gradeRows.map((g) => g.grade ?? ''), r.summary.promedioParcial ?? '']);
+    const header = ['Estudiante', ...model.components.map((c) => (c.kind === 'module' ? `${c.label} (${c.blockLabel})` : c.label)), 'Promedio', 'Asistencia'];
+    const rows = rowsByStudent.map((r) => [r.studentName, ...r.gradeRows.map((g) => g.grade ?? ''), r.summary.promedioParcial ?? '', r.att.pct === null ? '' : `${r.att.pct}%`]);
     downloadCsv(`registro-notas-${course.id}.csv`, [header, ...rows]);
   };
+
+  // Un bloque sin componentes (ej. curso sin entregables) no se dibuja.
+  const blocks = model.blocks.filter((b) => b.components.length > 0);
+  const moduleBlocks = blocks.filter((b) => b.components[0].kind === 'module');
+  const hasModuleBlock = moduleBlocks.length > 0;
 
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Registro de notas</h1><p className="admin-page-sub">{course.title} · Notas por módulo, promedio final y estado de aprobación.</p></div>
-        <button className="admin-btn-ghost" onClick={exportCsv}><Download size={14} /> Exportar CSV</button>
+        <div><h1 className="admin-page-title">Registro de notas</h1><p className="admin-page-sub">{course.title} · {model.subtitle}</p></div>
       </div>
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Estudiante</th>
-              {withDeliverable.map((m, i) => <th key={m.id}>M{i + 1} <span className="admin-cell-sub">{weightById[m.id]}%</span></th>)}
-              <th>Promedio</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rowsByStudent.map((r) => (
-              <tr key={r.uid}>
-                <td className="admin-cell-name">{r.studentName}</td>
-                {r.gradeRows.map((g) => <td key={g.moduleId}>{g.grade ?? '—'}</td>)}
-                <td><strong>{r.summary.promedioParcial ?? '—'}</strong></td>
-                <td>{(() => { const v = evaluateApproval(r.summary, null).overall; const b = APPROVAL_BADGE[v]; return <span className={`admin-status ${b.cls}`}>{b.label}</span>; })()}</td>
+
+      <div className="admin-panel">
+        <div className="admin-panel-head">
+          <div>
+            <span className="admin-panel-title">Notas del aula</span>
+            <div className="admin-cell-sub">{course.title}</div>
+          </div>
+          <button className="admin-btn-ghost" onClick={exportCsv}><Download size={14} /> Exportar CSV</button>
+        </div>
+        <div className="admin-table-wrap grade-grid-wrap">
+          <table className="admin-table grade-grid">
+            <thead>
+              <tr>
+                <th rowSpan={hasModuleBlock ? 2 : 1} className="grade-grid-student">Estudiante</th>
+                {blocks.map((b) => (b.components[0].kind === 'module'
+                  ? <th key={b.key} colSpan={b.components.length} className="grade-block-head">{b.label} · {b.weight}%</th>
+                  : <th key={b.key} rowSpan={hasModuleBlock ? 2 : 1} className="grade-block-head manual">{b.label} · {b.weight}%</th>))}
+                <th rowSpan={hasModuleBlock ? 2 : 1}>Promedio</th>
+                <th rowSpan={hasModuleBlock ? 2 : 1}>Asist.</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+              {hasModuleBlock && (
+                <tr>
+                  {moduleBlocks.flatMap((b) => b.components).map((c) => (
+                    <th key={c.key} className="grade-sub-head">{c.label}<br /><span>{c.weightInBlock}% {model.hasScheme ? 'del bloque' : 'de la nota'}</span></th>
+                  ))}
+                </tr>
+              )}
+            </thead>
+            <tbody>
+              {rowsByStudent.map((r) => (
+                <tr key={r.uid}>
+                  <td className="admin-cell-name grade-grid-student">{r.studentName}</td>
+                  {model.components.map((c, i) => {
+                    const grade = r.gradeRows[i].grade;
+                    return (
+                      <td key={c.key} className="grade-grid-cell">
+                        <input
+                          key={`${r.uid}-${c.key}-${grade}`}
+                          className="grade-grid-input" type="text" inputMode="decimal" placeholder="—" defaultValue={grade ?? ''}
+                          aria-label={`Nota de ${r.studentName} en ${c.label}`}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                          onBlur={async (e) => { const el = e.currentTarget; const ok = await saveCell(r, c, el.value, grade); if (!ok) el.value = grade ?? ''; }}
+                        />
+                      </td>
+                    );
+                  })}
+                  <td><strong>{r.summary.promedioParcial ?? '—'}</strong></td>
+                  <td>{r.att.pct === null ? '—' : `${r.att.pct}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {model.footer && <p className="admin-panel-caption" style={{ marginBottom: 0 }}>{model.footer}</p>}
       </div>
     </div>
   );
@@ -396,6 +460,7 @@ const TeacherCourseEvaluacion = () => {
   const [roster, setRoster] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [attendance, setAttendanceRows] = useState([]);
+  const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const vista = ['entregas', 'notas', 'asistencia'].includes(searchParams.get('vista')) ? searchParams.get('vista') : 'entregas';
@@ -403,11 +468,12 @@ const TeacherCourseEvaluacion = () => {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id)]).then(([content, enrollments, subs, att]) => {
+    Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id), fetchCourseGrades(course.id)]).then(([content, enrollments, subs, att, grades]) => {
       setModules(content.modules || []);
       setRoster(courseRoster(enrollments, course.id));
       setSubmissions(subs);
       setAttendanceRows(att);
+      setScores(grades);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [course.id]);
@@ -418,6 +484,13 @@ const TeacherCourseEvaluacion = () => {
   const reloadSubmissions = useCallback(async () => {
     const subs = await fetchCourseSubmissions(course.id);
     setSubmissions(subs);
+  }, [course.id]);
+
+  // Recarga entregas y notas manuales sin pantalla de carga (al editar una celda).
+  const reloadGrades = useCallback(async () => {
+    const [subs, grades] = await Promise.all([fetchCourseSubmissions(course.id), fetchCourseGrades(course.id)]);
+    setSubmissions(subs);
+    setScores(grades);
   }, [course.id]);
 
   const toggleAttendance = async (row, session, present) => {
@@ -443,15 +516,14 @@ const TeacherCourseEvaluacion = () => {
   const pendingCount = submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length;
 
   const classSummary = useMemo(() => {
-    const withDeliverable = modules.filter((m) => m.deliverable?.description);
+    const model = getGradingModel(course.id, modules);
+    const scoresByUid = Object.fromEntries(scores.map((g) => [g.uid, g.scores || {}]));
     const sessions = getOrderedSessions(modules);
     let riskCount = 0;
     let gradeSum = 0; let gradeN = 0;
     let attSum = 0; let attN = 0;
     roster.forEach((r) => {
-      const byModule = {};
-      withDeliverable.forEach((m) => { byModule[m.id] = submissions.find((s) => s.uid === r.uid && s.moduleId === m.id) || null; });
-      const summary = computeGradeSummary(buildGradebookRows(withDeliverable, byModule));
+      const summary = computeGradeSummary(buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid]));
       const attPct = attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)).raw;
       if (attPct !== null) { attSum += attPct; attN += 1; }
       if (summary.promedioParcial !== null) { gradeSum += summary.promedioParcial; gradeN += 1; }
@@ -463,7 +535,7 @@ const TeacherCourseEvaluacion = () => {
       enRiesgo: riskCount,
       total: roster.length,
     };
-  }, [modules, roster, submissions, attendance]);
+  }, [course.id, modules, roster, submissions, attendance, scores]);
 
   if (loading) return <div className="admin-empty-hint">Cargando evaluación...</div>;
 
@@ -471,7 +543,7 @@ const TeacherCourseEvaluacion = () => {
     <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
       <div>
         {vista === 'entregas' && <EntregasRevision course={course} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} />}
-        {vista === 'notas' && <RegistroNotas course={course} modules={modules} roster={roster} submissions={submissions} />}
+        {vista === 'notas' && <RegistroNotas course={course} modules={modules} roster={roster} submissions={submissions} attendance={attendance} scores={scores} onGradeSaved={reloadGrades} />}
         {vista === 'asistencia' && <Asistencia course={course} modules={modules} roster={roster} attendance={attendance} onToggle={toggleAttendance} />}
       </div>
       <div>

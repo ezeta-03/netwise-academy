@@ -3,9 +3,10 @@ import { useOutletContext } from 'react-router-dom';
 import { Lock, Plus, Pencil, Trash2, Save, Check, CheckSquare } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchCourseRubric, saveCourseRubric, saveCourseContent } from '../../lib/db';
+import { fetchCourseContent, fetchCourseRubric, saveCourseRubric } from '../../lib/db';
 import { getRubricTemplate } from '../../lib/rubricTemplates';
 import { resolveWeights, deliverableLabel } from '../../lib/weights';
+import { getGradingModel } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 // "5" -> 5, "2,5" -> 2.5, "0-2" -> 2 (el máximo del rango): los puntos de un
@@ -58,24 +59,11 @@ const CriterionForm = ({ initial, onSave, onCancel }) => {
   );
 };
 
-// Carga la rúbrica estándar del curso (lib/rubricTemplates.js) y, si los
-// entregables no tienen peso definido, los pesos que coordinación fijó para ese
-// curso. Devuelve la rúbrica y los módulos ya guardados.
+// Carga la rúbrica estándar del curso (lib/rubricTemplates.js).
 const seedFromTemplate = async ({ courseId, template, modules, rubric, uid }) => {
   const next = { ...rubric, criteria: template.criteria, status: rubric.status || 'pending' };
   await saveCourseRubric(courseId, next, uid);
-
-  let mods = modules;
-  const withDeliverable = modules.filter((m) => m.deliverable?.description);
-  const noWeights = withDeliverable.every((m) => m.deliverable?.weight == null || m.deliverable.weight === '');
-  if (template.weights && withDeliverable.length === template.weights.length && noWeights) {
-    mods = modules.map((m) => {
-      const i = withDeliverable.indexOf(m);
-      return i === -1 ? m : { ...m, deliverable: { ...m.deliverable, weight: template.weights[i] } };
-    });
-    await saveCourseContent(courseId, mods, uid);
-  }
-  return { next, mods };
+  return { next, mods: modules };
 };
 
 const TeacherCourseRubrica = () => {
@@ -156,7 +144,18 @@ const TeacherCourseRubrica = () => {
   if (loading) return <div className="admin-empty-hint">Cargando rúbrica...</div>;
 
   const totalPoints = rubric.criteria.reduce((sum, c) => sum + pointsValue(c.levels?.destacado?.points), 0);
+  // Peso efectivo de cada componente en la nota final (lib/gradingScheme.js).
   const resolved = resolveWeights(modules);
+  const model = getGradingModel(course.id, modules);
+  const moduleCount = model.components.filter((c) => c.kind === 'module').length;
+  const appliesRows = model.components.map((c) => ({
+    id: c.key,
+    name: c.kind === 'module'
+      ? `${model.hasScheme ? `Entregable M${c.index + 1}` : deliverableLabel(c.index, moduleCount)} · ${c.module.title}`
+      : c.label,
+    weight: c.weight,
+    estimated: !model.hasScheme && !resolved.rows[c.index]?.explicit,
+  }));
 
   return (
     <div className="anim-fade-up d1">
@@ -223,17 +222,17 @@ const TeacherCourseRubrica = () => {
           <div className="admin-panel" style={{ marginBottom: 20 }}>
             <div className="admin-panel-head">
               <span className="admin-panel-title">Se aplica a</span>
-              <span className="admin-status admin-status-violet">{resolved.rows.length} entregable{resolved.rows.length === 1 ? '' : 's'}</span>
+              <span className="admin-status admin-status-violet">{appliesRows.length} componente{appliesRows.length === 1 ? '' : 's'}</span>
             </div>
-            {resolved.rows.length === 0 ? (
+            {appliesRows.length === 0 ? (
               <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este curso todavía no tiene entregables definidos.</p>
-            ) : resolved.rows.map((r, i) => (
-              <div className="dash-rubric-applies-row" key={r.module.id}>
+            ) : appliesRows.map((r) => (
+              <div className="dash-rubric-applies-row" key={r.id}>
                 <Check size={15} />
                 <span>
-                  <strong>{deliverableLabel(i, resolved.rows.length)} · {r.module.title}</strong>
+                  <strong>{r.name}</strong>
                   {' · '}
-                  <span className="dash-rubric-applies-weight">{r.weight}% de la nota final{r.explicit ? '' : ' (estimado)'}</span>
+                  <span className="dash-rubric-applies-weight">{r.weight}% de la nota final{r.estimated ? ' (estimado)' : ''}</span>
                 </span>
               </div>
             ))}

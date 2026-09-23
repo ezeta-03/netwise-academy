@@ -1,8 +1,8 @@
 // Rúbricas estándar de los cursos que ya tienen una definida por coordinación
 // (Redes Sociales & IA y Branding). La página de Rúbrica de evaluación las
 // carga sola la primera vez -- el docente no tiene que escribir criterios ni
-// descripciones -- y las puede ajustar después. `weights` es el peso de cada
-// entregable en la nota final (en el orden de los módulos con entregable).
+// descripciones -- y las puede ajustar después. Los pesos de cada componente en
+// la nota final NO van acá: los define el esquema de notas (lib/gradingScheme.js).
 const level = (points, desc) => ({ points, desc });
 const criterion = (id, title, d, l, e, i) => ({
   id, title,
@@ -12,7 +12,6 @@ const criterion = (id, title, d, l, e, i) => ({
 export const RUBRIC_TEMPLATES = {
   // Redes Sociales & IA
   1: {
-    weights: [20, 25, 25, 30],
     criteria: [
       criterion('crit_1', 'Diagnóstico y uso de datos',
         'Sustenta cada decisión con datos reales del proyecto (métricas, benchmarking, escucha social) y saca conclusiones accionables.',
@@ -38,7 +37,6 @@ export const RUBRIC_TEMPLATES = {
   },
   // Branding & Marca
   2: {
-    weights: [20, 20, 25, 35],
     criteria: [
       criterion('crit_1', 'Dominio del marco CBBE',
         'Aplica con precisión el nivel de la pirámide CBBE y los conceptos de Keller que corresponden al entregable.',
@@ -65,4 +63,7 @@ export const RUBRIC_TEMPLATES = {
 };
 
 // null si el curso no tiene una rúbrica estándar definida.
-export const getRubricTemplate = (courseId) => RUBRIC_TEMPLATES[courseId] || RUBRIC_TEMPLATES[Number(courseId)] || null;
+export const getRubricTemplate = (courseId) => {
+  if (Object.hasOwn(RUBRIC_TEMPLATES, courseId)) return RUBRIC_TEMPLATES[courseId];
+  return Object.hasOwn(RUBRIC_TEMPLATES, Number(courseId)) ? RUBRIC_TEMPLATES[Number(courseId)] : null;
+};

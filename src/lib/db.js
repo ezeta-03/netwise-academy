@@ -1274,6 +1274,43 @@ export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studen
   return payload;
 };
 
+// --- Notas de componentes manuales (colección Firestore `courseGrades`) ---
+// Un doc por alumno+curso con `scores: { [componente]: nota 0-20 }` para lo que
+// el docente califica directo en el Registro de notas (sustentación final,
+// participación, caso, proyecto...; ver lib/gradingScheme.js). Las notas de
+// cada módulo NO van acá: salen de las entregas revisadas (`submissions`).
+
+// `uid` (opcional): un alumno solo puede leer su propio doc (reglas).
+export const fetchCourseGrades = async (courseId, uid) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem(`mock_course_grades_${courseId}`);
+    const list = raw ? JSON.parse(raw) : [];
+    return uid ? list.filter((g) => g.uid === uid) : list;
+  }
+  const constraints = [where('courseId', '==', courseId)];
+  if (uid) constraints.push(where('uid', '==', uid));
+  const snapshot = await getDocs(query(collection(db, 'courseGrades'), ...constraints));
+  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+// `value` null borra la nota de ese componente.
+export const setCourseScore = async ({ courseId, uid, studentName, key, value }) => {
+  const docId = `${uid}_${courseId}`;
+  const score = value === null || value === undefined || String(value).trim() === '' ? null : Number(value);
+  if (score !== null && (!Number.isFinite(score) || score < 0 || score > 20)) throw new Error('La nota debe estar entre 0 y 20.');
+
+  if (!isConfigValid) {
+    const storageKey = `mock_course_grades_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    const idx = list.findIndex((g) => g.uid === uid);
+    if (idx >= 0) list[idx] = { ...list[idx], studentName, scores: { ...(list[idx].scores || {}), [key]: score } };
+    else list.push({ id: docId, uid, courseId, studentName, scores: { [key]: score } });
+    localStorage.setItem(storageKey, JSON.stringify(list));
+    return;
+  }
+  await setDoc(doc(db, 'courseGrades', docId), { uid, courseId, studentName, scores: { [key]: score }, updatedAt: new Date().toISOString() }, { merge: true });
+};
+
 // "Sin registrar": borra el registro de esa sesión para ese alumno.
 export const deleteAttendance = async ({ courseId, sessionId, uid }) => {
   if (!isConfigValid) {

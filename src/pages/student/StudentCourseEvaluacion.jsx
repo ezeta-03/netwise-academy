@@ -3,8 +3,9 @@ import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { ClipboardCheck, BarChart3, UsersRound, Send, ExternalLink, Clock3, CheckCircle2, XCircle, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance } from '../../lib/db';
-import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
+import { fetchCourseContent, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, fetchCourseGrades } from '../../lib/db';
+import { computeGradeSummary } from '../../lib/gradebook';
+import { getGradingModel, buildStudentRows } from '../../lib/gradingScheme';
 import { getOrderedSessions } from '../../lib/courseSessions';
 import { attendanceStats } from '../../lib/attendance';
 import { APPROVAL, MIN_PERFORMANCE_GRADE, evaluateApproval } from '../../lib/approval';
@@ -89,14 +90,17 @@ const SubmitModal = ({ course, module, onClose, onSaved }) => {
   );
 };
 
-const EntregasNotas = ({ course, group, modules, submissions, onSubmitted }) => {
+const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitted }) => {
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
   const [submitModule, setSubmitModule] = useState(null);
 
   const subFor = (moduleId) => submissions.find((s) => s.moduleId === moduleId) || null;
-  const gradeRows = buildGradebookRows(withDeliverable, Object.fromEntries(withDeliverable.map((m) => [m.id, subFor(m.id)])));
+  const gradeRows = buildStudentRows(getGradingModel(course.id, modules), submissions, scores);
   const summary = computeGradeSummary(gradeRows);
-  const calificados = gradeRows.filter((r) => r.grade !== null).length;
+  // "Calificados" cuenta solo los entregables de módulo; las notas de
+  // sustentación/participación entran al promedio pero no son entregas.
+  const moduleRows = gradeRows.filter((r) => r.kind === 'module');
+  const calificados = moduleRows.filter((r) => r.grade !== null).length;
   const dueOf = (m) => deliverableDueDate(m, modules.indexOf(m), group);
   const now = new Date();
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -114,7 +118,7 @@ const EntregasNotas = ({ course, group, modules, submissions, onSubmitted }) => 
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card"><div className="admin-stat-label">Promedio parcial</div><div className="admin-stat-value">{summary.promedioParcial ?? '—'}</div><div className="admin-cell-sub">Sobre 20 · mínimo aprobatorio {APPROVAL.minFinalGrade}</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Calificados</div><div className="admin-stat-value">{calificados}/{gradeRows.length}</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Calificados</div><div className="admin-stat-value">{calificados}/{moduleRows.length}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Próxima entrega</div><div className="admin-stat-value" style={{ fontSize: '1rem' }}>{proxima ? formatDate(dueOf(proxima)) : 'Al día'}</div>{proxima && <div className="admin-cell-sub">{proxima.title}</div>}</div>
       </div>
 
@@ -158,12 +162,12 @@ const EntregasNotas = ({ course, group, modules, submissions, onSubmitted }) => 
   );
 };
 
-const MisNotas = ({ course, modules, submissions, attendance }) => {
-  const withDeliverable = modules.filter((m) => m.deliverable?.description);
-  const subByModule = Object.fromEntries(withDeliverable.map((m) => [m.id, submissions.find((s) => s.moduleId === m.id) || null]));
-  const rows = buildGradebookRows(withDeliverable, subByModule);
+const MisNotas = ({ course, modules, submissions, attendance, scores }) => {
+  const model = getGradingModel(course.id, modules);
+  const rows = buildStudentRows(model, submissions, scores);
   const summary = computeGradeSummary(rows);
-  const formula = rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ');
+  const gradeByKey = Object.fromEntries(rows.map((r) => [r.key, r.grade]));
+  const formula = model.components.map((c) => `${c.label} × ${c.weight}%`).join(' + ');
 
   const sessions = getOrderedSessions(modules);
   const attStats = attendanceStats(sessions, attendance);
@@ -184,13 +188,25 @@ const MisNotas = ({ course, modules, submissions, attendance }) => {
         <div className="admin-panel-head"><span className="admin-panel-title">Registro de notas</span><span className="admin-status admin-status-violet">Promedio parcial</span></div>
         <div className="admin-table-wrap">
           <table className="admin-table">
-            <thead><tr><th>Evaluación</th><th>Peso</th><th>Nota</th></tr></thead>
+            <thead><tr><th>Evaluación</th><th>Peso en la nota final</th><th>Nota</th></tr></thead>
             <tbody>
-              {rows.map((r) => <tr key={r.moduleId}><td>{r.title}</td><td>{r.weight}%</td><td>{r.grade ?? '—'}</td></tr>)}
+              {model.blocks.map((b) => (
+                <React.Fragment key={b.key}>
+                  <tr className="grade-student-block"><td colSpan={3}>{b.label} · {b.weight}%</td></tr>
+                  {b.components.map((c) => (
+                    <tr key={c.key}>
+                      <td>{c.kind === 'module' ? `${c.label} · ${c.module.title}` : c.label}</td>
+                      <td>{c.weight}%{c.kind === 'module' && model.hasScheme ? <span className="admin-cell-sub"> ({c.weightInBlock}% del bloque)</span> : null}</td>
+                      <td>{gradeByKey[c.key] ?? '—'}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
               <tr><td><strong>Promedio parcial (sobre lo calificado)</strong></td><td></td><td><strong>{summary.promedioParcial ?? '—'}/20</strong></td></tr>
             </tbody>
           </table>
         </div>
+        {model.footer && <p className="admin-panel-caption" style={{ marginBottom: 0 }}>{model.footer}</p>}
       </div>
 
       <div className="admin-panel">
@@ -262,6 +278,7 @@ const StudentCourseEvaluacion = () => {
   const [modules, setModules] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const vista = ['entregas', 'notas', 'asistencia'].includes(searchParams.get('vista')) ? searchParams.get('vista') : 'entregas';
@@ -270,10 +287,11 @@ const StudentCourseEvaluacion = () => {
   const load = useCallback(() => {
     if (!currentUser) return;
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id, currentUser.uid), fetchCourseAttendance(course.id, currentUser.uid)]).then(([content, subs, att]) => {
+    Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id, currentUser.uid), fetchCourseAttendance(course.id, currentUser.uid), fetchCourseGrades(course.id, currentUser.uid)]).then(([content, subs, att, grades]) => {
       setModules(content.modules || []);
       setSubmissions(subs.filter((s) => s.uid === currentUser.uid));
       setAttendance(att.filter((a) => a.uid === currentUser.uid));
+      setScores(grades.filter((g) => g.uid === currentUser.uid));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [course.id, currentUser]);
@@ -282,22 +300,20 @@ const StudentCourseEvaluacion = () => {
   useEffect(() => { load(); }, [load]);
 
   const summary = useMemo(() => {
-    const withDeliverable = modules.filter((m) => m.deliverable?.description);
-    const subByModule = Object.fromEntries(withDeliverable.map((m) => [m.id, submissions.find((s) => s.moduleId === m.id) || null]));
-    const g = computeGradeSummary(buildGradebookRows(withDeliverable, subByModule));
+    const g = computeGradeSummary(buildStudentRows(getGradingModel(course.id, modules), submissions, scores[0]?.scores));
     const sessions = getOrderedSessions(modules);
     const st = attendanceStats(sessions, attendance);
     const overall = evaluateApproval(g, { taken: st.taken, pct: st.raw }).overall;
     return { promedioParcial: g.promedioParcial, overall, asistenciaPct: st.pct };
-  }, [modules, submissions, attendance]);
+  }, [course.id, modules, submissions, attendance, scores]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu evaluación...</div>;
 
   return (
     <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
       <div>
-        {vista === 'entregas' && <EntregasNotas course={course} group={group} modules={modules} submissions={submissions} onSubmitted={load} />}
-        {vista === 'notas' && <MisNotas course={course} modules={modules} submissions={submissions} attendance={attendance} />}
+        {vista === 'entregas' && <EntregasNotas course={course} group={group} modules={modules} submissions={submissions} scores={scores[0]?.scores} onSubmitted={load} />}
+        {vista === 'notas' && <MisNotas course={course} modules={modules} submissions={submissions} attendance={attendance} scores={scores[0]?.scores} />}
         {vista === 'asistencia' && <MiAsistencia course={course} modules={modules} attendance={attendance} />}
       </div>
       <div><EvalSidePanel vista={vista} setVista={setVista} summary={summary} /></div>

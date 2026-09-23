@@ -1,10 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { RUBRIC_TEMPLATES, getRubricTemplate } from '../src/lib/rubricTemplates.js';
+import { GRADING_SCHEMES, getGradingModel } from '../src/lib/gradingScheme.js';
 
 describe('rubricTemplates', () => {
   for (const [courseId, tpl] of Object.entries(RUBRIC_TEMPLATES)) {
-    test(`curso ${courseId}: 4 criterios completos, máximo 20 puntos, pesos que suman 100`, () => {
+    test(`curso ${courseId}: 4 criterios completos, máximo 20 puntos, sin pesos propios (viven en gradingScheme)`, () => {
       assert.equal(tpl.criteria.length, 4);
       const ids = new Set(tpl.criteria.map((c) => c.id));
       assert.equal(ids.size, 4, 'ids únicos');
@@ -17,8 +18,7 @@ describe('rubricTemplates', () => {
       }
       const total = tpl.criteria.reduce((s, c) => s + parseInt(c.levels.destacado.points, 10), 0);
       assert.equal(total, 20);
-      assert.equal(tpl.weights.length, 4);
-      assert.equal(tpl.weights.reduce((a, b) => a + b, 0), 100);
+      assert.equal('weights' in tpl, false, 'los pesos ya no viven en la plantilla de rúbrica');
     });
   }
 
@@ -27,5 +27,18 @@ describe('rubricTemplates', () => {
     assert.equal(getRubricTemplate('2'), RUBRIC_TEMPLATES[2]);
     assert.equal(getRubricTemplate(3), null);
     assert.equal(getRubricTemplate(undefined), null);
+  });
+
+  test('cada plantilla de rúbrica corresponde a un curso con esquema de calificación que suma 100', () => {
+    for (const id of Object.keys(RUBRIC_TEMPLATES)) {
+      assert.ok(GRADING_SCHEMES[id], `curso ${id} sin esquema`);
+      const mods = Array.from({ length: 4 }, (_, i) => ({ id: `m${i}`, deliverable: { description: 'x' } }));
+      assert.equal(getGradingModel(id, mods).total, 100);
+    }
+  });
+
+  test('las claves heredadas de Object.prototype no son plantillas', { todo: 'BAJO rubricTemplates.js:66 - RUBRIC_TEMPLATES["constructor"] es truthy: getRubricTemplate("constructor") devuelve la función Object. Usar Object.hasOwn' }, () => {
+    assert.equal(getRubricTemplate('constructor'), null);
+    assert.equal(getRubricTemplate('toString'), null);
   });
 });

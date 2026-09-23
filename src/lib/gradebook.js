@@ -11,10 +11,10 @@ const MAX_GRADE = 20;
 // entregar (status 'submitted') la nota anterior se conserva en el
 // documento pero ya no vale hasta que el docente la califique de nuevo.
 // Además se acota a 0-20 por si un dato viejo trae una nota fuera de rango.
-const usableGrade = (sub) => {
+export const usableGrade = (sub) => {
   if (sub?.status !== 'reviewed') return null;
   const n = Number(sub.grade);
-  if (sub.grade === null || sub.grade === undefined || sub.grade === '' || !Number.isFinite(n)) return null;
+  if (sub.grade === null || sub.grade === undefined || String(sub.grade).trim() === '' || !Number.isFinite(n)) return null;
   return Math.min(MAX_GRADE, Math.max(0, n));
 };
 

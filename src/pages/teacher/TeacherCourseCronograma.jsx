@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
-import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions, fetchAllEnrollments } from '../../lib/db';
+import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions, fetchAllEnrollments, fetchCourseGrades } from '../../lib/db';
 import { courseRoster } from '../../lib/roster';
 import { deliverableDueDate } from '../../lib/deliveryDates';
 import { resolveWeights, deliverableLabel, deliverableModules } from '../../lib/weights';
+import { getGradingModel } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const fmtDate = (iso, withTime) => {
@@ -27,16 +28,18 @@ const TeacherCourseCronograma = () => {
   const [pendingCount, setPendingCount] = useState(0);
   const [subs, setSubs] = useState([]);
   const [roster, setRoster] = useState([]);
+  const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments(course.id)]).then(([content, rubric, submissions, enrollments]) => {
+    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments(course.id), fetchCourseGrades(course.id)]).then(([content, rubric, submissions, enrollments, grades]) => {
       setModules(content.modules || []);
       setPolicy(rubric.policy || null);
       const deliverableIds = new Set(deliverableModules(content.modules).map((m) => m.id));
       setPendingCount(submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length);
       setSubs(submissions);
+      setScores(grades);
       setRoster(courseRoster(enrollments, course.id));
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -47,29 +50,42 @@ const TeacherCourseCronograma = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando cronograma...</div>;
 
-  // Mismos entregables y pesos que el Registro de notas (ver lib/weights.js).
+  // Mismos componentes y pesos que el Registro de notas (lib/gradingScheme.js).
+  const model = getGradingModel(course.id, modules);
   const resolved = resolveWeights(modules);
+  const moduleComps = model.components.filter((c) => c.kind === 'module');
+  const manualComps = model.components.filter((c) => c.kind === 'manual');
 
   // "Calificado" sale de las notas reales: todos los alumnos del aula tienen
   // su entrega revisada en ese módulo (no de la marca manual de "completado").
   const rosterUids = new Set(roster.map((r) => r.uid));
   const gradedCount = (moduleId) => new Set(subs.filter((s) => s.moduleId === moduleId && s.status === 'reviewed' && rosterUids.has(s.uid)).map((s) => s.uid)).size;
   const isGraded = (moduleId) => roster.length > 0 && gradedCount(moduleId) === roster.length;
-  const firstOpenIdx = resolved.rows.findIndex((r) => !isGraded(r.module.id));
+  const scoredUids = (key) => new Set(scores.filter((g) => rosterUids.has(g.uid) && g.scores?.[key] !== null && g.scores?.[key] !== undefined && String(g.scores[key]).trim() !== '' && Number.isFinite(Number(g.scores[key]))).map((g) => g.uid));
+  const isManualGraded = (key) => roster.length > 0 && scoredUids(key).size === roster.length;
+  const firstOpenIdx = moduleComps.findIndex((c) => !isGraded(c.moduleId));
 
-  const rows = resolved.rows.map((r, i) => {
-    const m = r.module;
+  const moduleRows = moduleComps.map((c, i) => {
+    const m = c.module;
     const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
     const status = isGraded(m.id) ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
+    const label = model.hasScheme ? `Entregable M${i + 1}` : deliverableLabel(i, moduleComps.length);
     return {
-      id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit, graded: gradedCount(m.id),
-      name: `${deliverableLabel(i, resolved.rows.length)} · ${m.title}`,
+      id: m.id, sub: m.deliverable?.description, weeks: m.weeksLabel || '—', dueIso, status, weight: c.weight,
+      explicit: model.hasScheme || resolved.rows[i]?.explicit, graded: gradedCount(m.id), name: `${label} · ${m.title}`,
     };
   });
+  // Notas que registra el docente directo (sustentación, participación...): sin fecha propia.
+  const manualRows = manualComps.map((c) => ({
+    id: c.key, sub: 'Nota que registra el docente en el Registro de notas', weeks: '—', dueIso: null,
+    status: isManualGraded(c.key) ? 'graded' : 'scheduled', weight: c.weight, explicit: true, graded: scoredUids(c.key).size, name: c.label,
+  }));
+  const rows = [...moduleRows, ...manualRows];
 
-  const nextRow = rows[firstOpenIdx];
-  const totalWeight = resolved.total;
-  const formula = rows.length > 0 ? `PF = ${rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ')}` : null;
+  const nextRow = moduleRows[firstOpenIdx] || manualRows.find((r) => r.status !== 'graded');
+  const totalWeight = model.total;
+  const weightsOk = Math.abs(totalWeight - 100) <= 0.05;
+  const formula = rows.length > 0 ? `PF = ${model.components.map((c) => `${c.label} × ${c.weight}%`).join(' + ')}` : null;
   const scheduleLabel = group?.scheduleTime || group?.scheduleDays;
 
   return (
@@ -112,10 +128,13 @@ const TeacherCourseCronograma = () => {
               {policy?.weightsNote && <span className="admin-status admin-status-amber">Pesos provisionales</span>}
             </div>
             {policy?.weightsNote && <div className="dash-notice warn"><span>{policy.weightsNote}</span></div>}
-            {rows.length > 0 && !resolved.sumsTo100 && (
+            {rows.length > 0 && !weightsOk && (
               <div className="dash-notice warn"><span>Los pesos suman {totalWeight}%, no 100%. Ajusta el peso de cada entregable en Contenido → Editar módulo.</span></div>
             )}
-            {rows.length > 0 && !resolved.allExplicit && (
+            {model.moduleCountMismatch && (
+              <div className="dash-notice warn"><span>El esquema de notas de este curso prevé {model.moduleCountMismatch.expected} entregables y hoy hay {model.moduleCountMismatch.actual}: los pesos dentro del bloque de módulos se reparten en partes iguales.</span></div>
+            )}
+            {rows.length > 0 && !model.hasScheme && !resolved.allExplicit && (
               <div className="dash-notice warn"><span>Hay entregables sin peso definido: reciben en partes iguales lo que falta para llegar a 100%, igual que en el Registro de notas.</span></div>
             )}
             {rows.length === 0 ? (
@@ -129,9 +148,9 @@ const TeacherCourseCronograma = () => {
                   <tbody>
                     {rows.map((r) => (
                       <tr key={r.id}>
-                        <td><strong>{r.name}</strong><small>{r.m.deliverable?.description}</small></td>
-                        <td>{r.m.weeksLabel || '—'}</td>
-                        <td>{fmtDate(r.dueIso, true)}</td>
+                        <td><strong>{r.name}</strong><small>{r.sub}</small></td>
+                        <td>{r.weeks}</td>
+                        <td>{r.dueIso ? fmtDate(r.dueIso, true) : '—'}</td>
                         <td>{r.weight}%{!r.explicit && <small>estimado</small>}</td>
                         <td><span className={`admin-status ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].label}</span><small>{r.graded}/{roster.length} calificados</small></td>
                       </tr>
