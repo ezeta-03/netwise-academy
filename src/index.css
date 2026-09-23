@@ -1551,6 +1551,12 @@ body::before {
 .admin-stat-value { font-size: 1.5rem; font-weight: 700; color: #14141F; }
 
 .admin-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+/* Un hijo de grid tiene min-width:auto: una tabla ancha (ej. la matriz de
+   Asistencia con una columna por sesión) ensanchaba la columna "1fr" y
+   empujaba el panel lateral fuera de pantalla. Con min-width:0 la columna se
+   queda en su sitio y la tabla se desplaza dentro de .admin-table-wrap. */
+.admin-two-col > * { min-width: 0; }
+.admin-stats-grid > * { min-width: 0; }
 .admin-panel { background: #fff; border: 1px solid #ECEAF3; border-radius: 14px; padding: 22px 24px; }
 .admin-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .admin-panel-title { font-weight: 700; font-size: .96rem; color: #14141F; }
