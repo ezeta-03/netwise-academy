@@ -46,4 +46,26 @@ describe('getOrderedSessions', () => {
     const attendance = [{ uid: 'u', sessionId: undefined, present: true }];
     assert.ok(attendance.some((a) => a.sessionId === s.id), 'una fila de asistencia huérfana "coincide" con la sesión sin id');
   });
+  describe('done (sesión realizada)', () => {
+    const one = (session) => getOrderedSessions([{ id: 'm', sessions: [session] }])[0];
+    test('status "done" -> true; status "scheduled"/"live"/otros -> false', () => {
+      assert.equal(one({ id: 's', status: 'done' }).done, true);
+      assert.equal(one({ id: 's', status: 'scheduled' }).done, false);
+      assert.equal(one({ id: 's', status: 'live' }).done, false);
+      assert.equal(one({ id: 's', status: 'cancelled' }).done, false);
+    });
+    test('booleano legado done:true -> true; sin ninguno -> false', () => {
+      assert.equal(one({ id: 's', done: true }).done, true);
+      assert.equal(one({ id: 's', done: false }).done, false);
+      assert.equal(one({ id: 's' }).done, false);
+    });
+    test('el status manda sobre el done legado', () => {
+      assert.equal(one({ id: 's', status: 'scheduled', done: true }).done, false);
+      assert.equal(one({ id: 's', status: 'done', done: false }).done, true);
+    });
+    test('la forma completa del resultado incluye done', () => {
+      assert.deepEqual(one({ id: 's1', title: 'T', dateLabel: '10 mar', status: 'done' }),
+        { id: 's1', moduleId: 'm', moduleTitle: undefined, number: 1, label: 'S01', dateLabel: '10 mar', title: 'T', done: true });
+    });
+  });
 });

@@ -11,6 +11,8 @@ import { resolveWeights, deliverableModules } from '../../lib/weights';
 import { downloadCsv as downloadCsvFile } from '../../lib/csv';
 import { APPROVAL, evaluateApproval } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
+import { attendanceStats } from '../../lib/attendance';
+import { courseRoster } from '../../lib/roster';
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -300,14 +302,14 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
 
   const attendanceFor = (uid, sessionId) => attendance.find((a) => a.uid === uid && a.sessionId === sessionId) || null;
 
+  // Sesión dictada sin registro = falta (ver lib/attendance.js).
   const statsFor = (uid) => {
-    const taken = sessions.filter((s) => attendanceFor(uid, s.id));
-    const present = taken.filter((s) => attendanceFor(uid, s.id).present).length;
-    const raw = taken.length ? (present / taken.length) * 100 : null;
-    return { pct: raw === null ? null : Math.round(raw), raw, faltas: taken.length - present };
+    const st = attendanceStats(sessions, attendance.filter((a) => a.uid === uid));
+    return { pct: st.pct, raw: st.raw, faltas: st.absent, sinRegistrar: st.unregistered };
   };
 
-  const sessionsTaken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id)).length;
+  const sessionsTaken = sessions.filter((s) => s.done || attendance.some((a) => a.sessionId === s.id)).length;
+  const totalSinRegistrar = roster.reduce((sum, r) => sum + statsFor(r.uid).sinRegistrar, 0);
   const withAtt = roster.map((r) => statsFor(r.uid).raw).filter((p) => p !== null);
   const avgPct = withAtt.length ? Math.round(withAtt.reduce((sum, p) => sum + p, 0) / withAtt.length) : null;
   const bajo75 = withAtt.filter((p) => p < APPROVAL.minAttendancePct).length;
@@ -334,8 +336,14 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card"><div className="admin-stat-label">Asistencia promedio</div><div className="admin-stat-value">{avgPct === null ? '—' : `${avgPct}%`}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Sesiones registradas</div><div className="admin-stat-value">{sessionsTaken}/{sessions.length}</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Bajo el 75%</div><div className="admin-stat-value">{bajo75}</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Bajo el {APPROVAL.minAttendancePct}%</div><div className="admin-stat-value">{bajo75}</div></div>
       </div>
+
+      {totalSinRegistrar > 0 && (
+        <div className="dash-notice warn">
+          <span>Hay {totalSinRegistrar} registro{totalSinRegistrar === 1 ? '' : 's'} sin tomar en sesiones ya realizadas (marcados con «!»). Cuentan como falta hasta que registres la asistencia.</span>
+        </div>
+      )}
 
       {sessions.length === 0 ? (
         <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Todavía no defines sesiones en "Contenido".</div>
@@ -358,11 +366,12 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
                   <td className="admin-cell-name">{row.studentName}</td>
                   {sessions.map((s) => {
                     const a = attendanceFor(row.uid, s.id);
-                    const cls = a === null ? 'pending' : a.present ? 'present' : 'absent';
+                    const missing = a === null && s.done;
+                    const cls = a === null ? (missing ? 'missing' : 'pending') : a.present ? 'present' : 'absent';
                     return (
                       <td key={s.id} style={{ textAlign: 'center', padding: '8px 4px' }}>
                         <div className={`session-chip clickable ${cls}`} onClick={() => cycle(row, s)}>
-                          <span className="session-chip-label">{a === null ? '·' : a.present ? '✓' : 'F'}</span>
+                          <span className="session-chip-label" title={missing ? 'Sin registrar: cuenta como falta' : undefined}>{a === null ? (missing ? '!' : '·') : a.present ? '✓' : 'F'}</span>
                         </div>
                       </td>
                     );
@@ -396,7 +405,7 @@ const TeacherCourseEvaluacion = () => {
     setLoading(true);
     Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id)]).then(([content, enrollments, subs, att]) => {
       setModules(content.modules || []);
-      setRoster(enrollments.filter((e) => e.courseId?.toString() === course.id.toString()).map((e) => ({ uid: e.uid, studentName: e.studentName || e.uid, status: e.status })));
+      setRoster(courseRoster(enrollments, course.id));
       setSubmissions(subs);
       setAttendanceRows(att);
       setLoading(false);
@@ -443,9 +452,7 @@ const TeacherCourseEvaluacion = () => {
       const byModule = {};
       withDeliverable.forEach((m) => { byModule[m.id] = submissions.find((s) => s.uid === r.uid && s.moduleId === m.id) || null; });
       const summary = computeGradeSummary(buildGradebookRows(withDeliverable, byModule));
-      const taken = sessions.filter((s) => attendance.some((a) => a.uid === r.uid && a.sessionId === s.id));
-      const present = taken.filter((s) => attendance.find((a) => a.uid === r.uid && a.sessionId === s.id)?.present).length;
-      const attPct = taken.length ? (present / taken.length) * 100 : null;
+      const attPct = attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)).raw;
       if (attPct !== null) { attSum += attPct; attN += 1; }
       if (summary.promedioParcial !== null) { gradeSum += summary.promedioParcial; gradeN += 1; }
       if ((summary.promedioParcial !== null && summary.promedioParcial < APPROVAL.minFinalGrade) || (attPct !== null && attPct < APPROVAL.minAttendancePct)) riskCount += 1;

@@ -75,51 +75,112 @@ const firstClassOffsets = (baseMs, days) => {
   return { first, offsets: days.map((d) => ({ day: d, offset: (DAY_INDEX[d] - anchorDow + 7) % 7 })) };
 };
 
-// A partir de la fecha de la primera clase, genera una entrada por cada día
-// de la semana (scheduleDays) durante `weeksLabel` semanas (ej. "8 semanas"),
-// respetando el horario (scheduleTime, "19:00-21:00"). Si los datos no son
-// válidos devuelve [] en vez de fechas "NaN".
-export const buildRecurringSessions = ({ scheduleDays, scheduleTime, weeksLabel }, firstDate) => {
-  const weeks = parseInt(weeksLabel, 10) || 8;
-  const time = parseScheduleTime(scheduleTime);
-  const baseMs = parseDate(firstDate);
-  const days = [...new Set((scheduleDays || []).map(normalizeDay).filter(Boolean))];
-  if (!time || baseMs === null || days.length === 0) return [];
+// Una franja del horario semanal de un aula: un día con su hora de inicio y
+// fin. Un aula puede tener las franjas que se quiera (un día distinto con su
+// propia hora, dos franjas el mismo día, etc.) -- ver el editor de horario en
+// Admin > Grupos y horarios. { day: 'Martes', start: '19:00', end: '21:00' }
+const resolveSlots = ({ slots, scheduleDays, scheduleTime }) => {
+  const seen = new Set();
+  const out = [];
+  const push = (day, time) => {
+    if (!day || !time) return;
+    const key = `${day}|${time.startHour}:${time.startMinute}|${time.durationMin}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ day, ...time });
+  };
+  if (Array.isArray(slots) && slots.length) {
+    slots.forEach((s) => push(normalizeDay(s?.day), parseScheduleTime(`${s?.start}-${s?.end}`)));
+  } else {
+    const time = parseScheduleTime(scheduleTime);
+    (Array.isArray(scheduleDays) ? scheduleDays : []).forEach((d) => push(normalizeDay(d), time));
+  }
+  return out;
+};
 
-  const { startHour, startMinute, durationMin } = time;
-  const { first, offsets } = firstClassOffsets(baseMs, days);
+// Valida las franjas que arma el editor: devuelve las válidas (día + hora de
+// inicio/fin correctas) ya normalizadas como { day, start, end }.
+export const validSlots = (slots) => resolveSlots({ slots }).map((s) => ({
+  day: s.day,
+  start: `${pad2(s.startHour)}:${pad2(s.startMinute)}`,
+  end: (() => { const t = (s.startHour * 60 + s.startMinute + s.durationMin) % 1440; return `${pad2(Math.floor(t / 60))}:${pad2(t % 60)}`; })(),
+}));
+
+// Texto del horario que se guarda en el aula (`scheduleTime`) y se muestra en
+// tablas: "Martes y Jueves · 19:00-21:00" si todas las franjas comparten hora,
+// o "Lunes 19:00-21:00 · Miércoles 18:00-20:00" si cada día tiene la suya.
+export const buildScheduleLabel = (slots) => {
+  const list = validSlots(slots).sort((a, b) => DAY_INDEX[a.day] - DAY_INDEX[b.day] || a.start.localeCompare(b.start));
+  if (list.length === 0) return '';
+  const ranges = new Set(list.map((s) => `${s.start}-${s.end}`));
+  if (ranges.size === 1) {
+    const days = [...new Set(list.map((s) => s.day))];
+    const joined = days.length > 1 ? `${days.slice(0, -1).join(', ')} y ${days[days.length - 1]}` : days[0];
+    return `${joined} · ${[...ranges][0]}`;
+  }
+  return list.map((s) => `${s.day} ${s.start}-${s.end}`).join(' · ');
+};
+
+// A partir de la fecha de la primera clase, genera una entrada por cada franja
+// del horario semanal durante `weeksLabel` semanas (ej. "8 semanas").
+// Acepta `slots` (franjas con su propia hora) o el formato anterior
+// (scheduleDays + un único scheduleTime). Si los datos no son válidos
+// devuelve [] en vez de fechas "NaN".
+export const buildRecurringSessions = ({ slots, scheduleDays, scheduleTime, weeksLabel }, firstDate) => {
+  const weeks = parseInt(weeksLabel, 10) || 8;
+  const baseMs = parseDate(firstDate);
+  const resolved = resolveSlots({ slots, scheduleDays, scheduleTime });
+  if (baseMs === null || resolved.length === 0) return [];
+
+  const { first, offsets } = firstClassOffsets(baseMs, [...new Set(resolved.map((s) => s.day))]);
   const anchorMs = baseMs + first * DAY_MS;
-  offsets.sort((a, b) => a.offset - b.offset);
+  const offsetOf = Object.fromEntries(offsets.map((o) => [o.day, o.offset]));
+  const ordered = [...resolved].sort((a, b) => offsetOf[a.day] - offsetOf[b.day] || (a.startHour * 60 + a.startMinute) - (b.startHour * 60 + b.startMinute));
 
   const entries = [];
   for (let week = 0; week < weeks; week++) {
-    for (const { day, offset } of offsets) {
-      const startsAt = `${fmtDate(anchorMs + (offset + week * 7) * DAY_MS)}T${pad2(startHour)}:${pad2(startMinute)}${PERU_OFFSET}`;
-      entries.push({ startsAt, durationMin, title: `Semana ${week + 1} · ${day}` });
+    for (const slot of ordered) {
+      const startsAt = `${fmtDate(anchorMs + (offsetOf[slot.day] + week * 7) * DAY_MS)}T${pad2(slot.startHour)}:${pad2(slot.startMinute)}${PERU_OFFSET}`;
+      entries.push({ startsAt, durationMin: slot.durationMin, title: `Semana ${week + 1} · ${slot.day}` });
     }
   }
   return entries;
 };
 
-// "Martes y Jueves · 19:00-21:00" (formato que guarda el aula) -> días
-// (["Martes","Jueves"]) para poder calcular fechas a partir del horario.
-// También entiende rangos: "Lunes a Viernes".
+const DAY_WORDS = /(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?|domingos?)/gi;
+
+// Horario en texto -> días. Entiende "Martes y Jueves · 19:00-21:00", el
+// formato por día "Lunes 19:00-21:00 · Miércoles 18:00-20:00" y rangos como
+// "Lunes a Viernes". Se usa para aulas antiguas que solo guardaron el texto.
 export const parseScheduleLabel = (label) => {
-  const daysPart = String(label || '').split('·')[0].trim();
-  const range = daysPart.match(/^(\S+)\s+a\s+(\S+)$/i);
+  // NFC: un teclado que escribe "é" como "e" + tilde combinada también vale.
+  const text = String(label || '').normalize('NFC');
+  const found = [];
+  let rest = text;
+  const range = text.match(/^\s*(\S+)\s+a\s+(\S+)/i);
   if (range) {
     const from = normalizeDay(range[1]);
     const to = normalizeDay(range[2]);
     if (from && to) {
-      const out = [];
       for (let i = DAY_INDEX[from]; ; i = (i + 1) % 7) {
-        out.push(Object.keys(DAY_INDEX).find((d) => DAY_INDEX[d] === i));
+        found.push(Object.keys(DAY_INDEX).find((d) => DAY_INDEX[d] === i));
         if (i === DAY_INDEX[to]) break;
       }
-      return out;
+      rest = text.slice(range[0].length); // "Lunes a Miércoles y Viernes": suma Viernes
     }
   }
-  return daysPart.split(/\s+y\s+|,|\/|&/i).map(normalizeDay).filter(Boolean);
+  return [...new Set([...found, ...(rest.match(DAY_WORDS) || []).map(normalizeDay).filter(Boolean)])];
+};
+
+// Días de clase de un aula: las franjas estructuradas si existen (`schedule`)
+// o, en aulas antiguas (o si las franjas no son válidas), lo que diga el
+// texto del horario.
+export const groupScheduleDays = (group) => {
+  if (Array.isArray(group?.schedule) && group.schedule.length) {
+    const days = [...new Set(validSlots(group.schedule).map((s) => s.day))];
+    if (days.length) return days;
+  }
+  return parseScheduleLabel(group?.scheduleTime || group?.scheduleDays);
 };
 
 // Fecha (YYYY-MM-DD) de la última clase de la semana `week` (1 = la semana de

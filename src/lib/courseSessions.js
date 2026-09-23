@@ -15,6 +15,8 @@ export const getOrderedSessions = (modules) => {
         label: `S${String(n).padStart(2, '0')}`,
         dateLabel: s.dateLabel || '',
         title: s.title,
+        // "Realizada" (o el booleano antiguo `done`): ver lib/attendance.js.
+        done: (s.status || (s.done ? 'done' : 'scheduled')) === 'done',
       };
     })
   );

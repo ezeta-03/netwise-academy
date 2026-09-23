@@ -4,7 +4,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { endWeekOf, courseWeeksFromModules, deliverableDueDate } from '../src/lib/deliveryDates.js';
 import { lastClassDate, parseScheduleLabel } from '../src/lib/liveScheduleGenerator.js';
-import { isPendingUrl } from '../src/lib/placeholders.js';
+import { isPendingUrl, isSafeLink } from '../src/lib/placeholders.js';
 
 describe('endWeekOf', () => {
   test('etiquetas típicas', () => {
@@ -140,10 +140,38 @@ describe('isPendingUrl', () => {
     assert.equal(isPendingUrl('Por definir'), false);
     assert.equal(isPendingUrl('TBD'), false);
   });
-  test('una cadena que sólo espacios ("   ") debería tratarse como pendiente', { todo: 'BAJO placeholders.js:5 - !url es false para "   "; usar !String(url).trim()' }, () => {
-    assert.equal(isPendingUrl('   '), true);
+  test('una cadena de sólo espacios o tabs se trata como pendiente', () => {
+    for (const u of ['   ', '\t', ' \n ']) assert.equal(isPendingUrl(u), true, JSON.stringify(u));
   });
-  test('una url no-http ("javascript:...", "pendiente.com") debería considerarse inválida', { todo: 'BAJO placeholders.js:5 - sólo detecta el prefijo "pendiente"; no valida esquema http(s)' }, () => {
-    assert.equal(isPendingUrl('javascript:alert(1)'), true);
+});
+
+describe('isSafeLink', () => {
+  test('sólo http:// o https:// seguido de caracteres sin espacios', () => {
+    for (const u of ['https://x.com', 'http://x.com', 'https://drive.google.com/file/d/1/view?usp=sharing', 'HTTPS://X.COM', 'https://a', 'http://localhost:3000/x']) assert.equal(isSafeLink(u), true, u);
+  });
+  test('se ignoran espacios alrededor', () => {
+    assert.equal(isSafeLink('  https://x.com  '), true);
+    assert.equal(isSafeLink('https://x.com\n'), true);
+  });
+  test('javascript:, data:, ftp:, file:, mailto: -> false', () => {
+    for (const u of ['javascript:alert(1)', 'JAVASCRIPT:alert(1)', 'data:text/html,<script>', 'ftp://x.com/a', 'file:///c:/x', 'mailto:a@b.com']) assert.equal(isSafeLink(u), false, u);
+  });
+  test('sin esquema ("www.x.com", "x.com", "//x.com"), vacío, null, undefined -> false', () => {
+    for (const u of ['www.x.com', 'x.com', '//x.com', '', '   ', null, undefined, 0, false]) assert.equal(isSafeLink(u), false, String(u));
+  });
+  test('"https://" sin host o con espacios internos -> false', () => {
+    for (const u of ['https://', 'http://', 'https:// x.com', 'https://x.com/a b', 'https://x.com y']) assert.equal(isSafeLink(u), false, u);
+  });
+  test('los placeholders "Pendiente..." no son enlaces seguros y sí son pendientes', () => {
+    for (const u of ['Pendiente de subir', 'pendiente de grabar']) {
+      assert.equal(isSafeLink(u), false);
+      assert.equal(isPendingUrl(u), true);
+    }
+  });
+  test('un enlace seguro nunca es "pendiente" (excepto que empiece con la palabra)', () => {
+    for (const u of ['https://x.com', 'http://a.b/c']) assert.equal(isPendingUrl(u) && isSafeLink(u), false, u);
+  });
+  test('una url con esquema válido pero host basura ("https://<script>") debería rechazarse', { todo: 'BAJO placeholders.js:5 - isSafeLink sólo exige http(s):// + no-espacios; "https://<script>" o "http://javascript:x" pasan' }, () => {
+    assert.equal(isSafeLink('https://<script>alert(1)</script>'), false);
   });
 });

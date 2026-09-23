@@ -9,18 +9,24 @@ import { getOrderedSessions } from '../src/lib/courseSessions.js';
 import { deliverableDueDate } from '../src/lib/deliveryDates.js';
 import { resolveWeights, deliverableLabel } from '../src/lib/weights.js';
 import { APPROVAL, evaluateApproval } from '../src/lib/approval.js';
+import { attendanceStats } from '../src/lib/attendance.js';
+import { courseRoster } from '../src/lib/roster.js';
 
 // ---------------------------------------------------------------------------
-// TeacherCourseCronograma.jsx (bloque de filas; endWeekOf/fechas: lib/deliveryDates.js)
+// TeacherCourseCronograma.jsx (filas/estado; endWeekOf/fechas: lib/deliveryDates.js; roster: lib/roster.js)
 // ---------------------------------------------------------------------------
-const cronograma = (modules, group) => {
+const cronograma = (modules, group, roster = [], subs = []) => {
   const resolved = resolveWeights(modules);
-  const firstOpenIdx = resolved.rows.findIndex((r) => r.module.deliverable?.open !== false);
+  // "Calificado" = todos los alumnos del aula tienen su entrega revisada en ese módulo.
+  const rosterUids = new Set(roster.map((r) => r.uid));
+  const gradedCount = (moduleId) => new Set(subs.filter((x) => x.moduleId === moduleId && x.status === 'reviewed' && rosterUids.has(x.uid)).map((x) => x.uid)).size;
+  const isGraded = (moduleId) => roster.length > 0 && gradedCount(moduleId) === roster.length;
+  const firstOpenIdx = resolved.rows.findIndex((r) => !isGraded(r.module.id));
   const rows = resolved.rows.map((r, i) => {
     const m = r.module;
     const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
-    const status = m.deliverable?.open === false ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
-    return { id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit, name: `${deliverableLabel(i, resolved.rows.length)} · ${m.title}` };
+    const status = isGraded(m.id) ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
+    return { id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit, graded: gradedCount(m.id), name: `${deliverableLabel(i, resolved.rows.length)} · ${m.title}` };
   });
   const nextRow = rows[firstOpenIdx];
   const totalWeight = resolved.total;
@@ -35,12 +41,14 @@ const GROUP = { startDate: '2026-03-10', scheduleTime: 'Martes y Jueves · 19:00
 
 describe('Cronograma: filas, estado, pesos y fórmula', () => {
   const branding = [
-    M('a', 'Semana 1', D(20, { open: false })), M('b', 'Semana 2', D(20)),
+    M('a', 'Semana 1', D(20)), M('b', 'Semana 2', D(20)),
     M('c', 'Semana 3', D(25)), M('d', 'Semana 4', D(35)),
   ];
 
   test('caso Branding 20/20/25/35: fechas, estados, total y fórmula', () => {
-    const c = cronograma(branding, GROUP);
+    const roster = [{ uid: 'u1' }, { uid: 'u2' }];
+    const subs = [{ uid: 'u1', moduleId: 'a', status: 'reviewed' }, { uid: 'u2', moduleId: 'a', status: 'reviewed' }];
+    const c = cronograma(branding, GROUP, roster, subs);
     assert.deepEqual(c.rows.map((r) => r.dueIso), ['2026-03-12', '2026-03-19', '2026-03-26', '2026-04-02']);
     assert.deepEqual(c.rows.map((r) => r.status), ['graded', 'current', 'scheduled', 'scheduled']);
     assert.deepEqual(c.rows.map((r) => r.name), ['Entregable M1 · T-a', 'Entregable M2 · T-b', 'Entregable M3 · T-c', 'Trabajo final · T-d']);
@@ -73,10 +81,67 @@ describe('Cronograma: filas, estado, pesos y fórmula', () => {
     assert.equal(c.formula, null);
     assert.deepEqual(c.warnings, { sumNot100: false, missingWeights: false });
   });
-  test('todos cerrados -> ninguno "current" y no hay próxima evaluación', () => {
-    const c = cronograma([M('a', 'Semana 1', D(50, { open: false })), M('b', 'Semana 2', D(50, { open: false }))], GROUP);
-    assert.deepEqual(c.rows.map((r) => r.status), ['graded', 'graded']);
-    assert.equal(c.nextRow, undefined);
+  describe('estado "Calificado" según las notas reales del aula', () => {
+    const mods = [M('a', 'Semana 1', D(50)), M('b', 'Semana 2', D(50)), M('c', 'Semana 3', D(0))];
+    const roster = [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }];
+    const rev = (uid, moduleId, status = 'reviewed') => ({ uid, moduleId, status });
+
+    test('sin alumnos en el aula nunca hay "Calificado": la primera fila es "current"', () => {
+      const c = cronograma(mods, GROUP, [], [rev('u1', 'a')]);
+      assert.deepEqual(c.rows.map((r) => r.status), ['current', 'scheduled', 'scheduled']);
+      assert.deepEqual(c.rows.map((r) => r.graded), [0, 0, 0]);
+    });
+    test('un módulo es "graded" sólo si TODOS los alumnos tienen entrega revisada', () => {
+      const partial = cronograma(mods, GROUP, roster, [rev('u1', 'a'), rev('u2', 'a')]);
+      assert.equal(partial.rows[0].status, 'current');
+      assert.equal(partial.rows[0].graded, 2);
+      const full = cronograma(mods, GROUP, roster, [rev('u1', 'a'), rev('u2', 'a'), rev('u3', 'a')]);
+      assert.deepEqual(full.rows.map((r) => r.status), ['graded', 'current', 'scheduled']);
+      assert.equal(full.rows[0].graded, 3);
+      assert.equal(full.nextRow.id, 'b');
+    });
+    test('las entregas "submitted" (sin revisar) no cuentan como calificadas', () => {
+      const c = cronograma(mods, GROUP, roster, [rev('u1', 'a'), rev('u2', 'a'), rev('u3', 'a', 'submitted')]);
+      assert.equal(c.rows[0].status, 'current');
+      assert.equal(c.rows[0].graded, 2);
+    });
+    test('el conteo usa uids distintos: entregas duplicadas del mismo alumno cuentan una vez', () => {
+      const c = cronograma(mods, GROUP, [{ uid: 'u1' }, { uid: 'u2' }], [rev('u1', 'a'), rev('u1', 'a'), rev('u1', 'a')]);
+      assert.equal(c.rows[0].graded, 1);
+      assert.equal(c.rows[0].status, 'current');
+    });
+    test('las entregas de alumnos fuera del roster (pendientes, otros cursos) se ignoran', () => {
+      const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [rev('u1', 'a'), rev('x9', 'a'), rev('x8', 'b')]);
+      assert.deepEqual(c.rows.map((r) => r.status), ['graded', 'current', 'scheduled']);
+      assert.equal(c.rows[0].graded, 1);
+    });
+    test('el primer módulo NO calificado es "current" aunque un módulo posterior ya esté calificado', () => {
+      const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [rev('u1', 'b')]);
+      assert.deepEqual(c.rows.map((r) => r.status), ['current', 'graded', 'scheduled']);
+      assert.equal(c.nextRow.id, 'a');
+    });
+    test('todos los módulos calificados: ninguno "current" y no hay próxima evaluación', () => {
+      const c = cronograma(mods, GROUP, [{ uid: 'u1' }], [rev('u1', 'a'), rev('u1', 'b'), rev('u1', 'c')]);
+      assert.deepEqual(c.rows.map((r) => r.status), ['graded', 'graded', 'graded']);
+      assert.equal(c.nextRow, undefined);
+    });
+    test('el flag manual deliverable.open === false ya no marca "Calificado"', () => {
+      const c = cronograma([M('a', 'Semana 1', D(100, { open: false }))], GROUP, [{ uid: 'u1' }], []);
+      assert.equal(c.rows[0].status, 'current');
+    });
+    test('los módulos sin entregable no participan en el estado', () => {
+      const c = cronograma([M('z', 'Semana 1'), M('a', 'Semana 2', D(100))], GROUP, [{ uid: 'u1' }], [rev('u1', 'z')]);
+      assert.deepEqual(c.rows.map((r) => [r.id, r.status]), [['a', 'current']]);
+    });
+    test('un roster armado con courseRoster (sin pendientes ni duplicados) determina el estado', () => {
+      const enrollments = [
+        { uid: 'u1', courseId: 2, status: 'active' }, { uid: 'u1', courseId: 2, status: 'active' },
+        { uid: 'p1', courseId: 2, status: 'pending' }, { uid: 'o1', courseId: 9, status: 'active' },
+      ];
+      const r = courseRoster(enrollments, 2);
+      const c = cronograma(mods, GROUP, r, [rev('u1', 'a')]);
+      assert.equal(c.rows[0].status, 'graded'); // el pendiente p1 no bloquea la calificación
+    });
   });
   test('un único entregable se llama "Trabajo final"', () => {
     assert.equal(cronograma([M('a', 'Semana 1', D(100))], GROUP).rows[0].name, 'Trabajo final · T-a');
@@ -208,22 +273,22 @@ describe('Rúbrica: pointsValue / totalPoints (suma de "destacado")', () => {
 });
 
 // ---------------------------------------------------------------------------
-// TeacherCourseEvaluacion.jsx: Asistencia (statsFor, avg, bajo75) y classSummary
+// TeacherCourseEvaluacion.jsx: Asistencia (statsFor / sessionsTaken / totalSinRegistrar)
+//   y classSummary; lib/attendance.js (attendanceStats)
 // ---------------------------------------------------------------------------
 const teacherAttendance = (modules, roster, attendance) => {
   const sessions = getOrderedSessions(modules);
-  const attendanceFor = (uid, sessionId) => attendance.find((a) => a.uid === uid && a.sessionId === sessionId) || null;
+  // Sesión dictada sin registro = falta (ver lib/attendance.js).
   const statsFor = (uid) => {
-    const taken = sessions.filter((s) => attendanceFor(uid, s.id));
-    const present = taken.filter((s) => attendanceFor(uid, s.id).present).length;
-    const raw = taken.length ? (present / taken.length) * 100 : null;
-    return { pct: raw === null ? null : Math.round(raw), raw, faltas: taken.length - present };
+    const st = attendanceStats(sessions, attendance.filter((a) => a.uid === uid));
+    return { pct: st.pct, raw: st.raw, faltas: st.absent, sinRegistrar: st.unregistered };
   };
-  const sessionsTaken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id)).length;
+  const sessionsTaken = sessions.filter((s) => s.done || attendance.some((a) => a.sessionId === s.id)).length;
+  const totalSinRegistrar = roster.reduce((sum, r) => sum + statsFor(r.uid).sinRegistrar, 0);
   const withAtt = roster.map((r) => statsFor(r.uid).raw).filter((p) => p !== null);
   const avgPct = withAtt.length ? Math.round(withAtt.reduce((sum, p) => sum + p, 0) / withAtt.length) : null;
   const bajo75 = withAtt.filter((p) => p < APPROVAL.minAttendancePct).length;
-  return { statsFor, sessionsTaken, avgPct, bajo75, total: sessions.length };
+  return { statsFor, sessionsTaken, totalSinRegistrar, avgPct, bajo75, total: sessions.length };
 };
 const classSummary = (modules, roster, submissions, attendance) => {
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
@@ -233,9 +298,7 @@ const classSummary = (modules, roster, submissions, attendance) => {
     const byModule = {};
     withDeliverable.forEach((m) => { byModule[m.id] = submissions.find((s) => s.uid === r.uid && s.moduleId === m.id) || null; });
     const summary = computeGradeSummary(buildGradebookRows(withDeliverable, byModule));
-    const taken = sessions.filter((s) => attendance.some((a) => a.uid === r.uid && a.sessionId === s.id));
-    const present = taken.filter((s) => attendance.find((a) => a.uid === r.uid && a.sessionId === s.id)?.present).length;
-    const attPct = taken.length ? (present / taken.length) * 100 : null;
+    const attPct = attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)).raw;
     if (attPct !== null) { attSum += attPct; attN += 1; }
     if (summary.promedioParcial !== null) { gradeSum += summary.promedioParcial; gradeN += 1; }
     if ((summary.promedioParcial !== null && summary.promedioParcial < APPROVAL.minFinalGrade) || (attPct !== null && attPct < APPROVAL.minAttendancePct)) riskCount += 1;
@@ -247,30 +310,34 @@ const classSummary = (modules, roster, submissions, attendance) => {
   };
 };
 
-const sessionsMod = (n) => ({ id: 'm1', title: 'M1', sessions: Array.from({ length: n }, (_, i) => ({ id: `s${i + 1}` })) });
+// n sesiones s1..sn; las primeras `done` están marcadas como Realizadas (status 'done').
+const sessionsMod = (n, done = 0) => ({ id: 'm1', title: 'M1', sessions: Array.from({ length: n }, (_, i) => ({ id: `s${i + 1}`, ...(i < done ? { status: 'done' } : {}) })) });
 const att = (uid, flags) => flags.map((p, i) => ({ uid, sessionId: `s${i + 1}`, present: p }));
 const ROSTER = [{ uid: 'u1', studentName: 'Ana' }, { uid: 'u2', studentName: 'Luis' }];
 
 describe('Asistencia (docente)', () => {
-  test('cero sesiones: sin división por cero; pct null (sin datos), no 100%', () => {
+  test('cero sesiones: sin división por cero; pct null (sin datos)', () => {
     const a = teacherAttendance([], ROSTER, []);
     assert.equal(a.statsFor('u1').pct, null);
     assert.equal(a.avgPct, null);
     assert.equal(a.sessionsTaken, 0);
     assert.equal(a.total, 0);
     assert.equal(a.bajo75, 0);
+    assert.equal(a.totalSinRegistrar, 0);
   });
-  test('sesiones definidas pero ninguna tomada -> sin datos (null), nadie bajo el 75%', () => {
+  test('sesiones definidas pero ninguna realizada ni registrada -> sin datos, nadie bajo el 75%', () => {
     const a = teacherAttendance([sessionsMod(8)], ROSTER, []);
     assert.equal(a.statsFor('u1').pct, null);
     assert.equal(a.avgPct, null);
     assert.equal(a.bajo75, 0);
+    assert.equal(a.sessionsTaken, 0);
   });
-  test('exactamente 75% (3/4) NO está "bajo el 75%"; 2/3 = 67% sí', () => {
-    const ok = teacherAttendance([sessionsMod(4)], [ROSTER[0]], att('u1', [true, true, true, false]));
+  test('exactamente 75% (3/4 realizadas) NO está bajo el 75%; 2/3 = 67% sí', () => {
+    const ok = teacherAttendance([sessionsMod(4, 4)], [ROSTER[0]], att('u1', [true, true, true, false]));
     assert.equal(ok.statsFor('u1').pct, 75);
+    assert.equal(ok.statsFor('u1').raw, 75);
     assert.equal(ok.bajo75, 0);
-    const low = teacherAttendance([sessionsMod(3)], [ROSTER[0]], att('u1', [true, true, false]));
+    const low = teacherAttendance([sessionsMod(3, 3)], [ROSTER[0]], att('u1', [true, true, false]));
     assert.equal(low.statsFor('u1').pct, 67);
     assert.equal(low.bajo75, 1);
   });
@@ -281,82 +348,121 @@ describe('Asistencia (docente)', () => {
     assert.ok(a.statsFor('u1').raw < 75);
     assert.equal(a.bajo75, 1);
   });
+  test('una sesión Realizada SIN registro cuenta como FALTA y como "sin registrar"', () => {
+    // s1 y s2 realizadas; u1 sólo tiene registro en s1 (presente): s2 sin registrar = falta -> 1/2
+    const a = teacherAttendance([sessionsMod(2, 2)], [ROSTER[0]], att('u1', [true]));
+    assert.equal(a.statsFor('u1').pct, 50);
+    assert.equal(a.statsFor('u1').faltas, 1);
+    assert.equal(a.statsFor('u1').sinRegistrar, 1);
+    assert.equal(a.bajo75, 1);
+  });
+  test('alumno con CERO registros en una sesión Realizada: 0%, falta, sin registrar, bajo el 75% (ya no es invisible)', () => {
+    const a = teacherAttendance([sessionsMod(2, 1)], ROSTER, att('u1', [true]));
+    assert.deepEqual(a.statsFor('u2'), { pct: 0, raw: 0, faltas: 1, sinRegistrar: 1 });
+    assert.deepEqual(a.statsFor('u1'), { pct: 100, raw: 100, faltas: 0, sinRegistrar: 0 });
+    assert.equal(a.bajo75, 1);
+    assert.equal(a.avgPct, 50);
+    assert.equal(a.totalSinRegistrar, 1);
+    assert.equal(a.sessionsTaken, 1);
+  });
+  test('nadie tiene registros pero hay 1 sesión Realizada: todos 0%', () => {
+    const a = teacherAttendance([sessionsMod(3, 1)], ROSTER, []);
+    assert.equal(a.statsFor('u1').pct, 0);
+    assert.equal(a.statsFor('u2').pct, 0);
+    assert.equal(a.bajo75, 2);
+    assert.equal(a.avgPct, 0);
+    assert.equal(a.totalSinRegistrar, 2);
+    assert.equal(a.sessionsTaken, 1);
+  });
+  test('un registro en una sesión NO marcada como Realizada la vuelve "dictada" para ese alumno', () => {
+    const a = teacherAttendance([sessionsMod(4)], [ROSTER[0]], att('u1', [true, false]));
+    assert.equal(a.statsFor('u1').pct, 50);
+    assert.equal(a.sessionsTaken, 2);
+  });
+  test('sesiones Realizadas sin registro + registros en otras: cuentan todas', () => {
+    // s1 (done, sin registro), s2 (done, presente), s3 (no done, ausente) -> dictadas = 3, presentes 1
+    const m = { id: 'm1', sessions: [{ id: 's1', status: 'done' }, { id: 's2', status: 'done' }, { id: 's3' }] };
+    const a = teacherAttendance([m], [ROSTER[0]], [{ uid: 'u1', sessionId: 's2', present: true }, { uid: 'u1', sessionId: 's3', present: false }]);
+    assert.equal(a.statsFor('u1').raw, (1 / 3) * 100);
+    assert.equal(a.statsFor('u1').sinRegistrar, 1);
+  });
   test('0% y 100%; faltas; promedio', () => {
-    const a = teacherAttendance([sessionsMod(2)], ROSTER, [...att('u1', [true, true]), ...att('u2', [false, false])]);
-    assert.deepEqual(a.statsFor('u1'), { pct: 100, raw: 100, faltas: 0 });
-    assert.deepEqual(a.statsFor('u2'), { pct: 0, raw: 0, faltas: 2 });
+    const a = teacherAttendance([sessionsMod(2, 2)], ROSTER, [...att('u1', [true, true]), ...att('u2', [false, false])]);
+    assert.deepEqual(a.statsFor('u1'), { pct: 100, raw: 100, faltas: 0, sinRegistrar: 0 });
+    assert.deepEqual(a.statsFor('u2'), { pct: 0, raw: 0, faltas: 2, sinRegistrar: 0 });
     assert.equal(a.avgPct, 50);
     assert.equal(a.bajo75, 1);
   });
-  test('el promedio se calcula con porcentajes sin redondear', () => {
-    // u1 = 2/3 = 66.67 ; u2 = 100  -> (66.67 + 100) / 2 = 83.33 -> 83 (con redondeo previo: (67+100)/2 = 83.5 -> 84)
-    const a = teacherAttendance([sessionsMod(3)], ROSTER, [...att('u1', [true, true, false]), ...att('u2', [true, true, true])]);
+  test('el promedio se calcula con porcentajes sin redondear (66.67 y 100 -> 83, no 84)', () => {
+    const a = teacherAttendance([sessionsMod(3, 3)], ROSTER, [...att('u1', [true, true, false]), ...att('u2', [true, true, true])]);
     assert.equal(a.avgPct, 83);
   });
-  test('sólo cuentan las sesiones con registro de ESE alumno', () => {
-    const a = teacherAttendance([sessionsMod(4)], [ROSTER[0]], att('u1', [true, false]));
-    assert.equal(a.statsFor('u1').pct, 50); // 1/2, no 1/4
-  });
-  test('registros de sesiones que ya no existen se ignoran; filas duplicadas: gana la primera', () => {
-    const a = teacherAttendance([sessionsMod(1)], [ROSTER[0]], [...att('u1', [true]), { uid: 'u1', sessionId: 'borrada', present: false }]);
+  test('registros de sesiones que ya no existen se ignoran', () => {
+    const a = teacherAttendance([sessionsMod(1, 1)], [ROSTER[0]], [...att('u1', [true]), { uid: 'u1', sessionId: 'borrada', present: false }]);
     assert.equal(a.statsFor('u1').pct, 100);
-    const dup = [{ uid: 'u1', sessionId: 's1', present: true }, { uid: 'u1', sessionId: 's1', present: false }];
-    assert.equal(teacherAttendance([sessionsMod(1)], [ROSTER[0]], dup).statsFor('u1').pct, 100);
-  });
-  test('alumno SIN registros queda fuera del promedio y de "bajo el 75%" (ya no aparece como 100%)', () => {
-    const a = teacherAttendance([sessionsMod(2)], ROSTER, att('u1', [false, false])); // u2 sin registrar
-    assert.equal(a.statsFor('u2').pct, null);
-    assert.equal(a.avgPct, 0);
-    assert.equal(a.bajo75, 1);
   });
   test('roster vacío: la pestaña Asistencia y el panel lateral coinciden (null)', () => {
-    const tab = teacherAttendance([sessionsMod(2)], [], []).avgPct;
-    const side = classSummary([sessionsMod(2)], [], [], []).asistenciaPromedio;
+    const tab = teacherAttendance([sessionsMod(2, 2)], [], []).avgPct;
+    const side = classSummary([sessionsMod(2, 2)], [], [], []).asistenciaPromedio;
     assert.equal(tab, null);
     assert.equal(side, tab);
   });
-  test('con roster no vacío la pestaña y el panel lateral coinciden', () => {
-    const rows = [...att('u1', [true, true]), ...att('u2', [true, false])];
-    assert.equal(teacherAttendance([sessionsMod(2)], ROSTER, rows).avgPct, classSummary([sessionsMod(2)], ROSTER, [], rows).asistenciaPromedio);
-    const rows2 = [...att('u1', [true, true, false]), ...att('u2', [true, true, true])];
-    assert.equal(teacherAttendance([sessionsMod(3)], ROSTER, rows2).avgPct, classSummary([sessionsMod(3)], ROSTER, [], rows2).asistenciaPromedio);
+  test('con roster no vacío la pestaña y el panel lateral coinciden (incluye sesiones Realizadas sin registro)', () => {
+    for (const [mods, rows] of [
+      [[sessionsMod(2, 2)], [...att('u1', [true, true]), ...att('u2', [true, false])]],
+      [[sessionsMod(3, 3)], [...att('u1', [true, true, false]), ...att('u2', [true, true, true])]],
+      [[sessionsMod(3, 3)], att('u1', [true])],
+      [[sessionsMod(3, 0)], []],
+    ]) {
+      assert.equal(teacherAttendance(mods, ROSTER, rows).avgPct, classSummary(mods, ROSTER, [], rows).asistenciaPromedio);
+    }
   });
-  test('un alumno que no tiene NINGÚN registro cuando la clase ya tomó asistencia debería contar como 0% dictado', { todo: 'DISEÑO TeacherCourseEvaluacion.jsx:296-298 - el denominador son las sesiones con registro del propio alumno; quien nunca fue marcado (ni P ni F) es invisible en riesgo. Usar las sesiones ya dictadas por la clase (sessionsTaken)' }, () => {
-    const a = teacherAttendance([sessionsMod(2)], ROSTER, att('u1', [true, true]));
+  test('una sesión con registros de OTROS alumnos pero no marcada Realizada debería contar como dictada para todos', { todo: 'DISEÑO lib/attendance.js:200 - dictated = s.done || registro de ESE alumno; si el docente sólo tomó lista a algunos y no marcó la sesión como Realizada, los alumnos sin fila quedan con pct null (invisibles) aunque sessionsTaken ya cuenta la sesión' }, () => {
+    const a = teacherAttendance([sessionsMod(2)], ROSTER, att('u1', [true]));
     assert.equal(a.statsFor('u2').pct, 0);
   });
 });
 
-describe('Asistencia (alumno): MiAsistencia y MisNotas', () => {
-  // StudentCourseEvaluacion.jsx MiAsistencia :210-213 (display redondeado) y MisNotas :163-166 (valor sin redondear)
+describe('Asistencia (alumno): MiAsistencia y MisNotas (attendanceStats)', () => {
+  // StudentCourseEvaluacion.jsx MiAsistencia: pct = stats.pct (display) ; MisNotas: { taken, pct: raw }
   const student = (modules, attendance) => {
-    const sessions = getOrderedSessions(modules);
-    const taken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
-    const present = taken.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-    return {
-      display: taken.length ? Math.round((present / taken.length) * 100) : null,
-      info: { taken: taken.length, pct: taken.length ? (present / taken.length) * 100 : null },
-      taken: taken.length, present,
-    };
+    const st = attendanceStats(getOrderedSessions(modules), attendance);
+    return { display: st.pct, info: { taken: st.taken, pct: st.raw }, faltas: st.absent, taken: st.taken };
   };
-  test('sin sesiones registradas: null (no 100%) y veredicto pending', () => {
+  test('sin sesiones dictadas: null (no 100%) y veredicto pending', () => {
     const r = student([sessionsMod(5)], []);
     assert.equal(r.display, null);
     assert.equal(evaluateApproval(computeGradeSummary([]), r.info).attendance, 'pending');
     assert.equal(student([], []).display, null);
   });
+  test('una sesión Realizada sin registro del alumno cuenta como falta -> 0% y veredicto fail', () => {
+    const r = student([sessionsMod(4, 2)], []);
+    assert.equal(r.display, 0);
+    assert.equal(r.faltas, 2);
+    assert.equal(evaluateApproval(null, r.info).attendance, 'fail');
+  });
   test('exactamente 75% -> ok; 2/3 -> fail', () => {
-    assert.equal(evaluateApproval(null, student([sessionsMod(4)], att('u1', [true, true, true, false])).info).attendance, 'ok');
-    assert.equal(evaluateApproval(null, student([sessionsMod(3)], att('u1', [true, true, false])).info).attendance, 'fail');
+    assert.equal(evaluateApproval(null, student([sessionsMod(4, 4)], att('u1', [true, true, true, false])).info).attendance, 'ok');
+    assert.equal(evaluateApproval(null, student([sessionsMod(3, 3)], att('u1', [true, true, false])).info).attendance, 'fail');
   });
   test('38/51: se muestra 75% pero el veredicto es fail (usa el valor sin redondear)', () => {
     const r = student([sessionsMod(51)], att('u1', Array.from({ length: 51 }, (_, i) => i < 38)));
     assert.equal(r.display, 75);
     assert.equal(evaluateApproval(null, r.info).attendance, 'fail');
   });
-  test('coincide con la vista del docente para el mismo alumno', () => {
-    const rows = att('u1', [true, false, true]);
-    assert.equal(student([sessionsMod(3)], rows).display, teacherAttendance([sessionsMod(3)], [ROSTER[0]], rows).statsFor('u1').pct);
+  test('coincide con la vista del docente para el mismo alumno (con y sin sesiones sin registrar)', () => {
+    for (const [mods, rows] of [
+      [[sessionsMod(3, 3)], att('u1', [true, false, true])],
+      [[sessionsMod(4, 2)], att('u1', [true])],
+      [[sessionsMod(4, 0)], []],
+    ]) {
+      assert.equal(student(mods, rows).display, teacherAttendance(mods, [ROSTER[0]], rows).statsFor('u1').pct);
+    }
+  });
+  test('el resumen lateral del alumno (asistenciaPct) usa el mismo porcentaje redondeado', () => {
+    const st = attendanceStats(getOrderedSessions([sessionsMod(3, 3)]), att('u1', [true, true, false]));
+    assert.equal(st.pct, 67);
+    assert.equal(evaluateApproval(computeGradeSummary([]), { taken: st.taken, pct: st.raw }).attendance, 'fail');
   });
 });
 
@@ -379,6 +485,12 @@ describe('Resumen del aula (estudiantes en riesgo, promedio)', () => {
   });
   test('riesgo por asistencia < 75 aunque la nota sea 20', () => {
     assert.equal(classSummary(dmods, [ROSTER[0]], [sub('u1', 'a', 20)], att('u1', [true, false])).enRiesgo, 1);
+  });
+  test('riesgo por sesión Realizada sin registro (0% de asistencia)', () => {
+    const withDone = [{ ...dmods[0], sessions: [{ id: 's1', status: 'done' }, { id: 's2' }] }, dmods[1]];
+    assert.equal(classSummary(withDone, [ROSTER[0]], [], []).enRiesgo, 1);
+    assert.equal(classSummary(withDone, [ROSTER[0]], [], []).asistenciaPromedio, 0);
+    assert.equal(classSummary(withDone, [ROSTER[0]], [], att('u1', [true])).enRiesgo, 0);
   });
   test('riesgo por asistencia 74.5% (sin redondear)', () => {
     const big = { ...dmods[0], sessions: Array.from({ length: 51 }, (_, i) => ({ id: `s${i + 1}` })) };

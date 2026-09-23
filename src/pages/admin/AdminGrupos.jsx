@@ -7,7 +7,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, scheduleLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
-import { buildRecurringSessions } from '../../lib/liveScheduleGenerator';
+import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
 
 const GROUP_STATUS = {
@@ -20,13 +20,31 @@ const GROUP_STATUS = {
 // escribir uno nuevo a mano -- evita horarios inconsistentes entre aulas.
 // Se guardan días/hora por separado (no solo el texto) porque hacen falta
 // para generar el calendario de clases al crear el aula.
+const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const slotUid = () => `sl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+const pad5 = (t) => String(t).padStart(5, '0');
+const withId = (s) => ({ id: slotUid(), day: s.day, start: pad5(s.start), end: pad5(s.end) });
+
 const buildScheduleOptions = (courses) => {
   const map = new Map();
   courses.filter((c) => c.scheduleDays?.length && c.scheduleTime).forEach((c) => {
+    const [start, end] = c.scheduleTime.split('-').map((t) => t.trim());
     const label = `${c.scheduleDays.join(' y ')} · ${c.scheduleTime}`;
-    if (!map.has(label)) map.set(label, { label, days: c.scheduleDays, time: c.scheduleTime });
+    if (!map.has(label)) map.set(label, { label, slots: c.scheduleDays.map((day) => ({ day, start, end })) });
   });
   return [...map.values()];
+};
+
+// Franjas iniciales del editor: las estructuradas del aula (`schedule`), las
+// deducidas del texto de un aula antigua ("Martes y Jueves · 19:00-21:00"), o
+// el primer horario tipo como punto de partida.
+const initialSlots = (group, options) => {
+  if (Array.isArray(group?.schedule) && group.schedule.length) return group.schedule.map(withId);
+  const m = String(group?.scheduleTime || '').match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+  const days = parseScheduleLabel(group?.scheduleTime);
+  if (m && days.length) return days.map((day) => withId({ day, start: m[1], end: m[2] }));
+  if (options[0]) return options[0].slots.map(withId);
+  return [withId({ day: 'Martes', start: '19:00', end: '21:00' })];
 };
 
 const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
@@ -36,7 +54,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
   const [startDate, setStartDate] = useState(group?.startDate || '');
   const [endDate, setEndDate] = useState(group?.endDate || '');
   const scheduleOptions = buildScheduleOptions(courses);
-  const [scheduleTime, setScheduleTime] = useState(group?.scheduleTime || scheduleOptions[0]?.label || '');
+  const [slots, setSlots] = useState(() => initialSlots(group, scheduleOptions));
   const [teachers, setTeachers] = useState([]);
   const [instructor, setInstructor] = useState(group?.instructor || '');
   const [instructorUid, setInstructorUid] = useState(group?.instructorUid || '');
@@ -55,15 +73,30 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
     setInstructor(t ? (t.displayName || t.email) : '');
   };
 
+  const updateSlot = (id, patch) => setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const addSlot = () => setSlots((prev) => {
+    const last = prev[prev.length - 1];
+    return [...prev, withId(last ? { ...last, day: DAYS[(DAYS.indexOf(last.day) + 1) % 7] } : { day: 'Lunes', start: '19:00', end: '21:00' })];
+  });
+  const applyPreset = (label) => {
+    const opt = scheduleOptions.find((o) => o.label === label);
+    if (opt) setSlots(opt.slots.map(withId));
+  };
+
   const handleSave = async () => {
     if (!name.trim() || !instructor.trim()) { addToast('Nombre de aula y docente son obligatorios.', 'error'); return; }
+    const cleanSlots = validSlots(slots);
+    if (cleanSlots.length === 0 || cleanSlots.length < slots.length) {
+      addToast('Revisa el horario: cada franja necesita día, hora de inicio y hora de fin distintas (y sin repetir).', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const course = courses.find((c) => c.id.toString() === courseId.toString());
       const payload = {
         name: name.trim(), courseId, courseTitle: course?.title || '',
         startDate: startDate || null, endDate: endDate || null,
-        scheduleTime: scheduleTime.trim(), instructor: instructor.trim(), instructorUid: instructorUid || null,
+        schedule: cleanSlots, scheduleTime: buildScheduleLabel(cleanSlots), instructor: instructor.trim(), instructorUid: instructorUid || null,
         capacity: Number(capacity) || 0, status, classLink: classLink.trim() || null,
       };
       if (group) {
@@ -76,14 +109,13 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
 
         // Genera el calendario completo de una vez -- para que el docente ya
         // tenga todo listo al entrar, en vez de tener que armarlo él mismo.
-        const scheduleOpt = scheduleOptions.find((o) => o.label === scheduleTime.trim());
-        if (startDate && scheduleOpt && instructorUid) {
+        if (startDate && instructorUid) {
           // Las semanas salen de los módulos del curso (así el calendario cubre
           // exactamente lo que el contenido dicta); sin módulos, la duración
           // publicada del curso.
           const content = await fetchCourseContent(courseId).catch(() => ({ modules: [] }));
           const weeks = courseWeeksFromModules(content.modules) || course?.duration;
-          const entries = buildRecurringSessions({ scheduleDays: scheduleOpt.days, scheduleTime: scheduleOpt.time, weeksLabel: String(weeks) }, startDate);
+          const entries = buildRecurringSessions({ slots: cleanSlots, weeksLabel: String(weeks) }, startDate);
           for (const entry of entries) {
             await scheduleLiveSession({
               courseId, courseTitle: course?.title || '', title: entry.title,
@@ -140,14 +172,33 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           </div>
         </div>
-        <div className="admin-field-row">
-          <div className="admin-field">
-            <label>Horario · hora de Perú</label>
-            <select value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)}>
-              {scheduleOptions.length === 0 && <option value="">Sin horarios definidos todavía</option>}
-              {scheduleOptions.map((s) => <option key={s.label} value={s.label}>{s.label}</option>)}
-            </select>
+        <div className="admin-field">
+          <label>Horario semanal · hora de Perú</label>
+          <div className="sched-editor">
+            {slots.map((s) => (
+              <div className="sched-row" key={s.id}>
+                <select value={s.day} onChange={(e) => updateSlot(s.id, { day: e.target.value })}>
+                  {DAYS.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+                <input type="time" value={s.start} onChange={(e) => updateSlot(s.id, { start: e.target.value })} />
+                <span className="sched-to">a</span>
+                <input type="time" value={s.end} onChange={(e) => updateSlot(s.id, { end: e.target.value })} />
+                <button type="button" className="admin-icon-btn" title="Quitar horario" disabled={slots.length === 1} onClick={() => setSlots((prev) => prev.filter((x) => x.id !== s.id))}><X size={13} /></button>
+              </div>
+            ))}
+            <div className="sched-actions">
+              <button type="button" className="admin-btn-ghost" onClick={addSlot}><Plus size={13} /> Agregar horario</button>
+              {scheduleOptions.length > 0 && (
+                <select defaultValue="" onChange={(e) => { applyPreset(e.target.value); e.target.value = ''; }}>
+                  <option value="" disabled>Usar un horario tipo…</option>
+                  {scheduleOptions.map((o) => <option key={o.label} value={o.label}>{o.label}</option>)}
+                </select>
+              )}
+            </div>
+            <div className="admin-cell-sub" style={{ marginTop: 6 }}>{buildScheduleLabel(slots) || 'Completa al menos un horario válido.'}</div>
           </div>
+        </div>
+        <div className="admin-field-row">
           <div className="admin-field">
             <label>Cupos</label>
             <input type="number" min="1" value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="30" />

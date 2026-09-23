@@ -4,7 +4,7 @@
 // 2026-12-29 = martes, 2028-02-28 = lunes.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildRecurringSessions, parseScheduleLabel, lastClassDate, toPeruIso, PERU_OFFSET } from '../src/lib/liveScheduleGenerator.js';
+import { buildRecurringSessions, parseScheduleLabel, lastClassDate, toPeruIso, PERU_OFFSET, validSlots, buildScheduleLabel, groupScheduleDays } from '../src/lib/liveScheduleGenerator.js';
 
 const TJ = { scheduleDays: ['Martes', 'Jueves'], scheduleTime: '19:00-21:00', weeksLabel: '8 semanas' };
 
@@ -43,11 +43,23 @@ describe('parseScheduleLabel', () => {
   test('días con "y" pegado a un día inexistente se descartan sin error', () => {
     assert.deepEqual(parseScheduleLabel('Martes y Foo · 19:00'), ['Martes']);
   });
-  test('duplicados se conservan', () => {
-    assert.deepEqual(parseScheduleLabel('Martes y Martes'), ['Martes', 'Martes']);
+  test('duplicados se eliminan', () => {
+    assert.deepEqual(parseScheduleLabel('Martes y Martes'), ['Martes']);
+    assert.deepEqual(parseScheduleLabel('Martes 19:00-21:00 · martes 15:00-17:00'), ['Martes']);
   });
-  test('la hora antes de los días -> []', () => {
-    assert.deepEqual(parseScheduleLabel('19:00-21:00 · Martes y Jueves'), []);
+  test('la hora antes de los días: se encuentran igual las palabras de día', () => {
+    assert.deepEqual(parseScheduleLabel('19:00-21:00 · Martes y Jueves'), ['Martes', 'Jueves']);
+  });
+  test('un texto con sólo horas y sin palabras de día -> []', () => {
+    assert.deepEqual(parseScheduleLabel('19:00-21:00'), []);
+    assert.deepEqual(parseScheduleLabel('a convenir'), []);
+  });
+  test('formato por día: "Lunes 19:00-21:00 · Miércoles 18:00-20:30" -> días', () => {
+    assert.deepEqual(parseScheduleLabel('Lunes 19:00-21:00 · Miércoles 18:00-20:30'), ['Lunes', 'Miércoles']);
+    assert.deepEqual(parseScheduleLabel('Sábado 09:00-11:00 · Sábado 15:00-17:00'), ['Sábado']);
+  });
+  test('los días se devuelven en el orden en que aparecen en el texto', () => {
+    assert.deepEqual(parseScheduleLabel('Jueves y Martes'), ['Jueves', 'Martes']);
   });
 
   test('minúsculas, MAYÚSCULAS, sin tilde, plural, "/", "&" y NFD se reconocen', () => {
@@ -58,7 +70,10 @@ describe('parseScheduleLabel', () => {
     assert.deepEqual(parseScheduleLabel('Sábados y Domingos'), ['Sábado', 'Domingo']);
     assert.deepEqual(parseScheduleLabel('Martes/Jueves'), ['Martes', 'Jueves']);
     assert.deepEqual(parseScheduleLabel('Martes & Jueves'), ['Martes', 'Jueves']);
-    assert.deepEqual(parseScheduleLabel('Mie\u0301rcoles'), ['Miércoles']); // NFD (teclados macOS)
+  });
+  test('"Miércoles" en NFD (teclados macOS) debería reconocerse', { todo: 'BAJO liveScheduleGenerator.js:146 - DAY_WORDS busca "mi[eé]rcoles"/"s[aá]bado" sin normalizar NFD; "Mie\u0301rcoles" y "Sa\u0301bado" ya no se reconocen (antes sí). Aplicar .normalize("NFC") al texto' }, () => {
+    assert.deepEqual(parseScheduleLabel('Mie\u0301rcoles'), ['Miércoles']);
+    assert.deepEqual(parseScheduleLabel('Sa\u0301bado'), ['Sábado']);
   });
   test('un array (legacy group.scheduleDays) ya no lanza error', () => {
     assert.deepEqual(parseScheduleLabel(['Martes', 'Jueves']), ['Martes', 'Jueves']);
@@ -76,10 +91,11 @@ describe('parseScheduleLabel', () => {
     assert.deepEqual(parseScheduleLabel('Viernes a Lunes'), ['Viernes', 'Sábado', 'Domingo', 'Lunes']);
     assert.deepEqual(parseScheduleLabel('Martes a Martes'), ['Martes']);
   });
-  test('rango con un extremo inválido -> []', () => {
-    assert.deepEqual(parseScheduleLabel('Lunes a Foo'), []);
+  test('rango con un extremo inválido: no se expande, sólo quedan las palabras de día', () => {
+    assert.deepEqual(parseScheduleLabel('Lunes a Foo'), ['Lunes']);
+    assert.deepEqual(parseScheduleLabel('Foo a Viernes'), ['Viernes']);
   });
-  test('un rango combinado con otro día ("Lunes a Miércoles y Viernes") debería expandirse', { todo: 'BAJO liveScheduleGenerator.js:102 - el rango sólo se reconoce si es todo el texto; combinado con "y" se pierde el rango y sólo queda "Viernes"' }, () => {
+  test('un rango combinado con otro día ("Lunes a Miércoles y Viernes") debería expandirse', { todo: 'BAJO liveScheduleGenerator.js:153 - el rango se detecta al inicio y el resto del texto se ignora: "Lunes a Miércoles y Viernes" da [Lunes, Martes, Miércoles] y pierde "Viernes"' }, () => {
     assert.deepEqual(parseScheduleLabel('Lunes a Miércoles y Viernes'), ['Lunes', 'Martes', 'Miércoles', 'Viernes']);
   });
 });
@@ -140,13 +156,15 @@ describe('lastClassDate', () => {
     assert.equal(lastClassDate('no-es-fecha', ['Martes'], 1), null);
     assert.equal(lastClassDate('', ['Martes'], 1), null);
   });
-  test('fechas de calendario imposibles ("2026-13-45", "2026-02-31") deberían dar null', { todo: 'BAJO liveScheduleGenerator.js:48-53 - parseDate valida el formato con regex pero Date.UTC "rueda" los excesos (2026-02-31 -> 2026-03-03)' }, () => {
+  test('fechas de calendario imposibles ("2026-13-45", "2026-02-31") dan null', () => {
     assert.equal(lastClassDate('2026-13-45', ['Martes'], 1), null);
     assert.equal(lastClassDate('2026-02-31', ['Martes'], 1), null);
+    assert.equal(lastClassDate('2026-00-10', ['Martes'], 1), null);
+    assert.deepEqual(buildRecurringSessions({ ...TJ, weeksLabel: '1' }, '2026-02-31'), []);
   });
-  test('ignora nombres inválidos mezclados con válidos y acepta minúsculas', () => {
-    assert.equal(lastClassDate('2026-03-10', ['Foo', 'Martes'], 1), '2026-03-10');
-    assert.equal(lastClassDate('2026-03-10', ['martes', 'jueves'], 1), '2026-03-12');
+  test('29 de febrero sólo es válido en año bisiesto', () => {
+    assert.notEqual(lastClassDate('2028-02-29', ['Martes'], 1), null);
+    assert.equal(lastClassDate('2027-02-29', ['Martes'], 1), null);
   });
   test('semana 0 cae 7 días antes de la primera clase (endWeekOf puede devolver 0 con "Semana 0")', () => {
     assert.equal(lastClassDate('2026-03-10', ['Martes', 'Jueves'], 0), '2026-03-05');
@@ -340,8 +358,197 @@ describe('offset de Perú', () => {
     test('el resultado se interpreta como Lima en cualquier zona (instante fijo)', () => {
       assert.equal(new Date(toPeruIso('2026-08-11T19:00')).toISOString(), '2026-08-12T00:00:00.000Z');
     });
-    test('una fecha sin hora ("2026-08-11") no debería convertirse en un ISO inválido', { todo: 'BAJO liveScheduleGenerator.js:46 - devuelve "2026-08-11-05:00" (Invalid Date); validar que haya hora' }, () => {
-      assert.ok(!Number.isNaN(new Date(toPeruIso('2026-08-11')).getTime()));
+    test('una fecha sin hora ("2026-08-11") se completa a medianoche de Lima (ISO válido)', () => {
+      assert.equal(toPeruIso('2026-08-11'), '2026-08-11T00:00-05:00');
+      assert.equal(new Date(toPeruIso('2026-08-11')).toISOString(), '2026-08-11T05:00:00.000Z');
     });
+  });
+});
+
+const slot = (day, start, end) => ({ day, start, end });
+const dateOf = (e) => e.startsAt.slice(0, 10);
+const timeOf = (e) => e.startsAt.slice(11, 16);
+
+describe('buildRecurringSessions con slots (una hora por franja)', () => {
+  test('horas distintas por día: lun 19:00-21:00 y mié 18:00-20:30', () => {
+    const e = buildRecurringSessions({ slots: [slot('Lunes', '19:00', '21:00'), slot('Miércoles', '18:00', '20:30')], weeksLabel: '2' }, '2026-03-09');
+    assert.deepEqual(e, [
+      { startsAt: '2026-03-09T19:00-05:00', durationMin: 120, title: 'Semana 1 · Lunes' },
+      { startsAt: '2026-03-11T18:00-05:00', durationMin: 150, title: 'Semana 1 · Miércoles' },
+      { startsAt: '2026-03-16T19:00-05:00', durationMin: 120, title: 'Semana 2 · Lunes' },
+      { startsAt: '2026-03-18T18:00-05:00', durationMin: 150, title: 'Semana 2 · Miércoles' },
+    ]);
+  });
+  test('dos franjas el mismo día: ordenadas por hora, mismo título de día', () => {
+    const e = buildRecurringSessions({ slots: [slot('Sábado', '15:00', '17:00'), slot('Sábado', '09:00', '11:00')], weeksLabel: '2' }, '2026-03-14');
+    assert.deepEqual(e.map((x) => x.startsAt), ['2026-03-14T09:00-05:00', '2026-03-14T15:00-05:00', '2026-03-21T09:00-05:00', '2026-03-21T15:00-05:00']);
+    assert.deepEqual(e.map((x) => x.title), ['Semana 1 · Sábado', 'Semana 1 · Sábado', 'Semana 2 · Sábado', 'Semana 2 · Sábado']);
+    assert.ok(e.every((x) => x.durationMin === 120));
+  });
+  test('la misma franja repetida se elimina (también con distinto casing/formato de hora)', () => {
+    const e = buildRecurringSessions({ slots: [slot('Martes', '19:00', '21:00'), slot('martes', '19:00', '21:00'), slot('Martes', '7:00', '9:00'), slot('Martes', '07:00', '09:00')], weeksLabel: '1' }, '2026-03-10');
+    assert.deepEqual(e.map(timeOf), ['07:00', '19:00']);
+  });
+  test('mismo día y hora de inicio pero distinta duración: son franjas distintas', () => {
+    const e = buildRecurringSessions({ slots: [slot('Martes', '19:00', '20:00'), slot('Martes', '19:00', '21:00')], weeksLabel: '1' }, '2026-03-10');
+    assert.equal(e.length, 2);
+  });
+  test('franjas inválidas se ignoran; si ninguna es válida -> []', () => {
+    const e = buildRecurringSessions({ slots: [slot('Foo', '19:00', '21:00'), slot('Martes', '19:00', '21:00'), slot('Jueves', 'xx', 'yy'), slot('Lunes', '10:00', '10:00'), slot('Viernes', '25:00', '26:00'), null, {}], weeksLabel: '1' }, '2026-03-10');
+    assert.deepEqual(e.map((x) => x.title), ['Semana 1 · Martes']);
+    assert.deepEqual(buildRecurringSessions({ slots: [slot('Foo', '19:00', '21:00'), slot('Lunes', '10:00', '10:00')], weeksLabel: '1' }, '2026-03-10'), []);
+  });
+  test('slots vacío cae al formato anterior (scheduleDays + scheduleTime); el formato anterior sigue funcionando', () => {
+    const legacy = { scheduleDays: ['Martes', 'Jueves'], scheduleTime: '19:00-21:00', weeksLabel: '2' };
+    assert.deepEqual(buildRecurringSessions({ ...legacy, slots: [] }, '2026-03-10'), buildRecurringSessions(legacy, '2026-03-10'));
+    assert.equal(buildRecurringSessions(legacy, '2026-03-10').length, 4);
+  });
+  test('slots tiene prioridad sobre scheduleDays/scheduleTime', () => {
+    const e = buildRecurringSessions({ slots: [slot('Lunes', '08:00', '09:00')], scheduleDays: ['Martes'], scheduleTime: '19:00-21:00', weeksLabel: '1' }, '2026-03-09');
+    assert.deepEqual(e.map((x) => x.title), ['Semana 1 · Lunes']);
+    assert.equal(timeOf(e[0]), '08:00');
+  });
+  test('franja que cruza medianoche: dura 180 min y empieza a las 22:00', () => {
+    const [e] = buildRecurringSessions({ slots: [slot('Viernes', '22:00', '01:00')], weeksLabel: '1' }, '2026-03-13');
+    assert.equal(e.startsAt, '2026-03-13T22:00-05:00');
+    assert.equal(e.durationMin, 180);
+  });
+  test('weeksLabel por defecto (8) y personalizado', () => {
+    assert.equal(buildRecurringSessions({ slots: [slot('Martes', '19:00', '21:00')] }, '2026-03-10').length, 8);
+    assert.equal(buildRecurringSessions({ slots: [slot('Martes', '19:00', '21:00')], weeksLabel: '12 semanas' }, '2026-03-10').length, 12);
+  });
+
+  describe('inicio en un día que no es de clase', () => {
+    const slots = [slot('Martes', '19:00', '21:00'), slot('Jueves', '18:00', '20:00')];
+    test('miércoles: la primera clase es el jueves (18:00), luego el martes siguiente (19:00)', () => {
+      const e = buildRecurringSessions({ slots, weeksLabel: '2' }, '2026-03-11');
+      assert.deepEqual(e.map((x) => `${dateOf(x)} ${timeOf(x)}`), ['2026-03-12 18:00', '2026-03-17 19:00', '2026-03-19 18:00', '2026-03-24 19:00']);
+      assert.deepEqual(e.map((x) => x.durationMin), [120, 120, 120, 120]);
+    });
+    test('2 clases por semana y orden cronológico estricto (varias semanas y franjas el mismo día)', () => {
+      const many = [slot('Martes', '19:00', '21:00'), slot('Martes', '08:00', '09:00'), slot('Jueves', '18:00', '20:00'), slot('Domingo', '10:00', '12:00')];
+      for (const first of ['2026-03-09', '2026-03-10', '2026-03-11', '2026-03-12', '2026-03-13', '2026-03-14', '2026-03-15']) {
+        const e = buildRecurringSessions({ slots: many, weeksLabel: '5' }, first);
+        assert.equal(e.length, 20, first);
+        const stamps = e.map((x) => x.startsAt);
+        assert.deepEqual(stamps, [...stamps].sort(), first);
+        assert.equal(new Set(stamps).size, stamps.length, first);
+        // cada "Semana n" tiene exactamente 4 clases
+        for (let w = 1; w <= 5; w++) assert.equal(e.filter((x) => x.title.startsWith(`Semana ${w} `)).length, 4, `${first} S${w}`);
+        // la primera clase real cae a menos de 7 días del inicio
+        const diff = (Date.parse(dateOf(e[0])) - Date.parse(first)) / 86400000;
+        assert.ok(diff >= 0 && diff < 7, `${first} -> ${dateOf(e[0])}`);
+      }
+    });
+    test('lastClassDate coincide con la última clase generada de cada semana (franjas mixtas)', () => {
+      const e = buildRecurringSessions({ slots, weeksLabel: '4' }, '2026-03-11');
+      for (let w = 1; w <= 4; w++) {
+        const last = dateOf(e.filter((x) => x.title.startsWith(`Semana ${w} `)).at(-1));
+        assert.equal(lastClassDate('2026-03-11', groupScheduleDays({ schedule: slots }), w), last);
+      }
+    });
+  });
+
+  test('en horas mixtas las entradas nunca se solapan en el instante de inicio y el offset es -05:00', () => {
+    const e = buildRecurringSessions({ slots: [slot('Lunes', '19:00', '21:00'), slot('Lunes', '18:00', '19:00'), slot('Miércoles', '07:30', '09:00')], weeksLabel: '3' }, '2026-03-09');
+    assert.ok(e.every((x) => x.startsAt.endsWith(PERU_OFFSET)));
+    assert.equal(new Set(e.map((x) => x.startsAt)).size, e.length);
+  });
+});
+
+describe('validSlots', () => {
+  test('normaliza día y horas ("martes", "9:00" -> "Martes", "09:00")', () => {
+    assert.deepEqual(validSlots([slot('martes', '9:00', '11:00'), slot('Miercoles', '19:00', '21:00')]),
+      [{ day: 'Martes', start: '09:00', end: '11:00' }, { day: 'Miércoles', start: '19:00', end: '21:00' }]);
+  });
+  test('descarta inválidas, con fin == inicio, horas fuera de rango, null y objetos vacíos', () => {
+    assert.deepEqual(validSlots([slot('Foo', '19:00', '21:00'), slot('Lunes', '10:00', '10:00'), slot('Lunes', '25:00', '26:00'), slot('Lunes', '10:60', '11:00'), slot('Lunes', '', ''), null, {}]), []);
+  });
+  test('una franja que cruza la medianoche es válida (22:00-01:00)', () => {
+    assert.deepEqual(validSlots([slot('Viernes', '22:00', '01:00')]), [{ day: 'Viernes', start: '22:00', end: '01:00' }]);
+  });
+  test('elimina duplicados y conserva el orden de entrada', () => {
+    assert.deepEqual(validSlots([slot('Jueves', '19:00', '21:00'), slot('Martes', '19:00', '21:00'), slot('jueves', '19:00', '21:00')]).map((s) => s.day), ['Jueves', 'Martes']);
+  });
+  test('dos franjas el mismo día con distinta hora se conservan', () => {
+    assert.equal(validSlots([slot('Sábado', '09:00', '11:00'), slot('Sábado', '15:00', '17:00')]).length, 2);
+  });
+  test('no arreglo / undefined / null -> []', () => {
+    assert.deepEqual(validSlots(undefined), []);
+    assert.deepEqual(validSlots(null), []);
+    assert.deepEqual(validSlots('Martes'), []);
+    assert.deepEqual(validSlots([]), []);
+  });
+  test('es idempotente', () => {
+    const once = validSlots([slot('martes', '9:00', '11:00'), slot('Viernes', '22:00', '01:00')]);
+    assert.deepEqual(validSlots(once), once);
+  });
+  test('un fin "24:00" se rechaza (hay que escribir 00:00)', () => {
+    assert.deepEqual(validSlots([slot('Lunes', '22:00', '24:00')]), []);
+    assert.deepEqual(validSlots([slot('Lunes', '22:00', '00:00')]), [{ day: 'Lunes', start: '22:00', end: '00:00' }]);
+  });
+});
+
+describe('buildScheduleLabel', () => {
+  test('todas las franjas con la misma hora: "Martes y Jueves · 19:00-21:00"', () => {
+    assert.equal(buildScheduleLabel([slot('Jueves', '19:00', '21:00'), slot('Martes', '19:00', '21:00')]), 'Martes y Jueves · 19:00-21:00');
+    assert.equal(buildScheduleLabel([slot('Sábado', '10:00', '12:00')]), 'Sábado · 10:00-12:00');
+  });
+  test('horas distintas: "Lunes 19:00-21:00 · Miércoles 18:00-20:30"', () => {
+    assert.equal(buildScheduleLabel([slot('Miércoles', '18:00', '20:30'), slot('Lunes', '19:00', '21:00')]), 'Lunes 19:00-21:00 · Miércoles 18:00-20:30');
+  });
+  test('dos franjas el mismo día con distinta hora: formato por día, ordenadas por hora', () => {
+    assert.equal(buildScheduleLabel([slot('Sábado', '15:00', '17:00'), slot('Sábado', '09:00', '11:00')]), 'Sábado 09:00-11:00 · Sábado 15:00-17:00');
+  });
+  test('sin franjas válidas -> ""', () => {
+    assert.equal(buildScheduleLabel([]), '');
+    assert.equal(buildScheduleLabel(undefined), '');
+    assert.equal(buildScheduleLabel([slot('Foo', '19:00', '21:00'), slot('Lunes', '10:00', '10:00')]), '');
+  });
+  test('ignora las franjas inválidas y normaliza formato', () => {
+    assert.equal(buildScheduleLabel([slot('martes', '9:00', '11:00'), slot('Foo', '1:00', '2:00')]), 'Martes · 09:00-11:00');
+  });
+  test('domingo se ordena primero (índice 0)', () => {
+    assert.equal(buildScheduleLabel([slot('Sábado', '10:00', '12:00'), slot('Domingo', '10:00', '12:00')]), 'Domingo y Sábado · 10:00-12:00');
+  });
+  test('round-trip: parseScheduleLabel(buildScheduleLabel(slots)) devuelve los mismos días (ambos formatos)', () => {
+    const all = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    for (let mask = 1; mask < 128; mask++) {
+      const days = all.filter((_, i) => mask & (1 << i));
+      const same = days.map((d) => slot(d, '19:00', '21:00'));
+      const mixed = days.map((d, i) => slot(d, `${String(8 + i).padStart(2, '0')}:00`, `${String(9 + i).padStart(2, '0')}:30`));
+      assert.deepEqual([...parseScheduleLabel(buildScheduleLabel(same))].sort(), [...days].sort(), buildScheduleLabel(same));
+      assert.deepEqual([...parseScheduleLabel(buildScheduleLabel(mixed))].sort(), [...days].sort(), buildScheduleLabel(mixed));
+    }
+  });
+  test('un rango completo no se abrevia a "Lunes a Viernes": se lista con comas y "y" final', () => {
+    const l = buildScheduleLabel(['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].map((d) => slot(d, '19:00', '21:00')));
+    assert.equal(l, 'Lunes, Martes, Miércoles, Jueves y Viernes · 19:00-21:00');
+  });
+  test('con 3+ días: comas y "y" antes del último', () => {
+    assert.equal(buildScheduleLabel([slot('Lunes', '19:00', '21:00'), slot('Miércoles', '19:00', '21:00'), slot('Viernes', '19:00', '21:00')]), 'Lunes, Miércoles y Viernes · 19:00-21:00');
+  });
+});
+
+describe('groupScheduleDays', () => {
+  test('usa group.schedule (franjas) si existe, sin duplicar días', () => {
+    assert.deepEqual(groupScheduleDays({ schedule: [slot('Martes', '19:00', '21:00'), slot('Martes', '08:00', '09:00'), slot('Jueves', '19:00', '21:00')], scheduleTime: 'Lunes 10:00-11:00' }), ['Martes', 'Jueves']);
+  });
+  test('sin schedule (o vacío) parsea scheduleTime / scheduleDays', () => {
+    assert.deepEqual(groupScheduleDays({ scheduleTime: 'Martes y Jueves · 19:00-21:00' }), ['Martes', 'Jueves']);
+    assert.deepEqual(groupScheduleDays({ schedule: [], scheduleTime: 'Lunes a Viernes · 19:00-21:00' }), ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']);
+    assert.deepEqual(groupScheduleDays({ scheduleDays: ['Martes', 'Jueves'] }), ['Martes', 'Jueves']);
+    assert.deepEqual(groupScheduleDays({ scheduleTime: 'Lunes 19:00-21:00 · Miércoles 18:00-20:30' }), ['Lunes', 'Miércoles']);
+  });
+  test('grupo null / undefined / sin horario -> []', () => {
+    assert.deepEqual(groupScheduleDays(null), []);
+    assert.deepEqual(groupScheduleDays(undefined), []);
+    assert.deepEqual(groupScheduleDays({}), []);
+  });
+  test('schedule con franjas todas inválidas -> []', () => {
+    assert.deepEqual(groupScheduleDays({ schedule: [slot('Foo', '1:00', '2:00')] }), []);
+  });
+  test('schedule con franjas todas inválidas debería caer al texto scheduleTime', { todo: 'BAJO liveScheduleGenerator.js:172-175 - si group.schedule tiene elementos pero ninguno es válido se devuelve [] sin mirar scheduleTime' }, () => {
+    assert.deepEqual(groupScheduleDays({ schedule: [slot('Foo', '1:00', '2:00')], scheduleTime: 'Martes · 19:00-21:00' }), ['Martes']);
   });
 });

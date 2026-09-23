@@ -6,7 +6,8 @@ import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance } from '../../lib/db';
 import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
 import { getOrderedSessions } from '../../lib/courseSessions';
-import { APPROVAL, evaluateApproval } from '../../lib/approval';
+import { attendanceStats } from '../../lib/attendance';
+import { APPROVAL, MIN_PERFORMANCE_GRADE, evaluateApproval } from '../../lib/approval';
 import { deliverableDueDate } from '../../lib/deliveryDates';
 import ModalPortal from '../../components/ModalPortal';
 
@@ -165,14 +166,13 @@ const MisNotas = ({ course, modules, submissions, attendance }) => {
   const formula = rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ');
 
   const sessions = getOrderedSessions(modules);
-  const takenSessions = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
-  const presentCount = takenSessions.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-  const attendanceInfo = { taken: takenSessions.length, pct: takenSessions.length ? (presentCount / takenSessions.length) * 100 : null };
+  const attStats = attendanceStats(sessions, attendance);
+  const attendanceInfo = { taken: attStats.taken, pct: attStats.raw };
   const verdicts = evaluateApproval(summary, attendanceInfo);
 
   const checks = [
     { label: `Nota final mínima de ${APPROVAL.minFinalGrade}`, state: verdicts.finalGrade, detail: `Tu promedio parcial: ${summary.promedioParcial ?? '—'}` },
-    { label: `Rendimiento ponderado mínimo de ${APPROVAL.minPerformancePct}%`, state: verdicts.performance, detail: `Tu rendimiento parcial: ${summary.rendimientoPct ?? '—'}%` },
+    { label: `Rendimiento ponderado mínimo de ${APPROVAL.minPerformancePct}% (equivale a ${MIN_PERFORMANCE_GRADE}/20)`, state: verdicts.performance, detail: `Tu rendimiento parcial: ${summary.rendimientoPct ?? '—'}%` },
     { label: `Asistencia mínima de ${APPROVAL.minAttendancePct}% (constancia)`, state: verdicts.attendance, detail: attendanceInfo.taken ? `Tu asistencia: ${Math.round(attendanceInfo.pct)}%` : 'Aún sin sesiones registradas' },
   ];
 
@@ -217,9 +217,8 @@ const MisNotas = ({ course, modules, submissions, attendance }) => {
 
 const MiAsistencia = ({ course, modules, attendance }) => {
   const sessions = getOrderedSessions(modules);
-  const taken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
-  const present = taken.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-  const pct = taken.length ? Math.round((present / taken.length) * 100) : null;
+  const stats = attendanceStats(sessions, attendance);
+  const { pct } = stats;
   const grouped = modules.filter((m) => m.sessions?.length).map((m) => ({ module: m, sessions: sessions.filter((s) => s.moduleId === m.id) }));
 
   return (
@@ -228,8 +227,8 @@ const MiAsistencia = ({ course, modules, attendance }) => {
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card"><div className="admin-stat-label">Asistencia</div><div className="admin-stat-value">{pct === null ? '—' : `${pct}%`}</div><div className="admin-cell-sub">{pct === null ? 'Aún sin sesiones registradas' : pct >= APPROVAL.minAttendancePct ? `Cumples el mínimo de ${APPROVAL.minAttendancePct}%` : `Por debajo del mínimo de ${APPROVAL.minAttendancePct}%`}</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Sesiones</div><div className="admin-stat-value">{taken.length}/{sessions.length}</div><div className="admin-cell-sub">Asistidas de las dictadas</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Faltas</div><div className="admin-stat-value">{taken.length - present}</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Sesiones</div><div className="admin-stat-value">{stats.taken}/{sessions.length}</div><div className="admin-cell-sub">Asistidas de las dictadas</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Faltas</div><div className="admin-stat-value">{stats.absent}</div><div className="admin-cell-sub">{stats.unregistered > 0 ? `${stats.unregistered} sin registro cuentan como falta` : 'Incluye las sesiones sin registro'}</div></div>
       </div>
 
       <div className="admin-panel">
@@ -287,10 +286,9 @@ const StudentCourseEvaluacion = () => {
     const subByModule = Object.fromEntries(withDeliverable.map((m) => [m.id, submissions.find((s) => s.moduleId === m.id) || null]));
     const g = computeGradeSummary(buildGradebookRows(withDeliverable, subByModule));
     const sessions = getOrderedSessions(modules);
-    const taken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
-    const present = taken.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-    const overall = evaluateApproval(g, { taken: taken.length, pct: taken.length ? (present / taken.length) * 100 : null }).overall;
-    return { promedioParcial: g.promedioParcial, overall, asistenciaPct: taken.length ? Math.round((present / taken.length) * 100) : null };
+    const st = attendanceStats(sessions, attendance);
+    const overall = evaluateApproval(g, { taken: st.taken, pct: st.raw }).overall;
+    return { promedioParcial: g.promedioParcial, overall, asistenciaPct: st.pct };
   }, [modules, submissions, attendance]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu evaluación...</div>;

@@ -4,13 +4,19 @@
 
 export const APPROVAL = {
   minFinalGrade: 15,       // nota vigesimal mínima (vía regular)
-  minPerformancePct: 80,   // rendimiento ponderado mínimo sobre 20
+  // Rendimiento ponderado mínimo: 80% del puntaje máximo (20), o sea nota
+  // ponderada >= 16. Es la regla que decide en la vía regular; la nota final
+  // mínima de 15 queda como piso (siempre se cumple si se cumple el 80%).
+  minPerformancePct: 80,
   minSubstituteGrade: 16,  // nota mínima en la evaluación sustitutoria
   minAttendancePct: 75,    // asistencia mínima para la constancia
 };
 
+// Nota ponderada equivalente al rendimiento mínimo (80% de 20 = 16).
+export const MIN_PERFORMANCE_GRADE = (APPROVAL.minPerformancePct / 100) * 20;
+
 // summary: resultado de computeGradeSummary. attendance: { pct, taken } o
-// null si aún no hay sesiones registradas. Cada check devuelve
+// null si aún no hay sesiones dictadas. Cada check devuelve
 // 'ok' | 'fail' | 'pending': mientras falten notas por calificar nada se da
 // por aprobado ni por desaprobado -- solo se confirma con todo calificado.
 export const evaluateApproval = (summary, attendance) => {

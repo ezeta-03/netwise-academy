@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
-import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions } from '../../lib/db';
+import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions, fetchAllEnrollments } from '../../lib/db';
+import { courseRoster } from '../../lib/roster';
 import { deliverableDueDate } from '../../lib/deliveryDates';
 import { resolveWeights, deliverableLabel, deliverableModules } from '../../lib/weights';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
@@ -24,15 +25,19 @@ const TeacherCourseCronograma = () => {
   const [modules, setModules] = useState([]);
   const [policy, setPolicy] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [subs, setSubs] = useState([]);
+  const [roster, setRoster] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id)]).then(([content, rubric, subs]) => {
+    Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments()]).then(([content, rubric, submissions, enrollments]) => {
       setModules(content.modules || []);
       setPolicy(rubric.policy || null);
       const deliverableIds = new Set(deliverableModules(content.modules).map((m) => m.id));
-      setPendingCount(subs.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length);
+      setPendingCount(submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length);
+      setSubs(submissions);
+      setRoster(courseRoster(enrollments, course.id));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [course.id]);
@@ -44,14 +49,20 @@ const TeacherCourseCronograma = () => {
 
   // Mismos entregables y pesos que el Registro de notas (ver lib/weights.js).
   const resolved = resolveWeights(modules);
-  const firstOpenIdx = resolved.rows.findIndex((r) => r.module.deliverable?.open !== false);
+
+  // "Calificado" sale de las notas reales: todos los alumnos del aula tienen
+  // su entrega revisada en ese módulo (no de la marca manual de "completado").
+  const rosterUids = new Set(roster.map((r) => r.uid));
+  const gradedCount = (moduleId) => new Set(subs.filter((s) => s.moduleId === moduleId && s.status === 'reviewed' && rosterUids.has(s.uid)).map((s) => s.uid)).size;
+  const isGraded = (moduleId) => roster.length > 0 && gradedCount(moduleId) === roster.length;
+  const firstOpenIdx = resolved.rows.findIndex((r) => !isGraded(r.module.id));
 
   const rows = resolved.rows.map((r, i) => {
     const m = r.module;
     const dueIso = deliverableDueDate(m, modules.indexOf(m), group);
-    const status = m.deliverable?.open === false ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
+    const status = isGraded(m.id) ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
     return {
-      id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit,
+      id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit, graded: gradedCount(m.id),
       name: `${deliverableLabel(i, resolved.rows.length)} · ${m.title}`,
     };
   });
@@ -122,7 +133,7 @@ const TeacherCourseCronograma = () => {
                         <td>{r.m.weeksLabel || '—'}</td>
                         <td>{fmtDate(r.dueIso, true)}</td>
                         <td>{r.weight}%{!r.explicit && <small>estimado</small>}</td>
-                        <td><span className={`admin-status ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].label}</span></td>
+                        <td><span className={`admin-status ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].label}</span><small>{r.graded}/{roster.length} calificados</small></td>
                       </tr>
                     ))}
                     <tr className="dash-cron-total"><td>Promedio final</td><td></td><td></td><td>{totalWeight}%</td><td></td></tr>

@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
 import ModuleSessionCard from '../../components/ModuleSessionCard';
-import { isPendingUrl } from '../../lib/placeholders';
+import { isPendingUrl, isSafeLink } from '../../lib/placeholders';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -36,7 +36,7 @@ const SessionForm = ({ initial, onSave, onCancel }) => {
       <div className="admin-field"><label>Link de la grabación</label><input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://..." /></div>
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
-        <button className="admin-btn-edit" disabled={!canSave} onClick={() => onSave({ id: initial?.id || uid('l'), title: title.trim(), videoUrl: videoUrl.trim(), duration: duration.trim(), date: date.trim(), resources: initial?.resources || [] })}>
+        <button className="admin-btn-edit" disabled={!canSave || !isSafeLink(videoUrl)} title={videoUrl && !isSafeLink(videoUrl) ? 'El enlace debe empezar con http:// o https://' : undefined} onClick={() => onSave({ id: initial?.id || uid('l'), title: title.trim(), videoUrl: videoUrl.trim(), duration: duration.trim(), date: date.trim(), resources: initial?.resources || [] })}>
           <Save size={13} /> Guardar sesión
         </button>
       </div>
@@ -105,6 +105,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   };
 
   const handleSave = async () => {
+    if (!file && !isSafeLink(url)) { addToast('El enlace debe empezar con http:// o https://', 'error'); return; }
     setSaving(true);
     try {
       const finalUrl = file ? await uploadCourseMaterial(courseId, moduleId, file) : url.trim();

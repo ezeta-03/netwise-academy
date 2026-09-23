@@ -1,7 +1,7 @@
 // Fechas de entrega y duración calculadas a partir del horario del aula y de
 // la semana de cada módulo. Una sola fuente para el Cronograma del docente,
 // "Mis entregas" del alumno y la generación del calendario de clases (Admin).
-import { parseScheduleLabel, lastClassDate } from './liveScheduleGenerator.js';
+import { groupScheduleDays, lastClassDate } from './liveScheduleGenerator.js';
 
 // "Semanas 5-6" -> 6 (la entrega cae al cierre del módulo); "Semana 3" -> 3;
 // "Semanas 5 y 6" -> 6; "Sem. 3" -> 3. Sin una semana reconocible: `fallback`.
@@ -23,6 +23,6 @@ export const courseWeeksFromModules = (modules) => {
 // de cierre del módulo según el horario del aula. null si no se puede calcular.
 export const deliverableDueDate = (module, moduleIndex, group) => {
   if (module?.deliverable?.dueDate) return module.deliverable.dueDate;
-  const days = parseScheduleLabel(group?.scheduleTime || group?.scheduleDays);
+  const days = groupScheduleDays(group);
   return lastClassDate(group?.startDate, days, endWeekOf(module?.weeksLabel, moduleIndex + 1));
 };
