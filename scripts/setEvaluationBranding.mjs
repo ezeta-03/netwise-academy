@@ -103,11 +103,14 @@ const modules = contentSnap.data().modules.map((m, i) => (
 ));
 await contentRef.set({ ...contentSnap.data(), modules, updatedAt: new Date().toISOString() });
 
-// merge: true para no pisar el estado de validación si ya lo cambiaron.
-await db.collection('courseRubrics').doc('2').set({
+// El estado de validación ("Por validar"/"Validado") solo se fija la primera
+// vez: si coordinación ya la validó, volver a correr el script no lo revierte.
+const rubricRef = db.collection('courseRubrics').doc('2');
+const existing = await rubricRef.get();
+await rubricRef.set({
   criteria: CRITERIA,
   policy: POLICY,
-  status: 'pending',
+  ...(existing.exists && existing.data().status ? {} : { status: 'pending' }),
   updatedAt: new Date().toISOString(),
   updatedBy: 'content-update',
 }, { merge: true });

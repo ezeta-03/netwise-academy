@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "node --test \"tests/*.test.mjs\"",
     "deploy": "vite build && npx firebase-tools deploy --only hosting"
   },
   "dependencies": {

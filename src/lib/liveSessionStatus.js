@@ -5,6 +5,7 @@
 // renderizar, comparando la hora actual contra `startsAt`/`durationMin`.
 export const getLiveSessionStatus = (session) => {
   if (session.status === 'cancelled') return 'cancelled';
+  if (!session.startsAt) return session.status || 'upcoming';
 
   const start = new Date(session.startsAt).getTime();
   if (Number.isNaN(start)) return session.status || 'upcoming';
@@ -23,6 +24,7 @@ export const getLiveSessionStatus = (session) => {
 export const LIVE_JOIN_WINDOW_MIN = 10;
 
 export const canJoinLiveSession = (session) => {
+  if (session.status === 'cancelled' || !session.startsAt) return false;
   const start = new Date(session.startsAt).getTime();
   if (Number.isNaN(start)) return false;
   const end = start + (Number(session.durationMin) || 60) * 60000;

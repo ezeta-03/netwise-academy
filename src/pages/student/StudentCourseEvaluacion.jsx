@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import { ClipboardCheck, BarChart3, UsersRound, Send, ExternalLink, Clock3, CheckCircle2, X } from 'lucide-react';
+import { ClipboardCheck, BarChart3, UsersRound, Send, ExternalLink, Clock3, CheckCircle2, XCircle, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance } from '../../lib/db';
 import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
 import { getOrderedSessions } from '../../lib/courseSessions';
+import { APPROVAL, evaluateApproval } from '../../lib/approval';
 import ModalPortal from '../../components/ModalPortal';
 
 const formatDate = (iso) => {
@@ -39,7 +40,7 @@ const EvalSidePanel = ({ vista, setVista, summary }) => (
       <div className="admin-panel-head"><span className="admin-panel-title">Mi resumen</span></div>
       <div className="dash-profile-stats" style={{ gridTemplateColumns: '1fr', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia</span><strong>{summary.asistenciaPct}%</strong></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia</span><strong>{summary.asistenciaPct === null ? '—' : `${summary.asistenciaPct}%`}</strong></div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estado</span><span className="admin-status admin-status-violet">En curso</span></div>
       </div>
     </div>
@@ -152,16 +153,23 @@ const EntregasNotas = ({ course, modules, submissions, onSubmitted }) => {
   );
 };
 
-const MisNotas = ({ course, modules, submissions }) => {
+const MisNotas = ({ course, modules, submissions, attendance }) => {
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
   const subByModule = Object.fromEntries(withDeliverable.map((m) => [m.id, submissions.find((s) => s.moduleId === m.id) || null]));
   const rows = buildGradebookRows(withDeliverable, subByModule);
   const summary = computeGradeSummary(rows);
-  const formula = rows.map((r) => `${r.title.split(' ')[0] || 'M'} × ${r.weight}%`).join(' + ');
+  const formula = rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ');
+
+  const sessions = getOrderedSessions(modules);
+  const takenSessions = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
+  const presentCount = takenSessions.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
+  const attendanceInfo = { taken: takenSessions.length, pct: takenSessions.length ? (presentCount / takenSessions.length) * 100 : null };
+  const verdicts = evaluateApproval(summary, attendanceInfo);
 
   const checks = [
-    { label: 'Nota final mínima de 15', ok: summary.promedioParcial !== null && summary.promedioParcial >= 15, detail: `Tu promedio parcial: ${summary.promedioParcial ?? '—'}` },
-    { label: 'Rendimiento ponderado mínimo de 80%', ok: summary.rendimientoPct !== null && summary.rendimientoPct >= 80, detail: `Tu rendimiento parcial: ${summary.rendimientoPct ?? '—'}%` },
+    { label: `Nota final mínima de ${APPROVAL.minFinalGrade}`, state: verdicts.finalGrade, detail: `Tu promedio parcial: ${summary.promedioParcial ?? '—'}` },
+    { label: `Rendimiento ponderado mínimo de ${APPROVAL.minPerformancePct}%`, state: verdicts.performance, detail: `Tu rendimiento parcial: ${summary.rendimientoPct ?? '—'}%` },
+    { label: `Asistencia mínima de ${APPROVAL.minAttendancePct}% (constancia)`, state: verdicts.attendance, detail: attendanceInfo.taken ? `Tu asistencia: ${Math.round(attendanceInfo.pct)}%` : 'Aún sin sesiones registradas' },
   ];
 
   return (
@@ -187,12 +195,12 @@ const MisNotas = ({ course, modules, submissions }) => {
         {checks.map((c) => (
           <div key={c.label} className="dash-list-row">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {c.ok ? <CheckCircle2 size={16} color="#15803D" /> : <Clock3 size={16} color="#B45309" />}
+              {c.state === 'ok' ? <CheckCircle2 size={16} color="#15803D" /> : c.state === 'fail' ? <XCircle size={16} color="#BE123C" /> : <Clock3 size={16} color="#B45309" />}
               <div><div className="dash-list-row-title">{c.label}</div><div className="dash-list-row-sub">{c.detail}</div></div>
             </div>
           </div>
         ))}
-        {formula && <p className="admin-panel-caption" style={{ marginTop: 10 }}>PF = {formula}. Si no apruebas de forma regular, puedes rendir una evaluación sustitutoria (nota mínima 16) para obtener el certificado.</p>}
+        {formula && <p className="admin-panel-caption" style={{ marginTop: 10 }}>PF = {formula}. Si no apruebas de forma regular, puedes rendir una evaluación sustitutoria (nota mínima {APPROVAL.minSubstituteGrade}) para obtener el certificado.</p>}
       </div>
     </div>
   );
@@ -202,7 +210,7 @@ const MiAsistencia = ({ course, modules, attendance }) => {
   const sessions = getOrderedSessions(modules);
   const taken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
   const present = taken.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-  const pct = taken.length ? Math.round((present / taken.length) * 100) : 100;
+  const pct = taken.length ? Math.round((present / taken.length) * 100) : null;
   const grouped = modules.filter((m) => m.sessions?.length).map((m) => ({ module: m, sessions: sessions.filter((s) => s.moduleId === m.id) }));
 
   return (
@@ -210,7 +218,7 @@ const MiAsistencia = ({ course, modules, attendance }) => {
       <div className="admin-page-head"><div><h1 className="admin-page-title">Mi asistencia</h1><p className="admin-page-sub">{course.title} · Tu registro en cada sesión en vivo.</p></div></div>
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
-        <div className="admin-stat-card"><div className="admin-stat-label">Asistencia</div><div className="admin-stat-value">{pct}%</div><div className="admin-cell-sub">Cumples el mínimo de 75%</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Asistencia</div><div className="admin-stat-value">{pct === null ? '—' : `${pct}%`}</div><div className="admin-cell-sub">{pct === null ? 'Aún sin sesiones registradas' : pct >= APPROVAL.minAttendancePct ? `Cumples el mínimo de ${APPROVAL.minAttendancePct}%` : `Por debajo del mínimo de ${APPROVAL.minAttendancePct}%`}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Sesiones</div><div className="admin-stat-value">{taken.length}/{sessions.length}</div><div className="admin-cell-sub">Asistidas de las dictadas</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Faltas</div><div className="admin-stat-value">{taken.length - present}</div></div>
       </div>
@@ -254,7 +262,7 @@ const StudentCourseEvaluacion = () => {
   const load = useCallback(() => {
     if (!currentUser) return;
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id)]).then(([content, subs, att]) => {
+    Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id, currentUser.uid), fetchCourseAttendance(course.id, currentUser.uid)]).then(([content, subs, att]) => {
       setModules(content.modules || []);
       setSubmissions(subs.filter((s) => s.uid === currentUser.uid));
       setAttendance(att.filter((a) => a.uid === currentUser.uid));
@@ -272,7 +280,7 @@ const StudentCourseEvaluacion = () => {
     const sessions = getOrderedSessions(modules);
     const taken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id));
     const present = taken.filter((s) => attendance.find((a) => a.sessionId === s.id)?.present).length;
-    return { promedioParcial: g.promedioParcial, asistenciaPct: taken.length ? Math.round((present / taken.length) * 100) : 100 };
+    return { promedioParcial: g.promedioParcial, asistenciaPct: taken.length ? Math.round((present / taken.length) * 100) : null };
   }, [modules, submissions, attendance]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu evaluación...</div>;
@@ -281,7 +289,7 @@ const StudentCourseEvaluacion = () => {
     <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
       <div>
         {vista === 'entregas' && <EntregasNotas course={course} modules={modules} submissions={submissions} onSubmitted={load} />}
-        {vista === 'notas' && <MisNotas course={course} modules={modules} submissions={submissions} />}
+        {vista === 'notas' && <MisNotas course={course} modules={modules} submissions={submissions} attendance={attendance} />}
         {vista === 'asistencia' && <MiAsistencia course={course} modules={modules} attendance={attendance} />}
       </div>
       <div><EvalSidePanel vista={vista} setVista={setVista} summary={summary} /></div>

@@ -120,7 +120,7 @@ const StudentCourseProyecto = () => {
       const mods = content.modules || [];
       const subsByModule = {};
       for (const m of mods) {
-        const subs = await fetchSubmissions(course.id, m.id);
+        const subs = await fetchSubmissions(course.id, m.id, currentUser.uid);
         subsByModule[m.id] = subs.find((s) => s.uid === currentUser.uid) || null;
       }
       setModules(mods);

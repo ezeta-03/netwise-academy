@@ -4,7 +4,15 @@ import { Lock, Plus, Pencil, Trash2, Save, Check, CheckSquare } from 'lucide-rea
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchCourseRubric, saveCourseRubric } from '../../lib/db';
+import { resolveWeights, deliverableLabel } from '../../lib/weights';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
+
+// "5" -> 5, "2,5" -> 2.5, "0-2" -> 2 (el máximo del rango): los puntos de un
+// nivel pueden escribirse como rango y parseInt los truncaba o contaba mal.
+const pointsValue = (text) => {
+  const nums = String(text ?? '').match(/\d+(?:[.,]\d+)?/g);
+  return nums ? Math.max(...nums.map((n) => Number(n.replace(',', '.')))) : 0;
+};
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
@@ -102,8 +110,8 @@ const TeacherCourseRubrica = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando rúbrica...</div>;
 
-  const totalPoints = rubric.criteria.reduce((sum, c) => sum + (parseInt(c.levels?.destacado?.points, 10) || 0), 0);
-  const lastIdx = modules.length - 1;
+  const totalPoints = rubric.criteria.reduce((sum, c) => sum + pointsValue(c.levels?.destacado?.points), 0);
+  const resolved = resolveWeights(modules);
 
   return (
     <div className="anim-fade-up d1">
@@ -165,25 +173,30 @@ const TeacherCourseRubrica = () => {
           <div className="admin-panel" style={{ marginBottom: 20 }}>
             <div className="admin-panel-head">
               <span className="admin-panel-title">Se aplica a</span>
-              <span className="admin-status admin-status-violet">{modules.length} entregable{modules.length === 1 ? '' : 's'}</span>
+              <span className="admin-status admin-status-violet">{resolved.rows.length} entregable{resolved.rows.length === 1 ? '' : 's'}</span>
             </div>
-            {modules.length === 0 ? (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este curso todavía no tiene módulos.</p>
-            ) : modules.map((m, i) => (
-              <div className="dash-rubric-applies-row" key={m.id}>
+            {resolved.rows.length === 0 ? (
+              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este curso todavía no tiene entregables definidos.</p>
+            ) : resolved.rows.map((r, i) => (
+              <div className="dash-rubric-applies-row" key={r.module.id}>
                 <Check size={15} />
                 <span>
-                  <strong>{i === lastIdx ? 'Trabajo final' : `Entregable M${i + 1}`} · {m.title}</strong>
+                  <strong>{deliverableLabel(i, resolved.rows.length)} · {r.module.title}</strong>
                   {' · '}
-                  <span className="dash-rubric-applies-weight">{m.deliverable?.weight != null ? `${m.deliverable.weight}% de la nota final` : 'Peso no definido'}</span>
+                  <span className="dash-rubric-applies-weight">{r.weight}% de la nota final{r.explicit ? '' : ' (estimado)'}</span>
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="dash-notice">
+          <div className={`dash-notice ${rubric.criteria.length > 0 && totalPoints !== 20 ? 'warn' : ''}`}>
             <CheckSquare size={16} />
-            <span>El estudiante ve los criterios y el puntaje máximo de cada uno. Los descriptores de nivel son exclusivos del docente.</span>
+            <span>
+              Las notas de los entregables se registran sobre 20 (escala vigesimal).
+              {rubric.criteria.length > 0 && totalPoints !== 20
+                ? ` Esta rúbrica suma ${totalPoints} puntos: ajusta los criterios para que el máximo sea 20.`
+                : ' Esta rúbrica es una guía para calificar: el estudiante no la ve.'}
+            </span>
           </div>
         </div>
 

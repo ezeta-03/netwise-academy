@@ -9,7 +9,7 @@ export const fetchMyDeliverables = async (uid, enrolledCourses) => {
     const content = await fetchCourseContent(course.id);
     const modules = (content.modules || []).filter((m) => m.deliverable?.description);
     return Promise.all(modules.map(async (m) => {
-      const subs = await fetchSubmissions(course.id, m.id);
+      const subs = await fetchSubmissions(course.id, m.id, uid);
       const mine = subs.find((s) => s.uid === uid);
       const status = mine?.status === 'reviewed' ? 'reviewed' : mine?.status === 'submitted' ? 'submitted' : 'pending';
       return {

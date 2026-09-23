@@ -85,7 +85,11 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
               startsAt: entry.startsAt, durationMin: entry.durationMin,
             });
           }
-          addToast(`Aula creada y ${entries.length} clases programadas.`, 'success');
+          if (entries.length === 0) {
+            addToast('Aula creada, pero el horario o la fecha de inicio no son válidos: no se generó el calendario de clases.', 'warning');
+          } else {
+            addToast(`Aula creada y ${entries.length} clases programadas.`, 'success');
+          }
         } else {
           addToast('Aula creada. Agrega fecha de inicio para generar el calendario de clases.', 'info');
         }

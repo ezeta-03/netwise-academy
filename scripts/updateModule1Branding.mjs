@@ -75,7 +75,12 @@ const OTHER_MODULES = [
   { title: 'Medición de Brand Equity y Brand Deck Ejecutivo', weeksLabel: 'Semana 4' },
 ];
 
-const emptyModule = (base, { title, weeksLabel }) => ({
+// Idempotente: si el módulo ya tiene ese título (por ejemplo porque el script
+// del Módulo 2/3/4 ya cargó su contenido), se deja tal cual -- volver a correr
+// este script NO debe vaciar lo que ya se cargó.
+const emptyModule = (base, def) => (base?.title === def.title ? base : buildEmptyModule(base, def));
+
+const buildEmptyModule = (base, { title, weeksLabel }) => ({
   id: base?.id || uid('m'),
   title,
   weeksLabel,

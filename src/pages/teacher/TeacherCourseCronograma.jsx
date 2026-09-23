@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
 import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions } from '../../lib/db';
 import { parseScheduleLabel, lastClassDate } from '../../lib/liveScheduleGenerator';
+import { resolveWeights, deliverableLabel } from '../../lib/weights';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
 const fmtDate = (iso, withTime) => {
@@ -14,8 +15,8 @@ const fmtDate = (iso, withTime) => {
 
 // "Semanas 5-6" -> 6 (la entrega cae al cierre del módulo); "Semana 3" -> 3.
 const endWeekOf = (weeksLabel, fallback) => {
-  const nums = (weeksLabel || '').match(/\d+/g);
-  return nums ? Number(nums[nums.length - 1]) : fallback;
+  const m = String(weeksLabel || '').match(/sem(?:anas?|\.)?\s*(\d+)(?:\s*(?:[-–]|a|y)\s*(\d+))?/i);
+  return m ? Number(m[2] || m[1]) : fallback;
 };
 
 const STATUS_BADGE = {
@@ -47,22 +48,23 @@ const TeacherCourseCronograma = () => {
   if (loading) return <div className="admin-empty-hint">Cargando cronograma...</div>;
 
   const dayNames = parseScheduleLabel(group?.scheduleTime || group?.scheduleDays);
-  const lastIdx = modules.length - 1;
-  const firstOpenIdx = modules.findIndex((m) => m.deliverable?.open !== false);
+  // Mismos entregables y pesos que el Registro de notas (ver lib/weights.js).
+  const resolved = resolveWeights(modules);
+  const firstOpenIdx = resolved.rows.findIndex((r) => r.module.deliverable?.open !== false);
 
-  const rows = modules.map((m, i) => {
-    const dueIso = m.deliverable?.dueDate || lastClassDate(group?.startDate, dayNames, endWeekOf(m.weeksLabel, i + 1));
+  const rows = resolved.rows.map((r, i) => {
+    const m = r.module;
+    const dueIso = m.deliverable?.dueDate || lastClassDate(group?.startDate, dayNames, endWeekOf(m.weeksLabel, modules.indexOf(m) + 1));
     const status = m.deliverable?.open === false ? 'graded' : (i === firstOpenIdx ? 'current' : 'scheduled');
     return {
-      id: m.id, m, dueIso, status, weight: m.deliverable?.weight,
-      name: `${i === lastIdx ? 'Trabajo final' : `Entregable M${i + 1}`} · ${m.title}`,
+      id: m.id, m, dueIso, status, weight: r.weight, explicit: r.explicit,
+      name: `${deliverableLabel(i, resolved.rows.length)} · ${m.title}`,
     };
   });
 
   const nextRow = rows[firstOpenIdx];
-  const totalWeight = rows.reduce((s, r) => s + (Number(r.weight) || 0), 0);
-  const allWeighted = rows.length > 0 && rows.every((r) => r.weight != null);
-  const formula = allWeighted ? `PF = ${rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ')}` : null;
+  const totalWeight = resolved.total;
+  const formula = rows.length > 0 ? `PF = ${rows.map((r, i) => `M${i + 1} × ${r.weight}%`).join(' + ')}` : null;
   const scheduleLabel = group?.scheduleTime || group?.scheduleDays;
 
   return (
@@ -105,6 +107,12 @@ const TeacherCourseCronograma = () => {
               {policy?.weightsNote && <span className="admin-status admin-status-amber">Pesos provisionales</span>}
             </div>
             {policy?.weightsNote && <div className="dash-notice warn"><span>{policy.weightsNote}</span></div>}
+            {rows.length > 0 && !resolved.sumsTo100 && (
+              <div className="dash-notice warn"><span>Los pesos suman {totalWeight}%, no 100%. Ajusta el peso de cada entregable en Contenido → Editar módulo.</span></div>
+            )}
+            {rows.length > 0 && !resolved.allExplicit && (
+              <div className="dash-notice warn"><span>Hay entregables sin peso definido: reciben en partes iguales lo que falta para llegar a 100%, igual que en el Registro de notas.</span></div>
+            )}
             {rows.length === 0 ? (
               <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este curso todavía no tiene módulos.</p>
             ) : (
@@ -119,7 +127,7 @@ const TeacherCourseCronograma = () => {
                         <td><strong>{r.name}</strong><small>{r.m.deliverable?.description}</small></td>
                         <td>{r.m.weeksLabel || '—'}</td>
                         <td>{fmtDate(r.dueIso, true)}</td>
-                        <td>{r.weight != null ? `${r.weight}%` : '—'}</td>
+                        <td>{r.weight}%{!r.explicit && <small>estimado</small>}</td>
                         <td><span className={`admin-status ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].label}</span></td>
                       </tr>
                     ))}

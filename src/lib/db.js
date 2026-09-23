@@ -860,12 +860,17 @@ export const saveAcademySettings = async (settings) => {
 // entregable" del lado del alumno -- esto es lo que el docente usa para
 // llevar registro de a quién ya le revisó el entregable de cada módulo.
 
-export const fetchSubmissions = async (courseId, moduleId) => {
+// `uid` (opcional): trae solo las entregas de ese alumno. Un alumno SIEMPRE
+// debe pasarlo -- las reglas de Firestore solo le dejan leer las suyas.
+export const fetchSubmissions = async (courseId, moduleId, uid) => {
   if (!isConfigValid) {
     const raw = localStorage.getItem(`mock_submissions_${courseId}_${moduleId}`);
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    return uid ? list.filter((s) => s.uid === uid) : list;
   }
-  const q = query(collection(db, 'submissions'), where('courseId', '==', courseId), where('moduleId', '==', moduleId));
+  const constraints = [where('courseId', '==', courseId), where('moduleId', '==', moduleId)];
+  if (uid) constraints.push(where('uid', '==', uid));
+  const q = query(collection(db, 'submissions'), ...constraints);
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
@@ -873,7 +878,7 @@ export const fetchSubmissions = async (courseId, moduleId) => {
 // Todas las entregas de un curso (los módulos que sean), para el Registro de
 // notas y el resumen del aula del docente -- a diferencia de fetchSubmissions
 // (un módulo a la vez), esto trae todo en una sola llamada.
-export const fetchCourseSubmissions = async (courseId) => {
+export const fetchCourseSubmissions = async (courseId, uid) => {
   if (!isConfigValid) {
     const prefix = `mock_submissions_${courseId}_`;
     const rows = [];
@@ -883,9 +888,11 @@ export const fetchCourseSubmissions = async (courseId) => {
         rows.push(...JSON.parse(localStorage.getItem(key) || '[]'));
       }
     }
-    return rows;
+    return uid ? rows.filter((s) => s.uid === uid) : rows;
   }
-  const q = query(collection(db, 'submissions'), where('courseId', '==', courseId));
+  const constraints = [where('courseId', '==', courseId)];
+  if (uid) constraints.push(where('uid', '==', uid));
+  const q = query(collection(db, 'submissions'), ...constraints);
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
@@ -896,6 +903,9 @@ export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, s
   if (note !== undefined) payload.note = note || '';
   if (grade !== undefined) payload.grade = grade === null || grade === '' ? null : Number(grade);
   if (feedback !== undefined) payload.feedback = feedback || '';
+  // updatedAt cambia también cuando el docente califica; submittedAt solo
+  // cuando el alumno presenta -- es la fecha que sirve para ver atrasos.
+  if (status === 'submitted') payload.submittedAt = payload.updatedAt;
 
   if (!isConfigValid) {
     const key = `mock_submissions_${courseId}_${moduleId}`;
@@ -1205,12 +1215,16 @@ export const createPrivateRoom = async ({ courseId, courseTitle, groupName, name
 // `courseSessions.js`), así que sessionId es el id de esa sesión dentro del
 // módulo -- no hace falta una colección de "sesiones" aparte.
 
-export const fetchCourseAttendance = async (courseId) => {
+// `uid` (opcional): un alumno solo puede leer su propia asistencia (reglas).
+export const fetchCourseAttendance = async (courseId, uid) => {
   if (!isConfigValid) {
     const raw = localStorage.getItem(`mock_attendance_${courseId}`);
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    return uid ? list.filter((a) => a.uid === uid) : list;
   }
-  const q = query(collection(db, 'attendance'), where('courseId', '==', courseId));
+  const constraints = [where('courseId', '==', courseId)];
+  if (uid) constraints.push(where('uid', '==', uid));
+  const q = query(collection(db, 'attendance'), ...constraints);
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
@@ -1230,6 +1244,17 @@ export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studen
 
   await setDoc(doc(db, 'attendance', docId), payload, { merge: true });
   return payload;
+};
+
+// "Sin registrar": borra el registro de esa sesión para ese alumno.
+export const deleteAttendance = async ({ courseId, sessionId, uid }) => {
+  if (!isConfigValid) {
+    const key = `mock_attendance_${courseId}`;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify(list.filter((a) => !(a.uid === uid && a.sessionId === sessionId))));
+    return;
+  }
+  await deleteDoc(doc(db, 'attendance', `${uid}_${courseId}_${sessionId}`));
 };
 
 // --- Grupos de trabajo del proyecto (colección Firestore `workGroups`) ---

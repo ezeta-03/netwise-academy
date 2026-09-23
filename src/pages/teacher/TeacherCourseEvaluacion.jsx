@@ -5,8 +5,11 @@ import {
   Download, Save, ExternalLink,
 } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance } from '../../lib/db';
+import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance } from '../../lib/db';
 import { buildGradebookRows, computeGradeSummary } from '../../lib/gradebook';
+import { resolveWeights } from '../../lib/weights';
+import { downloadCsv as downloadCsvFile } from '../../lib/csv';
+import { APPROVAL } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
 
 const getInitials = (name) => {
@@ -21,14 +24,8 @@ const formatDate = (iso) => {
   return new Date(`${iso}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
 };
 
-const downloadCsv = (filename, rows) => {
-  const csv = rows.map((r) => r.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-};
+// Escapado, protección contra fórmulas y BOM viven en lib/csv.js.
+const downloadCsv = (filename, rows) => downloadCsvFile(filename, rows[0], rows.slice(1));
 
 const NAV_ITEMS = [
   { key: 'entregas', label: 'Entregas y revisión', sub: 'Revisa y califica', icon: ClipboardCheck },
@@ -59,7 +56,7 @@ const EvalSidePanel = ({ vista, setVista, pendingCount, summary }) => (
       <div className="admin-panel-head"><span className="admin-panel-title">Resumen del aula</span></div>
       <div className="dash-profile-stats" style={{ gridTemplateColumns: '1fr', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia promedio</span><strong>{summary.asistenciaPromedio}%</strong></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia promedio</span><strong>{summary.asistenciaPromedio === null ? '—' : `${summary.asistenciaPromedio}%`}</strong></div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estudiantes en riesgo</span><strong>{summary.enRiesgo}</strong></div>
       </div>
       <p className="admin-panel-caption" style={{ marginTop: 12, marginBottom: 0 }}>Muestra de {summary.total} estudiante{summary.total === 1 ? '' : 's'}.</p>
@@ -122,16 +119,23 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
   };
 
   const saveGrade = async () => {
+    const grade = Number(gradeDraft);
+    if (gradeDraft === '' || !Number.isFinite(grade) || grade < 0 || grade > 20) {
+      addToast('Ingresa una nota entre 0 y 20 para dejar la entrega revisada.', 'error');
+      return;
+    }
     setSaving(true);
     try {
       await upsertSubmission({
         courseId: course.id, moduleId: module.id, moduleTitle: module.title,
         uid: reviewingRow.uid, studentName: reviewingRow.studentName,
         deliverableTitle: module.deliverable?.description || module.title,
-        status: 'reviewed', grade: gradeDraft === '' ? null : Number(gradeDraft), feedback: feedbackDraft,
+        status: 'reviewed', grade, feedback: feedbackDraft,
       });
       addToast(`Calificación guardada para ${reviewingRow.studentName}.`, 'success');
       await onReloadSubmissions();
+    } catch {
+      addToast('No se pudo guardar la calificación. Intenta de nuevo.', 'error');
     } finally {
       setSaving(false);
     }
@@ -182,7 +186,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
       <div className="admin-toolbar" style={{ gap: 8, marginBottom: 16 }}>
         {withDeliverable.map((m, i) => (
           <button key={m.id} className="admin-btn-ghost" style={m.id === module.id ? { background: 'var(--accent-bg)', color: 'var(--accent)', borderColor: 'transparent' } : undefined} onClick={() => setModuleId(m.id)}>
-            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{m.deliverable?.weight ? `${m.deliverable.weight}%` : ''}</span>
+            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{resolveWeights(withDeliverable).rows.find((r) => r.module.id === m.id)?.weight}%</span>
           </button>
         ))}
       </div>
@@ -234,6 +238,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
 
 const RegistroNotas = ({ course, modules, roster, submissions }) => {
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
+  const weightById = Object.fromEntries(resolveWeights(withDeliverable).rows.map((r) => [r.module.id, r.weight]));
 
   const rowsByStudent = roster.map((r) => {
     const byModule = {};
@@ -260,7 +265,7 @@ const RegistroNotas = ({ course, modules, roster, submissions }) => {
           <thead>
             <tr>
               <th>Estudiante</th>
-              {withDeliverable.map((m, i) => <th key={m.id}>M{i + 1} <span className="admin-cell-sub">{m.deliverable?.weight ? `${m.deliverable.weight}%` : ''}</span></th>)}
+              {withDeliverable.map((m, i) => <th key={m.id}>M{i + 1} <span className="admin-cell-sub">{weightById[m.id]}%</span></th>)}
               <th>Promedio</th>
               <th>Estado</th>
             </tr>
@@ -292,17 +297,18 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
   const statsFor = (uid) => {
     const taken = sessions.filter((s) => attendanceFor(uid, s.id));
     const present = taken.filter((s) => attendanceFor(uid, s.id).present).length;
-    const pct = taken.length ? Math.round((present / taken.length) * 100) : 100;
-    return { pct, faltas: taken.length - present };
+    const raw = taken.length ? (present / taken.length) * 100 : null;
+    return { pct: raw === null ? null : Math.round(raw), raw, faltas: taken.length - present };
   };
 
   const sessionsTaken = sessions.filter((s) => attendance.some((a) => a.sessionId === s.id)).length;
-  const avgPct = roster.length ? Math.round(roster.reduce((sum, r) => sum + statsFor(r.uid).pct, 0) / roster.length) : 0;
-  const bajo75 = roster.filter((r) => statsFor(r.uid).pct < 75).length;
+  const withAtt = roster.map((r) => statsFor(r.uid).raw).filter((p) => p !== null);
+  const avgPct = withAtt.length ? Math.round(withAtt.reduce((sum, p) => sum + p, 0) / withAtt.length) : null;
+  const bajo75 = withAtt.filter((p) => p < APPROVAL.minAttendancePct).length;
 
   const exportCsv = () => {
     const header = ['Estudiante', ...sessions.map((s) => s.label), 'Asist.'];
-    const rows = roster.map((r) => [r.studentName, ...sessions.map((s) => { const a = attendanceFor(r.uid, s.id); return a ? (a.present ? 'P' : 'F') : ''; }), `${statsFor(r.uid).pct}%`]);
+    const rows = roster.map((r) => [r.studentName, ...sessions.map((s) => { const a = attendanceFor(r.uid, s.id); return a ? (a.present ? 'P' : 'F') : ''; }), statsFor(r.uid).pct === null ? '' : `${statsFor(r.uid).pct}%`]);
     downloadCsv(`asistencia-${course.id}.csv`, [header, ...rows]);
   };
 
@@ -320,7 +326,7 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
       </div>
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
-        <div className="admin-stat-card"><div className="admin-stat-label">Asistencia promedio</div><div className="admin-stat-value">{avgPct}%</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Asistencia promedio</div><div className="admin-stat-value">{avgPct === null ? '—' : `${avgPct}%`}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Sesiones registradas</div><div className="admin-stat-value">{sessionsTaken}/{sessions.length}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Bajo el 75%</div><div className="admin-stat-value">{bajo75}</div></div>
       </div>
@@ -355,7 +361,7 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
                       </td>
                     );
                   })}
-                  <td><strong>{statsFor(row.uid).pct}%</strong></td>
+                  <td><strong>{statsFor(row.uid).pct === null ? '—' : `${statsFor(row.uid).pct}%`}</strong></td>
                 </tr>
               ))}
             </tbody>
@@ -400,13 +406,22 @@ const TeacherCourseEvaluacion = () => {
   }, [course.id]);
 
   const toggleAttendance = async (row, session, present) => {
+    const previous = attendance;
     setAttendanceRows((prev) => {
       const others = prev.filter((a) => !(a.uid === row.uid && a.sessionId === session.id));
       return present === null ? others : [...others, { uid: row.uid, sessionId: session.id, moduleId: session.moduleId, studentName: row.studentName, present }];
     });
-    if (present === null) return; // "sin registrar" sólo se limpia en memoria; no hace falta un delete remoto para este alcance
-    await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present });
-    addToast(`Asistencia de ${row.studentName} actualizada.`, 'success');
+    try {
+      if (present === null) {
+        await deleteAttendance({ courseId: course.id, sessionId: session.id, uid: row.uid });
+      } else {
+        await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present });
+        addToast(`Asistencia de ${row.studentName} actualizada.`, 'success');
+      }
+    } catch {
+      setAttendanceRows(previous);
+      addToast('No se pudo guardar la asistencia. Intenta de nuevo.', 'error');
+    }
   };
 
   const pendingCount = submissions.filter((s) => s.status === 'submitted').length;
@@ -416,21 +431,21 @@ const TeacherCourseEvaluacion = () => {
     const sessions = getOrderedSessions(modules);
     let riskCount = 0;
     let gradeSum = 0; let gradeN = 0;
-    let attSum = 0;
+    let attSum = 0; let attN = 0;
     roster.forEach((r) => {
       const byModule = {};
       withDeliverable.forEach((m) => { byModule[m.id] = submissions.find((s) => s.uid === r.uid && s.moduleId === m.id) || null; });
       const summary = computeGradeSummary(buildGradebookRows(withDeliverable, byModule));
       const taken = sessions.filter((s) => attendance.some((a) => a.uid === r.uid && a.sessionId === s.id));
       const present = taken.filter((s) => attendance.find((a) => a.uid === r.uid && a.sessionId === s.id)?.present).length;
-      const attPct = taken.length ? Math.round((present / taken.length) * 100) : 100;
-      attSum += attPct;
+      const attPct = taken.length ? (present / taken.length) * 100 : null;
+      if (attPct !== null) { attSum += attPct; attN += 1; }
       if (summary.promedioParcial !== null) { gradeSum += summary.promedioParcial; gradeN += 1; }
-      if ((summary.promedioParcial !== null && summary.promedioParcial < 15) || attPct < 75) riskCount += 1;
+      if ((summary.promedioParcial !== null && summary.promedioParcial < APPROVAL.minFinalGrade) || (attPct !== null && attPct < APPROVAL.minAttendancePct)) riskCount += 1;
     });
     return {
       promedioParcial: gradeN ? Math.round((gradeSum / gradeN) * 100) / 100 : null,
-      asistenciaPromedio: roster.length ? Math.round(attSum / roster.length) : 100,
+      asistenciaPromedio: attN ? Math.round(attSum / attN) : null,
       enRiesgo: riskCount,
       total: roster.length,
     };
