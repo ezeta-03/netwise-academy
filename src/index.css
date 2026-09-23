@@ -261,6 +261,7 @@ body::before {
 .nav-cta { border-radius: 99px !important; padding-left: 22px !important; padding-right: 22px !important; }
 .nav-right-user { display: flex; align-items: center; gap: 16px; }
 .nav-right-guest { display: flex; align-items: center; gap: 10px; }
+.nav-mobile-logout { display: none; }
 .nav-mobile-login { display: none; border-radius: 99px !important; padding-left: 16px !important; padding-right: 16px !important; white-space: nowrap; }
 .mm-footer-guest { display: flex; flex-direction: column; gap: 10px; }
 .nav-avatar {
@@ -292,7 +293,7 @@ body::before {
    MOBILE MENU (drawer)
 ═══════════════════════════════════════════════════ */
 .mobile-menu {
-  position: fixed; top: 0; right: 0; width: 320px; max-width: 86vw; height: 100vh;
+  position: fixed; top: 0; right: 0; width: 320px; max-width: 86vw; height: 100vh; height: 100dvh;
   background: var(--bg); border-left: 1px solid var(--border);
   box-shadow: -10px 0 40px rgba(0,0,0,.3); z-index: 1001;
   transform: translateX(100%); transition: transform .3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -313,7 +314,7 @@ body::before {
 .mm-link:hover, .mm-link.active { background: var(--surface); color: var(--text); }
 .mm-link.active { color: var(--accent2); }
 .mm-link-btn { display: block; width: 100%; text-align: left; border: none; background: none; font: inherit; cursor: pointer; }
-.mm-footer { margin-top: auto; padding: 16px 20px 24px; border-top: 1px solid var(--border); }
+.mm-footer { margin-top: auto; padding: 16px 20px 24px; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--bg); }
 
 .form-fields { display: flex; flex-direction: column; gap: 18px; }
 
@@ -1469,6 +1470,7 @@ body::before {
   .nav-links, .search-bar, .nav-desktop-only { display: none; }
   .hamburger-btn { display: flex; }
   .nav-mobile-login { display: inline-flex; }
+  .nav-mobile-logout { display: flex; }
 }
 
 @media (min-width: 901px) {
@@ -1487,7 +1489,7 @@ body::before {
 .admin-sidebar {
   width: 260px; flex-shrink: 0; background: #141223;
   display: flex; flex-direction: column; padding: 22px 14px;
-  position: sticky; top: 0; height: 100vh; overflow-y: auto; transition: width .2s;
+  position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; transition: width .2s;
 }
 .admin-sidebar.collapsed { width: 76px; }
 .admin-sidebar-header { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 22px; }
@@ -1503,7 +1505,12 @@ body::before {
 .admin-sidebar-collapse-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
 .admin-sidebar.collapsed .admin-sidebar-collapse-btn { transform: rotate(180deg); }
 
-.admin-sidebar-footer { margin-top: auto; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+/* Pegado al borde inferior del área visible: aunque el menú sea más largo que la pantalla
+   (teléfonos en horizontal, laptops chicas) "Cerrar sesión" no queda fuera de vista. */
+.admin-sidebar-footer {
+  margin-top: auto; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08);
+  position: sticky; bottom: -22px; background: #141223; padding-bottom: 22px; margin-bottom: -22px; z-index: 2;
+}
 .admin-logout-btn { width: 100%; background: none; border: none; cursor: pointer; font-family: var(--ff-body); }
 .admin-logout-btn:hover { color: #FCA5A5; }
 
@@ -1751,7 +1758,7 @@ body::before {
      de un teléfono real -- pasa a cajón oculto por defecto, mismo patrón
      que .mobile-menu/.overlay del sitio público (Navbar.jsx). */
   .admin-sidebar {
-    width: 260px; max-width: 82vw; position: fixed; top: 0; left: 0; height: 100vh;
+    width: 260px; max-width: 82vw; position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh;
     transform: translateX(-100%); transition: transform .25s ease; z-index: 1001;
   }
   .admin-sidebar.mobile-open { transform: translateX(0); }

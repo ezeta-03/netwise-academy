@@ -119,7 +119,12 @@ const Navbar = () => {
             </div>
           )}
 
-          {/* En teléfono los botones de escritorio se ocultan: el acceso queda aquí y en el menú. */}
+          {/* En teléfono los botones de escritorio se ocultan: el acceso (o la salida) queda aquí y en el menú. */}
+          {currentUser && (
+            <button type="button" className="btn-icon nav-mobile-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}>
+              <LogOut size={18} />
+            </button>
+          )}
           {!currentUser && (
             <button type="button" className="btn btn-primary btn-sm nav-mobile-login" onClick={openLoginModal}>Iniciar sesión</button>
           )}

@@ -117,6 +117,7 @@ const AdminLayout = () => {
             <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>
               {getInitials(currentUser?.displayName || currentUser?.email)}
             </div>
+            <button className="admin-topbar-bell admin-topbar-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}><LogOut size={18} /></button>
           </div>
         </div>
 
