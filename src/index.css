@@ -1790,6 +1790,12 @@ body::before {
   .admin-sidebar-header { justify-content: space-between !important; }
   .admin-sidebar-logo-img { display: inline-block !important; }
   .admin-sidebar-icon-img { display: none !important; }
+  /* Un estado "colapsado" (guardado desde escritorio) no aplica al cajón: siempre se ve completo. */
+  .admin-sidebar.collapsed { width: 260px; }
+  .admin-sidebar.collapsed .admin-nav-label, .admin-sidebar.collapsed .admin-nav-badge,
+  .admin-sidebar.collapsed .admin-nav-section-label, .admin-sidebar.collapsed .admin-sidebar-logo-text { display: initial; }
+  .admin-sidebar.collapsed .admin-nav-link { justify-content: flex-start; }
+  .admin-sidebar.collapsed .admin-sidebar-collapse-btn { transform: none; }
   .admin-main { margin-left: 0; }
   .admin-sidebar-mobile-toggle { display: inline-flex; }
   .admin-topbar { padding: 12px 16px; }

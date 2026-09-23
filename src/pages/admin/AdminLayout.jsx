@@ -62,6 +62,12 @@ const AdminLayout = () => {
   // validar, sin importar si ya los marcó como leídos en la campanita.
   const counts = { courses: courses.length, ventas: notifications.length };
 
+  // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
+  const handleCollapseClick = () => {
+    if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(false);
+    else setCollapsed((c) => !c);
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/', { replace: true });
@@ -86,7 +92,7 @@ const AdminLayout = () => {
       <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
           <SidebarLogo />
-          <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expandir' : 'Colapsar'}>
+          <button className="admin-sidebar-collapse-btn" onClick={handleCollapseClick} title={collapsed ? 'Expandir' : 'Colapsar'}>
             <ChevronLeft size={16} />
           </button>
         </div>

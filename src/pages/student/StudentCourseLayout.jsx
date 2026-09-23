@@ -53,6 +53,12 @@ const StudentCourseLayout = () => {
   const [enrollment, setEnrollment] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
+  const handleCollapseClick = () => {
+    if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(false);
+    else setCollapsed((c) => !c);
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/', { replace: true });
@@ -92,7 +98,7 @@ const StudentCourseLayout = () => {
       <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
           <SidebarLogo />
-          <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)}><ChevronLeft size={16} /></button>
+          <button className="admin-sidebar-collapse-btn" onClick={handleCollapseClick}><ChevronLeft size={16} /></button>
         </div>
 
         <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
