@@ -4,6 +4,7 @@ import { fetchCourseOfferings } from '../lib/db';
 
 const CourseOfferingsContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook junto a su Provider (patrón de contexto)
 export const useCourseOfferings = () => useContext(CourseOfferingsContext);
 
 // El contenido de cada taller (título, descripción, highlights...) sigue

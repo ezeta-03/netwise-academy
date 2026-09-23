@@ -19,6 +19,7 @@ const ADMIN_POLL_MS = 45000;
 
 const UIContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook junto a su Provider (patrón de contexto)
 export const useUI = () => useContext(UIContext);
 
 export const UIProvider = ({ children }) => {

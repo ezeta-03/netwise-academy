@@ -14,14 +14,19 @@ const TeacherAgenda = () => {
   const { currentUser } = useAuth();
   const { courses: allCourses } = useCourseOfferings();
   // Un admin ve todo; un docente solo su(s) curso(s) asignado(s).
-  const courses = currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid);
-  const myCourseIds = new Set(courses.map((c) => c.id.toString()));
+  // useMemo: sin él `courses` es un array nuevo en cada render y el efecto de
+  // abajo (que depende de él) se volvía a disparar sin parar para un docente.
+  const courses = useMemo(
+    () => (currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid)),
+    [allCourses, currentUser?.role, currentUser?.uid],
+  );
+  const myCourseIds = useMemo(() => new Set(courses.map((c) => c.id.toString())), [courses]);
   const [sessions, setSessions] = useState([]);
   const [courseFilter, setCourseFilter] = useState('all');
   const [cursor, setCursor] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date());
 
-  useEffect(() => { fetchLiveSessions().then((all) => setSessions(all.filter((s) => myCourseIds.has(s.courseId?.toString())))); }, [courses]);
+  useEffect(() => { fetchLiveSessions().then((all) => setSessions(all.filter((s) => myCourseIds.has(s.courseId?.toString())))); }, [myCourseIds]);
 
   const filtered = sessions.filter((s) => courseFilter === 'all' || s.courseId?.toString() === courseFilter);
 

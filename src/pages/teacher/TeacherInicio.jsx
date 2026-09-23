@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Video, ArrowRight, BookOpen, CheckCircle2, BarChart3, Clock3 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -21,8 +21,13 @@ const TeacherInicio = () => {
   const { currentUser } = useAuth();
   const { courses: allCourses } = useCourseOfferings();
   // Un admin ve todo; un docente solo lo de los cursos que le asignaron.
-  const courses = currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid);
-  const myCourseIds = new Set(courses.map((c) => c.id.toString()));
+  // useMemo: sin él `courses` es un array nuevo en cada render y el efecto de
+  // abajo (que depende de él) se volvía a disparar sin parar para un docente.
+  const courses = useMemo(
+    () => (currentUser?.role === 'admin' ? allCourses : allCourses.filter((c) => c.teacherUid === currentUser?.uid)),
+    [allCourses, currentUser?.role, currentUser?.uid],
+  );
+  const myCourseIds = useMemo(() => new Set(courses.map((c) => c.id.toString())), [courses]);
   const [sessions, setSessions] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
   const [pendingByCourse, setPendingByCourse] = useState([]);
@@ -48,7 +53,7 @@ const TeacherInicio = () => {
       setPendingByCourse(byCourse.filter((b) => b.pending > 0));
       setLoading(false);
     });
-  }, [courses]);
+  }, [courses, myCourseIds]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
 

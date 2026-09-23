@@ -9,7 +9,8 @@
 // `records`: registros de asistencia de ESE alumno ({ sessionId, present }).
 export const attendanceStats = (sessions, records) => {
   const byId = new Map((records || []).map((r) => [r.sessionId, r]));
-  const dictated = (sessions || []).filter((s) => s.done || byId.has(s.id));
+  // Una sesión sin id no se puede cruzar con ningún registro: se ignora.
+  const dictated = (sessions || []).filter((s) => s.id !== undefined && s.id !== null && (s.done || byId.has(s.id)));
   const present = dictated.filter((s) => byId.get(s.id)?.present).length;
   const unregistered = dictated.filter((s) => !byId.has(s.id)).length;
   const raw = dictated.length ? (present / dictated.length) * 100 : null;

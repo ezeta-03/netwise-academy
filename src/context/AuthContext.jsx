@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 const AuthContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook junto a su Provider (patrón de contexto)
 export const useAuth = () => useContext(AuthContext);
 
 // Mock Users Database
