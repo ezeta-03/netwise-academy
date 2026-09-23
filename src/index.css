@@ -460,6 +460,16 @@ body::before {
 .home-lead-field input:focus, .home-lead-field select:focus { border-color: var(--accent); }
 .home-lead-field select option { background: var(--bg2); color: var(--text); }
 
+/* Pulso del botón "Solicita información" (teléfono): un anillo que se expande y se desvanece. */
+@keyframes hero-cta-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(124,58,237,.55); }
+  70%  { box-shadow: 0 0 0 14px rgba(124,58,237,0); }
+  100% { box-shadow: 0 0 0 0 rgba(124,58,237,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-discover { animation: none !important; }
+}
+
 /* En escritorio solo se ve la pestaña girada; en teléfono es un botón bajo el hero. */
 .hd-mobile, .home-lead-backdrop { display: none; }
 
@@ -467,10 +477,16 @@ body::before {
   /* El botón queda en el flujo, bajo la imagen del hero, a todo el ancho. */
   .home-hero-discover {
     position: static; transform: none; transform-origin: center; box-shadow: none;
-    display: flex; justify-content: center; width: calc(100% - 40px); margin: -32px 20px 40px;
+    display: flex; align-items: center; justify-content: center; width: calc(100% - 40px); margin: 0 20px 40px;
     border-radius: 12px; padding: 14px 18px; font-size: .9rem;
     background: var(--accent); color: #fff;
+    /* Por encima del hero (que tiene su propio contexto de apilado por la animación de entrada):
+       si no, el hero intercepta el toque y el botón solo responde en su borde. */
+    position: relative; z-index: 7; cursor: pointer; touch-action: manipulation;
+    animation: hero-cta-pulse 2s ease-out infinite;
   }
+  .home-hero-discover:active { transform: scale(.98); }
+  .home-hero-discover > * { pointer-events: none; }
   .home-hero-discover svg { display: none; }
   .hd-desktop { display: none; }
   .hd-mobile { display: inline; }
@@ -680,7 +696,7 @@ body::before {
   .home-features-grid > div { border-left: none; padding-left: 0; }
 }
 @media (max-width: 900px) {
-  .home-hero { flex-direction: column; padding: 48px 20px 64px; gap: 40px; }
+  .home-hero { flex-direction: column; padding: 48px 20px 32px; gap: 40px; }
   .home-hero-left, .home-hero-right { flex: 1 1 auto; width: 100%; }
   .home-hero-media { aspect-ratio: 4 / 3; }
   .home-hero-banner { font-size: .78rem; padding: 12px 16px; text-align: left; }
