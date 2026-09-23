@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -31,6 +31,7 @@ const getInitials = (name) => {
 const TeacherCourseLayout = () => {
   const { courseId } = useParams();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
@@ -73,7 +74,8 @@ const TeacherCourseLayout = () => {
 
   return (
     <div className="admin-shell">
-      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className={`overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
+      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
           <img src={logoNetwise} alt="Netwise Academy" className="admin-sidebar-logo-img" />
           <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)}><ChevronLeft size={16} /></button>
@@ -97,7 +99,7 @@ const TeacherCourseLayout = () => {
           </div>
         </div>
 
-        <nav className="admin-nav">
+        <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
           {SUB_NAV.map((item) => {
             const Icon = item.icon;
             return (
@@ -119,6 +121,7 @@ const TeacherCourseLayout = () => {
 
       <div className="admin-main">
         <div className="admin-topbar">
+          <button className="admin-sidebar-mobile-toggle" title="Menú" onClick={() => setMobileOpen(true)}><Menu size={18} /></button>
           <div className="admin-breadcrumb">
             <span className="admin-breadcrumb-link" onClick={() => navigate('/teacher/cursos')}>Mis cursos</span> / <span className="admin-breadcrumb-link" onClick={() => navigate(`/teacher/curso/${course.id}`)}>{course.title}</span> / <strong>{currentLabel}</strong>
           </div>

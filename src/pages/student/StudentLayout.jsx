@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, LogOut } from 'lucide-react';
+import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -30,6 +30,7 @@ const getInitials = (name) => {
 
 const StudentLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
@@ -56,7 +57,8 @@ const StudentLayout = () => {
 
   return (
     <div className="admin-shell">
-      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      <div className={`overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
+      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
           <img src={logoNetwise} alt="Netwise Academy" className="admin-sidebar-logo-img" />
           <button className="admin-sidebar-collapse-btn" onClick={() => setCollapsed((c) => !c)} title={collapsed ? 'Expandir' : 'Colapsar'}>
@@ -64,7 +66,7 @@ const StudentLayout = () => {
           </button>
         </div>
 
-        <nav className="admin-nav">
+        <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             return (
@@ -89,6 +91,7 @@ const StudentLayout = () => {
 
       <div className="admin-main">
         <div className="admin-topbar">
+          <button className="admin-sidebar-mobile-toggle" title="Menú" onClick={() => setMobileOpen(true)}><Menu size={18} /></button>
           <div className="admin-breadcrumb"><span className="admin-breadcrumb-link" onClick={() => navigate('/student/inicio')}>Mi campus</span> / <strong>{currentLabel}</strong></div>
           <div className="admin-topbar-right">
             <button className="admin-topbar-bell" title="Notificaciones" onClick={toggleSidebar}>

@@ -1657,9 +1657,23 @@ body::before {
 .admin-modal-lg .admin-field { margin-bottom: 22px; }
 .admin-modal-lg .admin-banner { padding: 22px 26px; margin-bottom: 24px; }
 
+/* Botón hamburguesa del sidebar del panel (Admin/Docente/Alumno) -- oculto
+   por defecto, solo aparece bajo 640px (ver media query más abajo). Mismo
+   trato visual que .admin-icon-btn. */
+.admin-sidebar-mobile-toggle {
+  display: none; align-items: center; justify-content: center; width: 36px; height: 36px;
+  border-radius: 8px; border: 1px solid #ECEAF3; background: #fff; color: #4A4860; cursor: pointer; flex-shrink: 0;
+  margin-right: 10px;
+}
+
 @media (max-width: 1080px) {
   .admin-stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .admin-two-col { grid-template-columns: 1fr; }
+  /* !important porque muchas páginas fijan estas grillas con un
+     style={{gridTemplateColumns}} inline (varía el ancho de la columna
+     lateral según la página) -- un estilo inline siempre gana sobre esta
+     regla si no se fuerza, y la página se queda en 2 columnas angostas en
+     vez de apilarse. */
+  .admin-two-col { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 900px) {
   .admin-sidebar { width: 76px; position: fixed; z-index: 50; }
@@ -1670,9 +1684,41 @@ body::before {
   .admin-content { padding: 20px; }
   .admin-topbar { padding: 14px 20px; }
   .admin-field-row { grid-template-columns: 1fr; }
+  .admin-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .dash-profile-stats { grid-template-columns: 1fr !important; }
 }
 @media (max-width: 640px) {
-  .admin-stats-grid { grid-template-columns: 1fr; }
+  .admin-stats-grid { grid-template-columns: 1fr !important; }
+
+  /* Bajo 640px la barra de solo-íconos (76px fijos) es casi 1/5 del ancho
+     de un teléfono real -- pasa a cajón oculto por defecto, mismo patrón
+     que .mobile-menu/.overlay del sitio público (Navbar.jsx). */
+  .admin-sidebar {
+    width: 260px; max-width: 82vw; position: fixed; top: 0; left: 0; height: 100vh;
+    transform: translateX(-100%); transition: transform .25s ease; z-index: 1001;
+  }
+  .admin-sidebar.mobile-open { transform: translateX(0); }
+  .admin-sidebar .admin-nav-label, .admin-sidebar .admin-nav-badge,
+  .admin-sidebar .admin-nav-section-label, .admin-sidebar .admin-sidebar-collapse-btn { display: initial; }
+  .admin-sidebar .admin-nav-link { justify-content: flex-start; }
+  .admin-sidebar-header { justify-content: space-between !important; }
+  .admin-sidebar-logo-img { display: inline-block !important; }
+  .admin-main { margin-left: 0; }
+  .admin-sidebar-mobile-toggle { display: inline-flex; }
+  .admin-topbar { padding: 12px 16px; }
+  .admin-breadcrumb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Tablas anchas (Registro de notas, Asistencia, listas de Admin): más
+     compactas y con la primera columna fija para no perder de vista a
+     quién corresponde cada fila al deslizar hacia los lados. */
+  .admin-table th, .admin-table td { padding: 10px 12px; font-size: .8rem; }
+  .admin-table th:first-child, .admin-table td:first-child {
+    position: sticky; left: 0; background: #fff; z-index: 1; box-shadow: 2px 0 6px rgba(20,18,35,.06);
+  }
+
+  /* .admin-icon-btn a 34px es chico para el dedo -- 40px es el mínimo
+     razonable de objetivo táctil. */
+  .admin-icon-btn { width: 40px; height: 40px; }
 }
 
 /* ═══════════════════════════════════════════════════
