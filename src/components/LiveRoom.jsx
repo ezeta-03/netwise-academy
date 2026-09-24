@@ -69,7 +69,14 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
         height: '100%',
         userInfo: { displayName },
         configOverwrite: {
+          // Jitsi reemplazó prejoinPageEnabled por prejoinConfig.enabled y ya
+          // no respeta el viejo: sin esto el alumno veía la pantalla "Join
+          // meeting" de Jitsi encima de nuestro propio lobby. Se dejan ambos.
+          prejoinConfig: { enabled: false },
           prejoinPageEnabled: false,
+          // Sin esto Jitsi muestra el nombre técnico de la sala
+          // ("Netwise Academy 1 1790282...").
+          subject: session.title || session.courseTitle || 'Clase en vivo',
           disableDeepLinking: true,
           startWithAudioMuted: !micOn,
           startWithVideoMuted: !camOn,
