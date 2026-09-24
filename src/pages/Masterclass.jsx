@@ -13,6 +13,8 @@ import iconVideo from '../assets/masterclass/icon-video.svg';
 import iFolder from '../assets/masterclass/i-folder.svg';
 import iMsg from '../assets/masterclass/i-msg.svg';
 import iVideo from '../assets/masterclass/i-video.svg';
+import logoHarvard from '../assets/masterclass/harvard.webp';
+import logoKellogg from '../assets/masterclass/kellogg.webp';
 import './masterclass.css';
 
 const SLIDE_MS = 7000;
@@ -161,8 +163,11 @@ const Masterclass = () => {
 
       <div className="mcl-cases">
         <div className="mcl-cases-inner">
-          <p className="mcl-cases-lead">Casos 100% reales</p>
-          <p className="mcl-cases-sub">con el método de caso, al estilo de <b>Harvard</b> y <b>Kellogg</b></p>
+          <p className="mcl-cases-lead">Casos 100% reales estilo</p>
+          <div className="mcl-cases-logos">
+            <img src={logoKellogg} alt="Kellogg School of Management (Northwestern University)" width="109" height="58" />
+            <img src={logoHarvard} alt="Harvard University" width="206" height="52" />
+          </div>
         </div>
       </div>
 

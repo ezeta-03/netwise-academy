@@ -2287,6 +2287,9 @@ body {
 .home-lead-check input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
 .home-lead-check:last-of-type { margin-bottom: 18px; }
 .home-lead-legal { font-size: .74rem; color: var(--text3); line-height: 1.5; margin-top: 12px; text-align: center; }
+.home-footer-libro { display: inline-block; margin-top: 10px; border-radius: 8px; overflow: hidden; transition: transform .2s; }
+.home-footer-libro:hover { transform: translateY(-2px); }
+.home-footer-libro img { display: block; width: 59px; height: 58px; object-fit: cover; }
 .home-footer-legal { display: inline-flex; gap: 16px; flex-wrap: wrap; }
 .home-footer-legal .home-footer-link-btn { color: var(--text3); font-size: .8rem; }
 @media (max-width: 600px) {

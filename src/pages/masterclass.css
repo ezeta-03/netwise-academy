@@ -122,10 +122,12 @@
 
 /* ---------- Franja de casos ---------- */
 .mcl-cases { background: var(--mcl-violet); }
-.mcl-cases-inner { max-width: 1200px; margin: 0 auto; padding: 22px 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px 32px; flex-wrap: wrap; }
+.mcl-cases-inner { max-width: 1040px; margin: 0 auto; padding: 20px 40px; min-height: 104px; display: flex; align-items: center; justify-content: space-between; gap: 16px 40px; flex-wrap: wrap; }
 .mcl-cases-lead { font-size: 28px; font-weight: 500; letter-spacing: -.5px; }
-.mcl-cases-sub { font-size: 17px; color: rgba(255,255,255,.88); }
-.mcl-cases-sub b { font-family: Georgia, "Times New Roman", serif; font-weight: 700; font-size: 20px; color: #fff; }
+.mcl-cases-logos { display: flex; align-items: center; gap: 44px; }
+.mcl-cases-logos img { height: auto; }
+.mcl-cases-logos img:first-child { width: 88px; }
+.mcl-cases-logos img:last-child { width: 166px; }
 
 /* ---------- Masterclasses ---------- */
 .mcl-mc { padding: 120px 20px 110px; display: flex; flex-direction: column; align-items: center; gap: 80px; }
@@ -282,7 +284,9 @@
   .mcl-info-date strong { font-size: 14px; line-height: 20px; }
   .mcl-form-card { width: 100%; max-width: 380px; padding: 24px 20px; }
   .mcl-cases-lead { font-size: 22px; }
-  .mcl-cases-sub { font-size: 15px; }
+  .mcl-cases-logos { gap: 28px; }
+  .mcl-cases-logos img:first-child { width: 72px; }
+  .mcl-cases-logos img:last-child { width: 136px; }
   .mcl-mc { padding: 80px 16px; gap: 56px; }
   .mcl-mc-img { height: 300px; }
   .mcl-mc-body { padding: 28px 20px 32px; }
