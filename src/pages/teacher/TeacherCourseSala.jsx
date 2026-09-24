@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Radio, LogIn, XCircle, Trash2 } from 'lucide-react';
+import { Radio, LogIn, XCircle, Trash2, Film } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { toPeruIso } from '../../lib/liveScheduleGenerator';
 import LiveRoom from '../../components/LiveRoom';
+import RecordingLinkModal from '../../components/RecordingLinkModal';
 
 const scheduleLineFor = (s) => {
   const start = new Date(s.startsAt);
@@ -28,6 +29,7 @@ const TeacherCourseSala = () => {
   const [activeSession, setActiveSession] = useState(null);
   const [selected, setSelected] = useState([]);
   const [bulkCancelling, setBulkCancelling] = useState(false);
+  const [recordingFor, setRecordingFor] = useState(null);
 
   const load = useCallback(() => {
     fetchLiveSessions().then((all) => setSessions(all.filter((s) => s.courseId?.toString() === course.id.toString())));
@@ -100,6 +102,7 @@ const TeacherCourseSala = () => {
           roleLabel="Docente"
           scheduleLine={scheduleLineFor(activeSession)}
           onExit={() => { setActiveSession(null); load(); }}
+          canRecord
         />
       </div>
     );
@@ -158,8 +161,13 @@ const TeacherCourseSala = () => {
                       <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleString('es-PE')} {status === 'cancelled' && '· Cancelada'} {status === 'ended' && '· Finalizada'}</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     {joinable && <button className="admin-btn-edit" onClick={() => setActiveSession(s)}><LogIn size={13} /> Entrar</button>}
+                    {status !== 'cancelled' && (
+                      <button className="admin-btn-ghost" onClick={() => setRecordingFor(s)} title="Publicar el enlace de la grabación para los alumnos">
+                        <Film size={13} /> {s.recordingUrl ? 'Grabación ✓' : 'Grabación'}
+                      </button>
+                    )}
                     {canCancel
                       ? <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>
                       : <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
@@ -170,6 +178,10 @@ const TeacherCourseSala = () => {
           </>
         )}
       </div>
+      {recordingFor && (
+        <RecordingLinkModal session={recordingFor} onClose={() => setRecordingFor(null)}
+          onSaved={(updated) => setSessions((list) => list.map((x) => (x.id === updated.id ? updated : x)))} />
+      )}
     </div>
   );
 };

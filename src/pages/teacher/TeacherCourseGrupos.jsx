@@ -139,6 +139,7 @@ const TeacherCourseGrupos = () => {
           lobbyMeta="Asesoría del grupo de trabajo."
           joinLabel="Entrar a la asesoría"
           onExit={() => { setActiveRoom(null); load(); }}
+          canRecord
         />
       </div>
     );
