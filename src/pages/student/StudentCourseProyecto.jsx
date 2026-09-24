@@ -5,9 +5,10 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import {
   fetchCourseContent, fetchProjectProfile, saveProjectProfile,
-  fetchProjectAdvances, toggleProjectAdvance, fetchSubmissions, upsertSubmission,
+  fetchProjectAdvances, toggleProjectAdvance, fetchSubmissions,
 } from '../../lib/db';
 import ModalPortal from '../../components/ModalPortal';
+import SubmitDeliverableModal, { SubmissionContent } from '../../components/SubmitDeliverableModal';
 
 const ProfileModal = ({ course, initial, onClose, onSaved }) => {
   const { currentUser } = useAuth();
@@ -61,45 +62,6 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
   );
 };
 
-const SubmitModal = ({ course, module, onClose, onSaved }) => {
-  const { currentUser } = useAuth();
-  const { addToast } = useUI();
-  const [note, setNote] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!note.trim()) { addToast('Describe tu avance o pega el link de tu entrega.', 'error'); return; }
-    setSaving(true);
-    try {
-      await upsertSubmission({
-        courseId: course.id, moduleId: module.id, moduleTitle: module.title,
-        uid: currentUser.uid, studentName: currentUser.displayName || currentUser.email,
-        deliverableTitle: module.deliverable?.description || module.title, status: 'submitted', note: note.trim(),
-      });
-      addToast('Avance presentado. Tu docente lo revisará pronto.', 'success');
-      onSaved();
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="admin-modal-head"><div className="admin-modal-title">Presentar avance</div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
-        <p className="admin-cell-sub" style={{ marginBottom: 12 }}>{module.deliverable?.description || module.title}</p>
-        <div className="admin-field"><label>Cuéntanos qué avanzaste o pega el link de tu entrega</label><textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder="https://... o una breve descripción" /></div>
-        <div className="admin-modal-actions">
-          <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="admin-btn-edit" onClick={handleSave} disabled={saving}><Send size={13} /> {saving ? 'Enviando...' : 'Enviar avance'}</button>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
-  );
-};
 
 const StudentCourseProyecto = () => {
   const { course } = useOutletContext();
@@ -280,7 +242,7 @@ const StudentCourseProyecto = () => {
               <div key={module.id} className="dash-list-row">
                 <div>
                   <div className="dash-list-row-title">{module.deliverable?.description || module.title}</div>
-                  <div className="dash-list-row-sub">{submission.note}</div>
+                  <SubmissionContent submission={submission} emptyText="Avance presentado." />
                 </div>
                 <span className={`admin-status ${submission.status === 'reviewed' ? 'admin-status-green' : 'admin-status-gray'}`}>{submission.status === 'reviewed' ? 'Revisado' : 'En revisión'}</span>
               </div>
@@ -296,7 +258,11 @@ const StudentCourseProyecto = () => {
       </div>
 
       {profileModalOpen && <ProfileModal course={course} initial={profile} onClose={() => setProfileModalOpen(false)} onSaved={load} />}
-      {submitModule && <SubmitModal course={course} module={submitModule} onClose={() => setSubmitModule(null)} onSaved={load} />}
+      {submitModule && (
+        <SubmitDeliverableModal course={course} module={submitModule} onClose={() => setSubmitModule(null)} onSaved={load}
+          title="Presentar avance" noteLabel="Cuéntanos qué avanzaste o pega el link (opcional si adjuntas archivo)"
+          submitLabel="Enviar avance" successMsg="Avance presentado. Tu docente lo revisará pronto." />
+      )}
     </div>
   );
 };

@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { ClipboardCheck, BarChart3, UsersRound, Send, ExternalLink, Clock3, CheckCircle2, XCircle, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, fetchCourseGrades } from '../../lib/db';
+import { fetchCourseContent, fetchCourseSubmissions, fetchCourseAttendance, fetchCourseGrades } from '../../lib/db';
 import { computeGradeSummary } from '../../lib/gradebook';
 import { getGradingModel, buildStudentRows } from '../../lib/gradingScheme';
 import { getOrderedSessions } from '../../lib/courseSessions';
@@ -11,6 +10,7 @@ import { attendanceStats } from '../../lib/attendance';
 import { APPROVAL, MIN_PERFORMANCE_GRADE, evaluateApproval } from '../../lib/approval';
 import { deliverableDueDate } from '../../lib/deliveryDates';
 import ModalPortal from '../../components/ModalPortal';
+import SubmitDeliverableModal, { SubmissionContent } from '../../components/SubmitDeliverableModal';
 
 const formatDate = (iso) => {
   if (!iso) return null;
@@ -53,45 +53,6 @@ const EvalSidePanel = ({ vista, setVista, summary }) => (
   </>
 );
 
-const SubmitModal = ({ course, module, onClose, onSaved }) => {
-  const { currentUser } = useAuth();
-  const { addToast } = useUI();
-  const [note, setNote] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!note.trim()) { addToast('Pega el link de tu entrega o describe tu trabajo.', 'error'); return; }
-    setSaving(true);
-    try {
-      await upsertSubmission({
-        courseId: course.id, moduleId: module.id, moduleTitle: module.title,
-        uid: currentUser.uid, studentName: currentUser.displayName || currentUser.email,
-        deliverableTitle: module.deliverable?.description || module.title, status: 'submitted', note: note.trim(),
-      });
-      addToast('Entrega presentada. Tu docente la revisará pronto.', 'success');
-      onSaved();
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
-        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="admin-modal-head"><div className="admin-modal-title">Presentar entrega</div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
-          <p className="admin-cell-sub" style={{ marginBottom: 12 }}>{module.deliverable?.description || module.title}</p>
-          <div className="admin-field"><label>Link de tu archivo o descripción de tu entrega</label><textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} placeholder="https://... o una breve descripción" /></div>
-          <div className="admin-modal-actions">
-            <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
-            <button className="admin-btn-edit" onClick={handleSave} disabled={saving}><Send size={13} /> {saving ? 'Enviando...' : 'Enviar entrega'}</button>
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-};
 
 const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitted }) => {
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
@@ -145,11 +106,7 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
             <p style={{ fontSize: '.86rem', color: '#4A4860', marginBottom: 12 }}>{m.deliverable.description}</p>
             <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 6 }}>Tu entrega</p>
             {sub ? (
-              /^https?:\/\//.test(sub.note || '') ? (
-                <a className="admin-btn-ghost" href={sub.note} target="_blank" rel="noreferrer" style={{ marginBottom: 10 }}><ExternalLink size={13} /> Abrir entrega</a>
-              ) : (
-                <p className="admin-cell-sub" style={{ marginBottom: 10 }}>{sub.note}</p>
-              )
+              <SubmissionContent submission={sub} emptyText="Entrega presentada sin descripción." />
             ) : (
               <p className="admin-panel-caption" style={{ marginTop: 0 }}>Aún no presentas este entregable.</p>
             )}
@@ -160,7 +117,11 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
         );
       })}
 
-      {submitModule && <SubmitModal course={course} module={submitModule} onClose={() => setSubmitModule(null)} onSaved={onSubmitted} />}
+      {submitModule && (
+        <SubmitDeliverableModal course={course} module={submitModule} onClose={() => setSubmitModule(null)} onSaved={onSubmitted}
+          title="Presentar entrega" noteLabel="Link o descripción de tu entrega (opcional si adjuntas archivo)"
+          submitLabel="Enviar entrega" successMsg="Entrega presentada. Tu docente la revisará pronto." />
+      )}
     </div>
   );
 };

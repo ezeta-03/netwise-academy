@@ -163,11 +163,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
           <div className="admin-panel">
             <div className="admin-panel-head"><span className="admin-panel-title">Entrega del alumno</span></div>
             {reviewingRow.submission ? (
-              /^https?:\/\//.test(reviewingRow.submission.note || '') ? (
-                <a className="admin-btn-edit" href={reviewingRow.submission.note} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Abrir entrega</a>
-              ) : (
-                <p style={{ fontSize: '.88rem', color: '#4A4860' }}>{reviewingRow.submission.note || 'El alumno no dejó una descripción.'}</p>
-              )
+              <SubmissionContent submission={reviewingRow.submission} primary emptyText="El alumno no dejó una descripción." />
             ) : (
               <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este alumno todavía no presenta su entrega.</p>
             )}

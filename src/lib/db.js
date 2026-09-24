@@ -718,6 +718,26 @@ export const uploadPaymentProof = async (uid, courseId, file) => {
   return getDownloadURL(ref);
 };
 
+// Archivo del entregable que presenta el alumno (Alumno > Evaluación y
+// Proyecto). Va en la carpeta del propio alumno: storage.rules solo le deja
+// escribir ahí; el docente lo abre con el link de descarga guardado en la
+// entrega. En modo mock se guarda como data URL, igual que los comprobantes.
+export const uploadSubmissionFile = async (uid, courseId, moduleId, file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+  const safeName = file.name.replace(/[^\w.-]+/g, '_');
+  const path = `submissions/${uid}/${courseId}_${moduleId}_${Date.now()}_${safeName}`;
+  const ref = storageRef(storage, path);
+  await uploadBytes(ref, file, { contentType: file.type });
+  return getDownloadURL(ref);
+};
+
 // Archivo que el docente sube para "Materiales de este módulo" (PDF/DOCX/PPT)
 // -- misma idea que uploadPaymentProof: en modo mock no hay Storage, así que
 // se guarda como data URL en localStorage junto con el resto del contenido.
@@ -898,9 +918,9 @@ export const saveAcademySettings = async (settings) => {
 };
 
 // --- Entregas de un módulo (colección Firestore `submissions`) ---
-// Un doc por alumno+módulo. No hay todavía un flujo real de "subir mi
-// entregable" del lado del alumno -- esto es lo que el docente usa para
-// llevar registro de a quién ya le revisó el entregable de cada módulo.
+// Un doc por alumno+módulo. El alumno presenta un archivo (Storage, ver
+// uploadSubmissionFile) y/o un link o descripción (`note`); el docente la
+// califica en el mismo doc.
 
 // `uid` (opcional): trae solo las entregas de ese alumno. Un alumno SIEMPRE
 // debe pasarlo -- las reglas de Firestore solo le dejan leer las suyas.
@@ -939,12 +959,15 @@ export const fetchCourseSubmissions = async (courseId, uid) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note, grade, feedback }) => {
+export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note, grade, feedback, file }) => {
   const docId = `${uid}_${courseId}_${moduleId}`;
   const payload = { courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, updatedAt: new Date().toISOString() };
   if (note !== undefined) payload.note = note || '';
   if (grade !== undefined) payload.grade = grade === null || grade === '' ? null : Number(grade);
   if (feedback !== undefined) payload.feedback = feedback || '';
+  // `file` ({ url, name } o null) solo lo manda el alumno al presentar: null
+  // borra el adjunto anterior si esta vez entregó solo un link.
+  if (file !== undefined) { payload.fileUrl = file?.url || null; payload.fileName = file?.name || null; }
   // updatedAt cambia también cuando el docente califica; submittedAt solo
   // cuando el alumno presenta -- es la fecha que sirve para ver atrasos.
   if (status === 'submitted') payload.submittedAt = payload.updatedAt;
