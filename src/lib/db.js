@@ -1101,11 +1101,14 @@ const sendLeadToSheet = (payload) => {
   }).catch(() => {});
 };
 
-export const captureProgramLead = async ({ courseId, courseTitle, name, email, phone, marketingConsent, source }) => {
+export const captureProgramLead = async ({ courseId, courseTitle, name, email, phone, marketingConsent, acceptedTerms, source }) => {
+  const now = new Date().toISOString();
   const payload = {
     courseId: courseId || null, courseTitle: courseTitle || null, name, email, phone: phone || null,
     source: source || 'download',
-    marketingConsent: !!marketingConsent, createdAt: new Date().toISOString(),
+    marketingConsent: !!marketingConsent, createdAt: now,
+    // Constancia de la casilla de Términos (formularios que la piden, p. ej. el hero).
+    ...(acceptedTerms ? { termsAcceptedAt: now } : {}),
   };
 
   sendLeadToSheet(payload);

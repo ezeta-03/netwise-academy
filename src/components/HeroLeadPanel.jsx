@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { captureProgramLead } from '../lib/db';
 import { useUI } from '../context/UIContext';
+import TermsModal from './TermsModal';
 
 // Formulario de interés general del hero: SIEMPRE visible (antes se abría con una
 // pestaña "Descubre" / un botón). En escritorio flota sobre la imagen; en teléfono
@@ -14,6 +15,9 @@ const HeroLeadPanel = ({ courses }) => {
   const [phone, setPhone] = useState('');
   const [topic, setTopic] = useState('');
   const [saving, setSaving] = useState(false);
+  const [legalTab, setLegalTab] = useState(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
 
   const visibleCourses = courses.filter((c) => c.visible !== false);
 
@@ -28,11 +32,13 @@ const HeroLeadPanel = ({ courses }) => {
         phone,
         courseId: topicCourse?.id ?? null,
         courseTitle: topicCourse?.title ?? null,
-        marketingConsent: true,
+        acceptedTerms,
+        marketingConsent,
         source: 'hero',
       });
       addToast('¡Gracias! Te contactaremos muy pronto.', 'success');
       setName(''); setLastName(''); setEmail(''); setPhone(''); setTopic('');
+      setAcceptedTerms(false); setMarketingConsent(false);
     } catch {
       addToast('No se pudo enviar. Intenta de nuevo.', 'error');
     } finally {
@@ -73,10 +79,24 @@ const HeroLeadPanel = ({ courses }) => {
             ))}
           </select>
         </div>
+        {/* Aceptación de Términos (obligatoria): se marca sola al pulsar "Entendido"
+            en el modal. Promociones (opcional): nunca premarcada -- Ley 29733. */}
+        <label className="home-lead-check">
+          <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} required />
+          <span>
+            He leído y acepto los <button type="button" className="terms-link" onClick={(e) => { e.preventDefault(); setLegalTab('terms'); }}>Términos y condiciones</button> y
+            la <button type="button" className="terms-link" onClick={(e) => { e.preventDefault(); setLegalTab('privacy'); }}>Política de privacidad</button>.
+          </span>
+        </label>
+        <label className="home-lead-check">
+          <input type="checkbox" checked={marketingConsent} onChange={(e) => setMarketingConsent(e.target.checked)} />
+          <span>Quiero recibir novedades, próximos cursos y promociones (opcional).</span>
+        </label>
         <button type="submit" className="lead-submit-btn" disabled={saving}>
           {saving ? <Loader2 size={16} className="spin" /> : 'Enviar información'}
         </button>
       </form>
+      {legalTab && <TermsModal initialTab={legalTab} onClose={() => setLegalTab(null)} onAccept={() => setAcceptedTerms(true)} />}
     </div>
   );
 };

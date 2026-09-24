@@ -10,6 +10,18 @@ import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
 import { planScheduleSync } from '../../lib/scheduleSync';
+import { isPendingUrl } from '../../lib/placeholders';
+
+// Resumen del contenido cargado de un curso. Un módulo cuenta si ya tiene
+// objetivo o sesiones (no solo el título); las grabaciones "Pendiente de
+// grabar" de los seeds no cuentan como lecciones reales.
+const summarizeContent = (modules = []) => ({
+  modules: modules.filter((m) => m.objective?.trim() || m.sessions?.length).length,
+  sessions: modules.reduce((sum, m) => sum + (m.sessions?.length || 0), 0),
+  recordings: modules.reduce((sum, m) => sum + (m.lessons || []).filter((l) => !isPendingUrl(l.videoUrl)).length, 0),
+});
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 const GROUP_STATUS = {
   open: { label: 'Abierto', cls: 'admin-status-green' },
@@ -336,7 +348,7 @@ const LiveClassesPanel = ({ courses }) => {
     Promise.all([
       fetchLiveSessions(),
       Promise.all(courses.map((c) =>
-        fetchCourseContent(c.id).then((data) => [c.id, (data.modules || []).reduce((sum, m) => sum + m.lessons.length, 0)])
+        fetchCourseContent(c.id).then((data) => [c.id, summarizeContent(data.modules)])
       )),
     ]).then(([allSessions, counts]) => {
       setSessions(allSessions);
@@ -395,12 +407,18 @@ const LiveClassesPanel = ({ courses }) => {
         <div className="admin-panel-head"><span className="admin-panel-title">Contenido publicado por curso</span></div>
         <div style={{ display: 'grid', gap: 10 }}>
           {courses.map((c) => {
-            const count = contentCounts[c.id] || 0;
+            const info = contentCounts[c.id] || { modules: 0, sessions: 0, recordings: 0 };
+            const count = info.modules;
+            const label = [
+              plural(info.modules, 'módulo', 'módulos'),
+              plural(info.sessions, 'sesión', 'sesiones'),
+              info.recordings > 0 && plural(info.recordings, 'grabación', 'grabaciones'),
+            ].filter(Boolean).join(' · ');
             return (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#F6F5FA', borderRadius: 10 }}>
                 <span style={{ fontSize: '.88rem', color: '#14141F', fontWeight: 500 }}>{c.title}</span>
                 <span className={`admin-status ${count > 0 ? 'admin-status-green' : 'admin-status-amber'}`}>
-                  {count > 0 ? `${count} lección${count === 1 ? '' : 'es'}` : 'Sin contenido'}
+                  {count > 0 ? label : 'Sin contenido'}
                 </span>
               </div>
             );

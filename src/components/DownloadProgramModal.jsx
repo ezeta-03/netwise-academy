@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { X, Download, Loader2 } from 'lucide-react';
 import { captureProgramLead } from '../lib/db';
 import ModalPortal from './ModalPortal';
+import TermsModal from './TermsModal';
 
 const DownloadProgramModal = ({ course, onClose, onDownload }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
+  const [legalTab, setLegalTab] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -53,9 +55,14 @@ const DownloadProgramModal = ({ course, onClose, onDownload }) => {
             <button type="submit" className="lead-submit-btn" disabled={saving}>
               {saving ? <Loader2 size={16} className="spin" /> : <Download size={16} />} {saving ? 'Guardando...' : 'Descargar programa completo'}
             </button>
+            <p className="home-lead-legal" style={{ color: '#8B8A9B' }}>
+              Tus datos se tratan según nuestra <button type="button" className="terms-link" onClick={() => setLegalTab('privacy')}>Política de privacidad</button> y
+              los <button type="button" className="terms-link" onClick={() => setLegalTab('terms')}>Términos y condiciones</button>.
+            </p>
           </form>
         </div>
       </div>
+      {legalTab && <TermsModal initialTab={legalTab} onClose={() => setLegalTab(null)} />}
     </ModalPortal>
   );
 };

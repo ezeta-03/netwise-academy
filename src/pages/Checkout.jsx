@@ -9,6 +9,7 @@ import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchMyOrders, 
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import { PAYMENT_METHODS, buildPaymentInstructions } from '../lib/paymentMethods';
 import YapeInstructionsModal from '../components/YapeInstructionsModal';
+import TermsModal from '../components/TermsModal';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 import qrZaazmago from '../assets/NETWISE ACADEMY WEB/qr_zaazmago_recortado.jpeg';
 
@@ -43,6 +44,7 @@ const Checkout = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [legalTab, setLegalTab] = useState(null);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -345,7 +347,7 @@ const Checkout = () => {
                         </div>
                         <label className="checkout-terms-row">
                           <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
-                          Acepto los <a>Términos y condiciones</a> y la <a>Política de privacidad</a> de Netwise Academy.
+                          <span>He leído y acepto los <button type="button" className="terms-link" onClick={(e) => { e.preventDefault(); setLegalTab('terms'); }}>Términos y Condiciones de Servicio</button> y la <button type="button" className="terms-link" onClick={(e) => { e.preventDefault(); setLegalTab('privacy'); }}>Política de Privacidad</button> de Netwise Academy, y autorizo el tratamiento de mis datos personales para gestionar mi inscripción, pagos, clases, certificación y atención, conforme a la Ley N.° 29733.</span>
                         </label>
                         <button type="submit" className="checkout-submit-btn" disabled={authLoading}>
                           {authLoading ? <Loader2 size={16} className="spin" /> : 'Crear cuenta y continuar →'}
@@ -557,6 +559,7 @@ const Checkout = () => {
           onClose={() => setShowYapeInstructions(false)}
         />
       )}
+      {legalTab && <TermsModal initialTab={legalTab} onClose={() => setLegalTab(null)} onAccept={() => setAcceptedTerms(true)} />}
     </div>
   );
 };
