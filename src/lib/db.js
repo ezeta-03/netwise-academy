@@ -1109,19 +1109,47 @@ export const updateSupportRequestStatus = async (requestId, status) => {
 const LEADS_WEBAPP_URL = import.meta.env.VITE_LEADS_WEBAPP_URL;
 const LEADS_WEBAPP_SECRET = import.meta.env.VITE_LEADS_WEBAPP_SECRET;
 
-const sendLeadToSheet = (payload) => {
-  if (!LEADS_WEBAPP_URL) return;
+const sendLeadToSheet = (payload, url = LEADS_WEBAPP_URL, secret = LEADS_WEBAPP_SECRET) => {
+  if (!url) return;
   // mode: 'no-cors' porque Apps Script no siempre manda los headers CORS que
   // el navegador exige para LEER la respuesta -- con no-cors el envío sí
   // llega, solo no podemos inspeccionar qué contestó. Content-Type
   // text/plain evita el preflight OPTIONS, que Apps Script no maneja.
   // Best-effort: si falla, no bloquea ni rompe el guardado en Firestore.
-  fetch(LEADS_WEBAPP_URL, {
+  fetch(url, {
     method: 'POST',
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ ...payload, secret: LEADS_WEBAPP_SECRET || null }),
+    body: JSON.stringify({ ...payload, secret: secret || null }),
   }).catch(() => {});
+};
+
+// Inscripciones a las masterclass gratuitas (landing /masterclass). Van a su
+// PROPIO Google Sheet -- ver scripts/google-apps-script/Masterclass.gs -- y
+// a Firestore (`masterclassLeads`) como respaldo: el envío al Sheet es
+// no-cors y no se puede confirmar desde el navegador.
+const MASTERCLASS_WEBAPP_URL = import.meta.env.VITE_MASTERCLASS_WEBAPP_URL;
+const MASTERCLASS_WEBAPP_SECRET = import.meta.env.VITE_MASTERCLASS_WEBAPP_SECRET;
+
+export const captureMasterclassLead = async ({ firstName, lastName, email, whatsapp, masterclasses, marketingConsent, source }) => {
+  const now = new Date().toISOString();
+  const payload = {
+    firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim().toLowerCase(), whatsapp: whatsapp.trim(),
+    masterclasses, marketingConsent: !!marketingConsent, termsAcceptedAt: now,
+    source: source || 'landing', createdAt: now,
+  };
+
+  sendLeadToSheet(payload, MASTERCLASS_WEBAPP_URL, MASTERCLASS_WEBAPP_SECRET);
+
+  if (!isConfigValid) {
+    const list = JSON.parse(localStorage.getItem('mock_masterclass_leads') || '[]');
+    list.push({ id: `mock-${Date.now()}`, ...payload });
+    localStorage.setItem('mock_masterclass_leads', JSON.stringify(list));
+    return payload;
+  }
+
+  await addDoc(collection(db, 'masterclassLeads'), payload);
+  return payload;
 };
 
 export const captureProgramLead = async ({ courseId, courseTitle, name, email, phone, marketingConsent, acceptedTerms, source }) => {

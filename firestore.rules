@@ -321,6 +321,23 @@ service cloud.firestore {
 
     // Leads del programa descargable: captura de contacto antes de crear
     // cuenta, así que no requiere sesión. Solo el admin los consulta.
+    // Inscripciones a las masterclass gratuitas (landing /masterclass): sin
+    // sesión, solo alta con forma validada; solo el admin las consulta.
+    match /masterclassLeads/{leadId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['firstName', 'lastName', 'email', 'whatsapp', 'masterclasses', 'marketingConsent', 'termsAcceptedAt', 'source', 'createdAt'])
+        && request.resource.data.firstName is string && request.resource.data.firstName.size() > 0 && request.resource.data.firstName.size() <= 80
+        && request.resource.data.lastName is string && request.resource.data.lastName.size() > 0 && request.resource.data.lastName.size() <= 80
+        && request.resource.data.email is string && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$') && request.resource.data.email.size() <= 160
+        && request.resource.data.whatsapp is string && request.resource.data.whatsapp.size() >= 6 && request.resource.data.whatsapp.size() <= 30
+        && request.resource.data.masterclasses is list && request.resource.data.masterclasses.size() >= 1
+        && request.resource.data.masterclasses.hasOnly(['branding', 'marketing', 'negocios'])
+        && request.resource.data.marketingConsent is bool
+        && request.resource.data.termsAcceptedAt is string
+        && request.resource.data.source is string && request.resource.data.source.size() <= 100;
+      allow update, delete: if false;
+    }
+
     match /programLeads/{leadId} {
       allow read: if isAdmin();
       allow create: if true;

@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation } from 'react-router-dom';
 
 const PHONE = '51923681807';
+const MASTERCLASS_MESSAGE = '¡Hola! 👋 Quiero información sobre las masterclass gratuitas de octubre de Netwise Academy.';
 const MESSAGE = '¡Hola! 👋 Quiero conocer más sobre los talleres de IA, marketing y negocios digitales de Netwise Academy y cómo empezar a aplicarlos en mi propio proyecto 🚀';
 
 // Botón flotante site-wide, con el mismo criterio de rutas "internas" que ya
@@ -21,7 +22,8 @@ const WhatsAppButton = () => {
     return null;
   }
 
-  const href = `https://wa.me/${PHONE}?text=${encodeURIComponent(MESSAGE)}`;
+  const text = location.pathname === '/masterclass' ? MASTERCLASS_MESSAGE : MESSAGE;
+  const href = `https://wa.me/${PHONE}?text=${encodeURIComponent(text)}`;
 
   return (
     <a className="whatsapp-float" href={href} target="_blank" rel="noreferrer" aria-label="Escríbenos por WhatsApp">

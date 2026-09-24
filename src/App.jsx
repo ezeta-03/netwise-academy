@@ -9,6 +9,7 @@ import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
 // Pages
 import Home from './pages/Home';
 import Metodologia from './pages/Metodologia';
+import Masterclass from './pages/Masterclass';
 import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
@@ -134,6 +135,7 @@ function App() {
           <Route path="/" element={<RoleHome />} />
           <Route path="/catalog" element={<Catalog />} />
           <Route path="/metodologia" element={<Metodologia />} />
+          <Route path="/masterclass" element={<Masterclass />} />
           <Route path="/course/:id" element={<CourseDetail />} />
           <Route path="/checkout/:courseId" element={<Checkout />} />
 

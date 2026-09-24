@@ -6,6 +6,7 @@ import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { METHOD_STEPS, FEATURES } from '../lib/methodologyData';
 import Footer from '../components/Footer';
 import HeroLeadPanel from '../components/HeroLeadPanel';
+import MasterclassPopup from '../components/masterclass/MasterclassPopup';
 
 import heroImg from '../assets/NETWISE ACADEMY WEB/hero_principal.webp';
 import videoFuturo from '../assets/NETWISE ACADEMY WEB/videos/video_futuro.mp4';
@@ -180,6 +181,7 @@ const Home = () => {
         </section>
 
         <Footer onCoursesClick={scrollToCourses} onMethodologyClick={scrollToMethod} />
+        <MasterclassPopup />
       </div>
     </div>
   );

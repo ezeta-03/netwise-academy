@@ -32,7 +32,7 @@ const Navbar = () => {
   };
 
   // Hide Navbar on Player and active live-class room pages (similar to original design behavior)
-  if (location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout')) {
+  if (location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout') || location.pathname === '/masterclass') {
     return null;
   }
 
