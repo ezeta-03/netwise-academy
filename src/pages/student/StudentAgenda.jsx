@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, Film } from 'lucide-react';
+import { isSafeLink } from '../../lib/placeholders';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchLiveSessions, fetchMyEnrollments } from '../../lib/db';
@@ -118,7 +119,12 @@ const StudentAgenda = () => {
               <div className="dash-list-row-title">{s.title}</div>
               <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })} · {s.durationMin} min · Clase en vivo</div>
             </div>
-            <button className="admin-btn-edit" onClick={() => navigate(`/live/${s.id}`)}><Video size={13} /> Ver sala</button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {isSafeLink(s.recordingUrl) && (
+                <a className="admin-btn-ghost" href={s.recordingUrl} target="_blank" rel="noreferrer"><Film size={13} /> Ver grabación</a>
+              )}
+              <button className="admin-btn-edit" onClick={() => navigate(`/live/${s.id}`)}><Video size={13} /> Ver sala</button>
+            </div>
           </div>
         ))}
       </div>

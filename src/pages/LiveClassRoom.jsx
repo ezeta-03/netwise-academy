@@ -73,6 +73,7 @@ const LiveClassRoom = () => {
           roleLabel={ROLE_LABELS[currentUser?.role] || 'Invitado'}
           scheduleLine={scheduleLineFor(session)}
           onExit={() => exitRoom()}
+          canRecord={currentUser?.role === 'teacher' || currentUser?.role === 'admin'}
         />
       </div>
     </div>

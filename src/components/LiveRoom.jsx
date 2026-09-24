@@ -1,6 +1,21 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MoreHorizontal, ChevronRight, Send, Plus, Clock3, SmilePlus } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MoreHorizontal, ChevronRight, Send, Plus, Clock3, SmilePlus, Circle, Square, Download, Trash2 } from 'lucide-react';
 import { canJoinLiveSession, LIVE_JOIN_WINDOW_MIN } from '../lib/liveSessionStatus';
+import { isRecordingSupported, startRecording, buildRecordingName, downloadBlob, listPendingRecordings, deletePendingRecording } from '../lib/sessionRecorder';
+import { useUI } from '../context/UIContext';
+
+const fmtElapsed = (ms) => {
+  const s = Math.floor(ms / 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+};
+const fmtSize = (bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
+
+// Aviso "se está grabando" para el resto de la sala: quien graba lo repite
+// cada 20 s (así lo ven también los que entran tarde) y se apaga si deja de
+// llegar por 45 s.
+const REC_PING_MS = 20000;
+const REC_NOTICE_TTL_MS = 45000;
 
 const REACTIONS = ['👍', '❤️', '😂', '👏', '🎉', '🙌'];
 
@@ -27,7 +42,10 @@ const loadJitsiScript = () => {
   return window.__jitsiScriptPromise;
 };
 
-const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobbyHeadline, lobbyMeta, joinLabel, secondaryAction }) => {
+// `canRecord`: docente/admin de una clase programada -- ve el botón "Grabar"
+// (grabación en su computadora, ver lib/sessionRecorder.js).
+const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobbyHeadline, lobbyMeta, joinLabel, secondaryAction, canRecord = false }) => {
+  const { addToast } = useUI();
   const [joined, setJoined] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
@@ -39,6 +57,13 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
   const [floatingReactions, setFloatingReactions] = useState([]);
   const containerRef = useRef(null);
   const apiRef = useRef(null);
+  const recRef = useRef(null);
+  const [recStartedAt, setRecStartedAt] = useState(null);
+  const [recStarting, setRecStarting] = useState(false);
+  const [recNow, setRecNow] = useState(Date.now());
+  const [othersRecordingAt, setOthersRecordingAt] = useState(0);
+  const [pendingRecs, setPendingRecs] = useState([]);
+  const recordingAllowed = canRecord && isRecordingSupported();
   const displayName = currentUser?.displayName || currentUser?.email || 'Invitado';
 
   // Solo las clases programadas (con startsAt) tienen ventana de entrada; una
@@ -110,6 +135,7 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
         try {
           const msg = JSON.parse(eventData?.text || '{}');
           if (msg.type === 'reaction') addFloatingReaction(msg.emoji);
+          if (msg.type === 'recording') setOthersRecordingAt(msg.on ? Date.now() : 0);
         } catch {
           // mensaje de otro tipo, se ignora
         }
@@ -126,12 +152,88 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
   }, [joined]);
 
   const exec = (...args) => apiRef.current?.executeCommand(...args);
+  const broadcastRecording = (on) => exec('sendEndpointTextMessage', undefined, JSON.stringify({ type: 'recording', on }));
+
+  const refreshPending = useCallback(() => {
+    if (recordingAllowed) listPendingRecordings().then(setPendingRecs);
+  }, [recordingAllowed]);
+  useEffect(() => { refreshPending(); }, [refreshPending]);
+
+  const finishRecording = useCallback((result) => {
+    recRef.current = null;
+    setRecStartedAt(null);
+    broadcastRecording(false);
+    if (!result) return;
+    if (result.blob?.size) {
+      downloadBlob(result.blob, result.name);
+      addToast(result.error
+        ? 'La grabación se descargó, pero hubo un error al guardarla: revisa que el video esté completo.'
+        : 'Grabación descargada. Súbela a YouTube o Drive y pega el enlace en tu Agenda, en esta clase.', result.error ? 'error' : 'success');
+    } else {
+      addToast('La grabación quedó vacía.', 'error');
+    }
+    refreshPending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addToast, refreshPending]);
+
+  // Debe correr directo desde el clic: el navegador exige un gesto del usuario
+  // para compartir la pestaña.
+  const toggleRecording = async () => {
+    if (recRef.current) {
+      const rec = recRef.current;
+      finishRecording(await rec.stop());
+      return;
+    }
+    setRecStarting(true);
+    try {
+      recRef.current = await startRecording({ name: buildRecordingName(session), onStop: (r) => finishRef.current(r) });
+      setRecStartedAt(Date.now());
+      broadcastRecording(true);
+      addToast('Grabando. Si cambias de pestaña, la grabación sigue con esta sala.', 'info');
+    } catch (err) {
+      if (err.code === 'no-mic') addToast('Permite el micrófono para que tu voz quede en la grabación.', 'error');
+      else if (err.code !== 'cancelled') addToast('No se pudo iniciar la grabación en este navegador.', 'error');
+    } finally {
+      setRecStarting(false);
+    }
+  };
+
+  // Mientras graba: reloj en pantalla, aviso periódico a la sala y alerta si
+  // intenta cerrar la pestaña.
+  useEffect(() => {
+    if (!recStartedAt) return undefined;
+    const tick = setInterval(() => setRecNow(Date.now()), 1000);
+    const ping = setInterval(() => broadcastRecording(true), REC_PING_MS);
+    const beforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => { clearInterval(tick); clearInterval(ping); window.removeEventListener('beforeunload', beforeUnload); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recStartedAt]);
+
+  // Referencia estable: el cierre al salir NO debe depender de finishRecording
+  // (si cambiara, React correría la limpieza y cortaría la grabación en plena clase).
+  const finishRef = useRef(finishRecording);
+  useEffect(() => { finishRef.current = finishRecording; }, [finishRecording]);
+
+  // Salir de la sala (o de la página) con la grabación en curso: se cierra y
+  // se descarga igual. Solo al desmontar.
+  useEffect(() => () => { if (recRef.current) recRef.current.stop().then((r) => finishRef.current(r)); }, []);
+
+  useEffect(() => {
+    if (!othersRecordingAt) return undefined;
+    const t = setTimeout(() => setOthersRecordingAt(0), REC_NOTICE_TTL_MS);
+    return () => clearTimeout(t);
+  }, [othersRecordingAt]);
   const sendMessage = () => {
     if (!draft.trim()) return;
     exec('sendChatMessage', draft.trim());
     setDraft('');
   };
-  const hangup = () => { exec('hangup'); onExit(); };
+  const hangup = async () => {
+    if (recRef.current) finishRecording(await recRef.current.stop());
+    exec('hangup');
+    onExit();
+  };
 
   const addFloatingReaction = (emoji) => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -154,6 +256,22 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
         {scheduleLine && <p className="live-lobby-schedule">{scheduleLine}</p>}
         {!joinable && (
           <p className="live-lobby-wait"><Clock3 size={14} /> Podrás entrar {minutesUntilOpen > 0 ? `en ${minutesUntilOpen} min` : 'en unos segundos'} (se habilita {LIVE_JOIN_WINDOW_MIN} min antes de la hora).</p>
+        )}
+        {recordingAllowed && pendingRecs.length > 0 && (
+          <div className="live-rec-pending">
+            <p>Grabaciones guardadas en este navegador. Descárgalas y bórralas cuando las hayas subido:</p>
+            {pendingRecs.map((r) => (
+              <div key={r.name} className="live-rec-pending-row">
+                <span title={r.name}>{r.name} · {fmtSize(r.size)}</span>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadBlob(r.blob, r.name)}><Download size={14} /> Descargar</button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={async () => {
+                  if (!window.confirm('¿Borrar esta grabación del navegador? Hazlo solo si ya la descargaste.')) return;
+                  await deletePendingRecording(r.name);
+                  refreshPending();
+                }}><Trash2 size={14} /> Borrar</button>
+              </div>
+            ))}
+          </div>
         )}
         <div className="live-lobby-controls">
           <button className={`live-round-btn ${micOn ? '' : 'off'}`} onClick={() => setMicOn((v) => !v)} title={micOn ? 'Silenciar micrófono' : 'Activar micrófono'}>
@@ -178,6 +296,8 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
         <div className="live-stage-head">
           <span className="live-stage-eyebrow"><Video size={13} /> Aula en vivo</span>
           <h2 className="live-stage-title">{session.courseTitle}</h2>
+          {recStartedAt && <span className="live-rec-badge"><i /> Grabando · {fmtElapsed(recNow - recStartedAt)}</span>}
+          {!recStartedAt && othersRecordingAt > 0 && <span className="live-rec-badge"><i /> Esta clase se está grabando</span>}
         </div>
         <div className="live-stage-video" ref={containerRef}>
           <div className="live-reactions-layer">
@@ -200,6 +320,12 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
             )}
             <button className="live-round-btn sm" onClick={() => setReactionPickerOpen((v) => !v)} title="Reaccionar"><SmilePlus size={16} /></button>
           </div>
+          {recordingAllowed && (
+            <button className={`live-round-btn sm ${recStartedAt ? 'recording' : ''}`} onClick={toggleRecording} disabled={recStarting}
+              title={recStartedAt ? 'Detener y descargar la grabación' : 'Grabar la clase en tu computadora'}>
+              {recStartedAt ? <Square size={14} /> : <Circle size={16} />}
+            </button>
+          )}
           <button className="live-round-btn sm hangup" onClick={hangup}><PhoneOff size={16} /></button>
           <button className="live-round-btn sm" onClick={() => setChatOpen((v) => !v)}><MoreHorizontal size={16} /></button>
         </div>
