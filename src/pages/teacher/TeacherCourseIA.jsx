@@ -43,8 +43,10 @@ const TeacherCourseIA = () => {
     try {
       const reply = await askAssistant({ systemInstruction, history, message: text });
       setMessages((prev) => [...prev, { role: 'assistant', text: reply }]);
-    } catch {
-      addToast('El asistente no pudo responder. Intenta de nuevo.', 'error');
+    } catch (err) {
+      // Tope diario de la Cloud Function (functions/index.js) -- mensaje propio.
+      const limit = err?.code === 'functions/resource-exhausted';
+      addToast(limit ? err.message : 'El asistente no pudo responder. Intenta de nuevo.', limit ? 'info' : 'error');
       setMessages((prev) => [...prev, { role: 'assistant', text: 'No pude responder esta vez. ¿Puedes intentarlo de nuevo?' }]);
     } finally {
       setSending(false);
