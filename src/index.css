@@ -120,7 +120,7 @@ body {
   font-family: var(--ff-body);
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   cursor: default;
   transition: background-color .25s ease, color .25s ease;
 }
@@ -137,7 +137,7 @@ body {
 .hidden { display: none !important; }
 
 /* ── VIEWS: todas ocultas por defecto, solo la .active se muestra ── */
-.view { display: none; min-height: 100vh; }
+.view { display: none; min-height: 100vh; min-height: 100dvh; }
 .view.active { display: block; }
 
 /* Login es especial: card centrada, definido más abajo en VIEW: LOGIN */
@@ -236,7 +236,7 @@ body::before {
 }
 .navbar.scrolled {
   background: var(--nav-bg);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   box-shadow: var(--shadow);
 }
 .nav-logo { display: flex; align-items: center; cursor: pointer; }
@@ -703,7 +703,7 @@ body::before {
    POPUP: Inicio de sesión rápido (navbar)
 ═══════════════════════════════════════════════════ */
 .auth-modal-overlay {
-  position: fixed; inset: 0; background: rgba(10,8,20,.6); backdrop-filter: blur(3px);
+  position: fixed; inset: 0; background: rgba(10,8,20,.6); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center; z-index: 2100; padding: 24px;
 }
 .auth-modal {
@@ -936,7 +936,7 @@ body::before {
 ═══════════════════════════════════════════════════ */
 .nf-modal-overlay {
   position: fixed; inset: 0; z-index: 2000;
-  background: rgba(0,0,0,.75); backdrop-filter: blur(2px);
+  background: rgba(0,0,0,.75); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
   display: flex; align-items: flex-start; justify-content: center;
   padding: 40px 20px; overflow-y: auto;
 }
@@ -992,7 +992,7 @@ body::before {
 
 @media (max-width: 640px) {
   .nf-modal-overlay { padding: 0; align-items: stretch; }
-  .nf-modal { max-width: none; min-height: 100vh; border-radius: 0; }
+  .nf-modal { max-width: none; min-height: 100vh; min-height: 100dvh; border-radius: 0; }
   .nf-modal-media-content, .nf-modal-body { padding-left: 20px; padding-right: 20px; }
   .nf-modal-info-grid { grid-template-columns: 1fr 1fr; row-gap: 16px; }
 }
@@ -1026,7 +1026,7 @@ body::before {
 .course-card:hover .play-btn-sm { transform: scale(1); }
 .course-duration {
   position: absolute; bottom: 10px; right: 10px;
-  background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+  background: rgba(0,0,0,.7); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   color: #fff; font-size: .72rem; font-family: var(--ff-mono);
   padding: 3px 8px; border-radius: 5px;
 }
@@ -1255,7 +1255,7 @@ body::before {
 .player-exit-btn {
   position: absolute; top: 16px; left: 16px; z-index: 5;
   display: flex; align-items: center; gap: 6px;
-  background: rgba(10,10,15,.65); backdrop-filter: blur(6px); color: #fff;
+  background: rgba(10,10,15,.65); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); color: #fff;
   border: 1px solid rgba(255,255,255,.15); border-radius: 99px; padding: 8px 16px;
   font-family: var(--ff-body); font-size: .82rem; font-weight: 600; cursor: pointer; transition: background .15s;
 }
@@ -1384,9 +1384,9 @@ body::before {
 /* ═══════════════════════════════════════════════════
    SIDEBAR & OVERLAY
 ═══════════════════════════════════════════════════ */
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); backdrop-filter: blur(4px); z-index: 1000; opacity: 0; pointer-events: none; transition: all .3s; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); z-index: 1000; opacity: 0; pointer-events: none; transition: all .3s; }
 .overlay.active { opacity: 1; pointer-events: all; }
-.notification-sidebar { position: fixed; top: 0; right: 0; width: 340px; height: 100vh; background: var(--bg); border-left: 1px solid var(--border); box-shadow: -10px 0 40px rgba(0,0,0,.3); z-index: 1001; transform: translateX(100%); transition: transform .3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
+.notification-sidebar { position: fixed; top: 0; right: 0; width: 340px; height: 100vh; height: 100dvh; background: var(--bg); border-left: 1px solid var(--border); box-shadow: -10px 0 40px rgba(0,0,0,.3); z-index: 1001; transform: translateX(100%); transition: transform .3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; }
 .notification-sidebar.open { transform: translateX(0); }
 .ns-header { padding: 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .ns-actions { padding: 12px 24px; border-bottom: 1px solid var(--border); text-align: right; }
@@ -1435,7 +1435,7 @@ body::before {
 /* Panel fijo en modo claro, independiente del tema del sitio (--text es
    claro en modo oscuro y se volvería invisible acá) -- por eso fija su
    propio color base para todo lo que no tenga un color explícito. */
-.admin-shell { display: flex; min-height: 100vh; background: #F6F5FA; color: #14141F; font-family: var(--ff-body); }
+.admin-shell { display: flex; min-height: 100vh; min-height: 100dvh; background: #F6F5FA; color: #14141F; font-family: var(--ff-body); }
 
 .admin-sidebar {
   width: 260px; flex-shrink: 0; background: #141223;
@@ -1642,7 +1642,7 @@ body::before {
 .admin-page-footer { text-align: center; color: #C4C2D4; font-size: .74rem; margin-top: 20px; }
 
 .admin-modal-overlay {
-  position: fixed; inset: 0; background: rgba(20,18,35,.5); backdrop-filter: blur(2px);
+  position: fixed; inset: 0; background: rgba(20,18,35,.5); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
   display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 24px;
 }
 .admin-modal { background: #fff; border-radius: 18px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; padding: 26px; }
@@ -2102,7 +2102,7 @@ body::before {
 .live-reaction-option:hover { background: rgba(255,255,255,.12); transform: scale(1.15); }
 .live-stage-controlbar {
   position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 2;
-  display: flex; align-items: center; gap: 10px; background: rgba(20,18,35,.7); backdrop-filter: blur(8px);
+  display: flex; align-items: center; gap: 10px; background: rgba(20,18,35,.7); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   padding: 8px; border-radius: 99px;
 }
 
@@ -2189,3 +2189,43 @@ body::before {
 
 
 .grade-student-block td { background: var(--accent-bg); color: #14141F; font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; }
+
+/* ═══════════════════════════════════════════════════
+   iPHONE / iOS (Safari y app instalada)
+   - viewport-fit=cover (index.html) deja pintar bajo el notch y la barra de inicio:
+     estos márgenes usan env(safe-area-inset-*), que vale 0 en el resto de dispositivos.
+   - Safari hace zoom al enfocar un campo con letra < 16px.
+═══════════════════════════════════════════════════ */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  -webkit-tap-highlight-color: transparent;
+  padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right);
+}
+
+/* Arriba (notch / isla dinámica / barra de estado de la app instalada) */
+.home-promo { padding-top: calc(9px + env(safe-area-inset-top)); }
+.admin-topbar { padding-top: calc(16px + env(safe-area-inset-top)); }
+@media (max-width: 900px) { .admin-topbar { padding-top: calc(14px + env(safe-area-inset-top)); } }
+@media (max-width: 640px) { .admin-topbar { padding-top: calc(12px + env(safe-area-inset-top)); } }
+.admin-sidebar { padding-top: calc(22px + env(safe-area-inset-top)); }
+.mm-header { padding-top: calc(20px + env(safe-area-inset-top)); }
+.notification-sidebar { padding-top: env(safe-area-inset-top); }
+
+/* Abajo (barra de inicio del iPhone) */
+.whatsapp-float { bottom: calc(24px + env(safe-area-inset-bottom)); right: calc(24px + env(safe-area-inset-right)); }
+.mm-footer { padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.admin-sidebar-footer { padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+
+/* Los paneles fijos del lateral respetan el notch en horizontal */
+.admin-sidebar { padding-left: calc(14px + env(safe-area-inset-left)); }
+
+@supports (-webkit-touch-callout: none) {
+  /* Solo iOS: 16px evita el zoom automático al enfocar campos. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select, textarea { font-size: 16px !important; }
+  /* Los <select> de iOS se dibujan como píldoras; se deja el estilo de subrayado del sitio. */
+  .home-lead-field select {
+    -webkit-appearance: none; appearance: none; border-radius: 0; padding-right: 22px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%239A98B0' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 2px center;
+  }
+}
