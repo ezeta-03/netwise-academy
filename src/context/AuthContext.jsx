@@ -6,9 +6,11 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   signInWithPopup,
+  getAdditionalUserInfo,
   updateProfile
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { track } from '../lib/tracking';
 
 const AuthContext = createContext();
 
@@ -122,7 +124,9 @@ export const AuthProvider = ({ children }) => {
     }
     
     // Proper Firebase Login
-    return signInWithEmailAndPassword(auth, email, password);
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    track('login', { method: 'email' });
+    return credential;
   };
 
   const register = async (email, password, displayName) => {
@@ -140,6 +144,7 @@ export const AuthProvider = ({ children }) => {
     
     // Proper Firebase Register
     const credential = await createUserWithEmailAndPassword(auth, email, password);
+    track('sign_up', { method: 'email' });
     registeringUid.current = credential.user.uid;
     try {
       if (displayName) {
@@ -171,6 +176,14 @@ export const AuthProvider = ({ children }) => {
     return firebaseSignOut(auth);
   };
 
+  // Login social: GA4 distingue cuenta nueva (sign_up) de sesión (login).
+  const signInWithProvider = async (provider, method) => {
+    const result = await signInWithPopup(auth, provider);
+    const isNewUser = getAdditionalUserInfo(result)?.isNewUser;
+    track(isNewUser ? 'sign_up' : 'login', { method });
+    return result;
+  };
+
   const loginWithGoogle = () => {
     if (isMockEnv) {
       return new Promise((resolve) => {
@@ -182,7 +195,7 @@ export const AuthProvider = ({ children }) => {
         }, 800);
       });
     }
-    return signInWithPopup(auth, googleProvider);
+    return signInWithProvider(googleProvider, 'google');
   };
 
   // Cambiar el nombre para mostrar, disponible para cualquier rol -- se
@@ -217,7 +230,7 @@ export const AuthProvider = ({ children }) => {
         }, 800);
       });
     }
-    return signInWithPopup(auth, githubProvider);
+    return signInWithProvider(githubProvider, 'github');
   };
 
   const value = {

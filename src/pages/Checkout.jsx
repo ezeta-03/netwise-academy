@@ -8,6 +8,7 @@ import { useEnrollment } from '../hooks/useEnrollment';
 import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchMyOrders, uploadPaymentProof, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import { PAYMENT_METHODS, buildPaymentInstructions } from '../lib/paymentMethods';
+import { track, courseItem } from '../lib/tracking';
 import YapeInstructionsModal from '../components/YapeInstructionsModal';
 import TermsModal from '../components/TermsModal';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
@@ -220,6 +221,15 @@ const Checkout = () => {
 
   const handlePay = async () => {
     setProcessing(true);
+    const isFree = finalPrice === 0;
+    track('add_payment_info', {
+      ecommerce: {
+        currency: 'PEN',
+        value: finalPrice,
+        payment_type: paymentMethod,
+        items: [courseItem(course, finalPrice)],
+      },
+    });
     await new Promise((r) => setTimeout(r, 1400)); // simulación de pasarela, igual que el checkout de un curso
 
     // La tarjeta simula una pasarela real que cobra al toque, así que
@@ -245,7 +255,7 @@ const Checkout = () => {
       }
     }
 
-    await createOrder({
+    const order = await createOrder({
       uid: currentUser.uid,
       studentName: currentUser.displayName || currentUser.email,
       studentEmail: currentUser.email,
@@ -257,6 +267,26 @@ const Checkout = () => {
       couponId: isManual && usingCoupon ? appliedCoupon.id : null,
       proofCode: isManual ? proofCode.trim() : null,
       proofUrl,
+    });
+
+    // Solo aquí, recién guardado el pedido -- si recarga, el checkout salta
+    // al paso 3 por fetchMyOrders sin pasar por handlePay, así que no se
+    // duplica. transaction_id único: GA4 y Meta lo usan para deduplicar.
+    // Yape/Plin/transferencia quedan 'pending' hasta que el admin valida el
+    // pago (y pueden no pagarse nunca): no son una compra todavía, así que
+    // van como 'purchase_pending' para no inflar ventas ni entrenar las
+    // campañas con compras que no ocurrieron. 'purchase' = tarjeta o gratis.
+    track(isManual && !isFree ? 'purchase_pending' : 'purchase', {
+      ecommerce: isFree
+        ? { transaction_id: `free-${currentUser.uid}-${course.id}`, currency: 'PEN', value: 0, items: [courseItem(course, 0)] }
+        : {
+            transaction_id: order.code || order.id,
+            currency: 'PEN',
+            value: finalPrice,
+            payment_type: paymentMethod,
+            ...(usingCoupon && { coupon: appliedCoupon.code }),
+            items: [courseItem(course, finalPrice)],
+          },
     });
 
     setOrderPending(isManual);
