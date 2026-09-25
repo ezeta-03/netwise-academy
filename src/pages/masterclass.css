@@ -89,17 +89,17 @@
 .mcl-form-card h2 { font-family: "Poppins", system-ui, sans-serif; font-size: 23px; line-height: 27.6px; letter-spacing: -1px; font-weight: 600; color: var(--mcl-ink); margin: 0; }
 .mcl-lead { font-size: 12px; line-height: 18px; color: var(--mcl-violet); margin: 0; }
 .mcl-field-title { font-size: 12px; font-weight: 700; line-height: 18.6px; letter-spacing: .23px; margin-bottom: 9px; display: block; padding: 0; }
-.mcl-choices { display: flex; flex-direction: column; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
-.mcl-choice { display: flex; align-items: center; gap: 10px; background: #fbfaff; border: 1px solid #e1ddea; border-radius: 11px; padding: 11px 13px; cursor: pointer; transition: border-color .2s, background .2s; }
+.mcl-choices { display: flex; flex-direction: column; gap: 6px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.mcl-choice { display: flex; align-items: center; gap: 10px; background: #fbfaff; border: 1px solid #e1ddea; border-radius: 11px; padding: 8px 13px; cursor: pointer; transition: border-color .2s, background .2s; }
 .mcl-choice:hover { border-color: #c9bdf0; }
 .mcl-choice.is-checked { border-color: var(--mcl-violet); background: #f5f0ff; }
 .mcl-choice input, .mcl-check input { appearance: none; -webkit-appearance: none; flex: none; width: 18px; height: 18px; margin: 0; border: 1px solid #746b83; border-radius: 2px; display: grid; place-items: center; cursor: pointer; background: #fff; transition: background .15s, border-color .15s; }
 .mcl-choice input:checked, .mcl-check input:checked { background: var(--mcl-violet); border-color: var(--mcl-violet); }
 .mcl-choice input:checked::after, .mcl-check input:checked::after { content: ""; width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
 .mcl-choice input:focus-visible, .mcl-check input:focus-visible { outline: 2px solid var(--mcl-violet); outline-offset: 2px; }
-.mcl-choice b { display: block; font-size: 13px; line-height: 15.6px; font-weight: 700; max-width: 190px; }
+.mcl-choice b { display: block; font-size: 13px; line-height: 15.6px; font-weight: 700; }
 .mcl-choice small { display: block; font-size: 11px; line-height: 17px; color: #716b83; margin-top: 2px; }
-.mcl-fields { display: flex; flex-direction: column; gap: 18px; margin-top: 16px; }
+.mcl-fields { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
 .mcl-row { display: flex; gap: 13px; }
 .mcl-row > label { flex: 1; min-width: 0; }
 .mcl-fld { display: block; font-size: 12px; line-height: 18px; color: var(--mcl-ink-2); letter-spacing: .25px; }
