@@ -83,7 +83,7 @@ const MasterclassPopup = () => {
 
           <div className="mcp-body">
             <span className="mcp-tag">MASTERCLASS GRATUITAS <ArrowUpRight size={16} /></span>
-            <h2 id="mcp-title" className="mcp-title">3 masterclass <span>gratis en octubre</span></h2>
+            <h2 id="mcp-title" className="mcp-title">{MASTERCLASSES.length} masterclass <span>gratis en octubre</span></h2>
             <p className="mcp-desc">Clases prácticas en vivo para llevar tu marca y tu negocio al siguiente nivel.</p>
             <ul className="mcp-list">
               {MASTERCLASSES.map((m) => (

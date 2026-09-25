@@ -39,11 +39,16 @@ const MASTERCLASSES = [
   { id: 'marketing', title: 'Marketing Digital (07/10)' },
   { id: 'negocios', title: 'Creación de Negocios Digitales (14/10)' },
 ];
+// Agregadas cuando la hoja ya existía: van al final para no desplazar columnas.
+const MASTERCLASSES_ADDED = [
+  { id: 'redes', title: 'Estrategia de Redes Sociales (15/10)' },
+];
 
 const HEADERS = [
   'Fecha', 'Nombre', 'Apellido', 'Correo', 'WhatsApp',
   ...MASTERCLASSES.map((m) => m.title),
   'Total elegidas', 'Acepta términos', 'Acepta promociones', 'Origen',
+  ...MASTERCLASSES_ADDED.map((m) => m.title),
 ];
 
 function doPost(e) {
@@ -71,6 +76,7 @@ function doPost(e) {
       data.termsAcceptedAt ? 'Sí' : 'No',
       data.marketingConsent ? 'Sí' : 'No',
       clean(data.source) || 'landing',
+      ...MASTERCLASSES_ADDED.map((m) => (picked.indexOf(m.id) >= 0 ? 'Sí' : 'No')),
     ]);
     return jsonResponse({ ok: true });
   } catch (err) {
@@ -100,6 +106,10 @@ function getOrCreateSheet() {
     sheet.setFrozenRows(1);
     sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight('bold').setBackground('#7d33ff').setFontColor('#ffffff');
     sheet.getRange('A:A').setNumberFormat('dd/mm/yyyy hh:mm');
+  } else if (sheet.getLastColumn() < HEADERS.length) {
+    // Hoja creada antes de agregar masterclass: completa los encabezados nuevos.
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS])
+      .setFontWeight('bold').setBackground('#7d33ff').setFontColor('#ffffff');
   }
   return sheet;
 }

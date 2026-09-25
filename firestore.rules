@@ -331,7 +331,7 @@ service cloud.firestore {
         && request.resource.data.email is string && request.resource.data.email.matches('^[^@ ]+@[^@ ]+[.][^@ ]+$') && request.resource.data.email.size() <= 160
         && request.resource.data.whatsapp is string && request.resource.data.whatsapp.size() >= 6 && request.resource.data.whatsapp.size() <= 30
         && request.resource.data.masterclasses is list && request.resource.data.masterclasses.size() >= 1
-        && request.resource.data.masterclasses.hasOnly(['branding', 'marketing', 'negocios'])
+        && request.resource.data.masterclasses.hasOnly(['branding', 'marketing', 'negocios', 'redes'])
         && request.resource.data.marketingConsent is bool
         && request.resource.data.termsAcceptedAt is string
         && request.resource.data.source is string && request.resource.data.source.size() <= 100;

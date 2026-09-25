@@ -41,6 +41,7 @@
 .mcl-hero-bg.is-active { opacity: 1; }
 .mcl-hero-bg.is-active img { transform: scale(1); }
 .mcl-hero-bg[data-slide="1"] img { object-position: 30% top; }
+.mcl-hero-bg[data-slide="3"] img { object-position: 50% top; }
 .mcl-hero-bgs::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8,7,16,.35) 0%, rgba(8,7,16,0) 18%, rgba(8,7,16,0) 80%, rgba(8,7,16,.45) 100%); }
 
 .mcl-nav { height: 78px; display: flex; align-items: center; justify-content: space-between; padding: 0 80px; position: relative; z-index: 3; animation: mcl-drop .8s var(--mcl-ease) .05s both; }

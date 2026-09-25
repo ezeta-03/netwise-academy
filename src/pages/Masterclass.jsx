@@ -221,8 +221,8 @@ const Masterclass = () => {
               <p>Todas las sesiones empiezan a las 8:00 p.m.</p>
             </div>
             <div className="mcl-faq-list mcl-stagger">
-              <details open><summary>¿Las masterclass son gratuitas?</summary><p>Sí. Las tres sesiones son gratuitas.</p></details>
-              <details><summary>¿Puedo elegir más de una?</summary><p>Sí. Puedes escoger una, dos o las tres masterclass.</p></details>
+              <details open><summary>¿Las masterclass son gratuitas?</summary><p>Sí. Las cuatro sesiones son gratuitas.</p></details>
+              <details><summary>¿Puedo elegir más de una?</summary><p>Sí. Puedes escoger una, varias o las cuatro masterclass.</p></details>
               <details><summary>¿Dónde serán las clases?</summary><p>Por Google Meet, a las 8:00 p. m., hora de Perú.</p></details>
             </div>
           </div>

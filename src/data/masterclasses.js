@@ -4,11 +4,12 @@
 import heroBranding from '../assets/masterclass/hero-branding.webp';
 import heroMarketing from '../assets/masterclass/hero-marketing.webp';
 import heroNegocios from '../assets/masterclass/hero-negocios.webp';
+import heroRedes from '../assets/masterclass/hero-redes.webp';
 import cardMarketing from '../assets/masterclass/card-marketing.webp';
 
 export const MASTERCLASS_TIME = '8:00 p.m.';
 export const MASTERCLASS_PLATFORM = 'Google Meet';
-export const MASTERCLASS_DATES_LABEL = '6, 7 y 14 de octubre';
+export const MASTERCLASS_DATES_LABEL = '6, 7, 14 y 15 de octubre';
 
 export const MASTERCLASSES = [
   {
@@ -76,8 +77,29 @@ export const MASTERCLASSES = [
     ],
     forWho: 'Personas con una idea o un negocio físico que quieren llevarlo a digital.',
   },
+  {
+    id: 'redes',
+    title: 'Estrategia de Redes Sociales',
+    titleTop: 'Estrategia de',
+    titleAccent: 'Redes Sociales',
+    subtitle: 'El algoritmo no te compara contra otras marcas, te compara contra el celular de tu cliente.',
+    startsAt: '2026-10-15T20:00:00-05:00',
+    weekday: 'Jueves',
+    day: '15',
+    month: 'OCT',
+    dateLong: '15 de octubre',
+    heroImage: heroRedes,
+    cardImage: heroRedes,
+    learn: [
+      'Definir objetivos y elegir las redes donde está tu cliente.',
+      'Crear contenido que detenga el scroll.',
+      'Planificar un calendario de publicaciones sostenible.',
+      'Medir resultados y ajustar tu estrategia con datos.',
+    ],
+    forWho: 'Emprendedores, community managers y negocios que quieren crecer en redes con un plan claro.',
+  },
 ];
 
 // Fin de la última sesión (2 h): después de esto el popup del Inicio deja de salir.
-export const MASTERCLASS_CAMPAIGN_ENDS = '2026-10-14T22:00:00-05:00';
+export const MASTERCLASS_CAMPAIGN_ENDS = '2026-10-15T22:00:00-05:00';
 export const isMasterclassCampaignActive = (now = Date.now()) => now < new Date(MASTERCLASS_CAMPAIGN_ENDS).getTime();
