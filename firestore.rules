@@ -134,13 +134,10 @@ service cloud.firestore {
                     canManageCourse(string(resource.data.courseId)) ||
                     exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + string(resource.data.courseId)))
                   );
-      // El alumno solo crea SU matrícula (id `${uid}_${courseId}`) y solo con los campos
-      // de inscripción/avance: no puede fijarse estado, aula ni seguimiento.
-      allow create: if isSignedIn() && (isAdmin() || (
-        request.resource.data.uid == request.auth.uid
-        && enrollmentId == request.auth.uid + '_' + string(request.resource.data.courseId)
-        && request.resource.data.keys().hasOnly(['uid', 'courseId', 'courseTitle', 'studentName', 'studentEmail', 'enrolledAt', 'completedLessonIds', 'progress', 'updatedAt'])
-      ));
+      // Solo el admin matricula (al validar un pago en Ventas o por alta
+      // manual): antes un alumno podía crearse su propia matrícula y entrar
+      // gratis a cualquier curso.
+      allow create: if isAdmin();
       // Un alumno solo actualiza su avance (lecciones completadas / progreso):
       // no puede cambiarse el estado, el aula ni el seguimiento de su matrícula.
       // El docente asignado a ese curso solo puede tocar el seguimiento
@@ -201,7 +198,9 @@ service cloud.firestore {
       // un uso (canje) -- no cambiar el porcentaje, el estado ni el tope.
       allow update: if isAdmin() || (isSignedIn()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount'])
-        && request.resource.data.usedCount == resource.data.get('usedCount', 0) + 1);
+        && request.resource.data.usedCount == resource.data.get('usedCount', 0) + 1
+        && resource.data.get('active', true) == true
+        && (resource.data.get('maxUses', 0) == 0 || request.resource.data.usedCount <= resource.data.maxUses));
       allow create, delete: if isAdmin();
     }
 
@@ -217,7 +216,12 @@ service cloud.firestore {
     // los lee todos (Ventas e inscripciones). No se editan desde el cliente.
     match /orders/{orderId} {
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      // Un alumno solo crea pedidos 'pending': no hay pasarela que confirme
+      // un cobro desde el cliente, así que 'paid' lo pone solo el admin.
+      allow create: if isAdmin() || (isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number && request.resource.data.amount >= 0);
       // Un pago manual (Yape/Transferencia) entra como 'pending' y solo el
       // admin puede pasarlo a 'paid' al validar el comprobante -- ver
       // approveOrder en lib/db.js.

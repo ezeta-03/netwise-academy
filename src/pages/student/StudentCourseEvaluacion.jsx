@@ -99,7 +99,8 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className={`admin-status ${badge.cls}`}>{badge.label}</span>
-                <strong>{sub?.grade ?? '—'}/20</strong>
+                {/* Tras una reentrega la nota anterior ya no cuenta: solo se muestra si está revisada. */}
+                <strong>{sub?.status === 'reviewed' ? (sub.grade ?? '—') : '—'}/20</strong>
               </div>
             </div>
             <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 2 }}>Qué debes entregar</p>
@@ -112,14 +113,20 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
             )}
             <button className="admin-btn-edit" style={{ marginBottom: 12 }} onClick={() => setSubmitModule(m)}><Send size={13} /> {sub ? 'Reemplazar entrega' : 'Presentar entrega'}</button>
             <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 2 }}>Retroalimentación del docente</p>
-            <p className="admin-cell-sub" style={{ marginBottom: 0 }}>{sub?.feedback || 'Cuando presentes tu entrega, aquí verás tu nota y los comentarios de tu docente.'}</p>
+            <p className="admin-cell-sub" style={{ marginBottom: 0 }}>
+              {!sub
+                ? 'Cuando presentes tu entrega, aquí verás tu nota y los comentarios de tu docente.'
+                : sub.status === 'reviewed'
+                  ? (sub.feedback || 'Tu docente calificó la entrega sin dejar comentarios.')
+                  : 'Tu docente está revisando esta versión. Aquí verás tu nota y sus comentarios.'}
+            </p>
           </div>
         );
       })}
 
       {submitModule && (
-        <SubmitDeliverableModal course={course} module={submitModule} onClose={() => setSubmitModule(null)} onSaved={onSubmitted}
-          title="Presentar entrega" noteLabel="Link o descripción de tu entrega (opcional si adjuntas archivo)"
+        <SubmitDeliverableModal course={course} module={submitModule} existing={subFor(submitModule.id)} onClose={() => setSubmitModule(null)} onSaved={onSubmitted}
+          title={subFor(submitModule.id) ? 'Reemplazar entrega' : 'Presentar entrega'} noteLabel="Link o descripción de tu entrega (opcional si adjuntas archivo)"
           submitLabel="Enviar entrega" successMsg="Entrega presentada. Tu docente la revisará pronto." />
       )}
     </div>

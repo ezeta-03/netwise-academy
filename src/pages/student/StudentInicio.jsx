@@ -17,7 +17,7 @@ const StudentInicio = () => {
   const [pendingByCourse, setPendingByCourse] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const enrolledCourses = courses.filter((c) => enrollments[c.id]);
+  const enrolledCourses = courses.filter((c) => enrollments[c.id] && (enrollments[c.id].status || 'active') === 'active');
 
   useEffect(() => {
     if (!currentUser) return;
@@ -122,7 +122,7 @@ const StudentInicio = () => {
       ) : (
         <div className="home-courses-grid">
           {enrolledCourses.map((c) => (
-            <div className="home-course-card" key={c.id} onClick={() => navigate(`/student/curso/${c.id}`)}>
+            <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => navigate(`/student/curso/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/student/curso/${c.id}`); } }}>
               <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
               <div className="home-course-body">
                 <div className="home-course-meta-row">

@@ -5,7 +5,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchGroups, createGroup, updateGroup, deleteGroup, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
+import { fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
@@ -114,7 +114,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
     if (!startDate || slotsOk.length === 0 || slotsOk.length < slots.length) {
       return { ...planScheduleSync({ ...common, desired: [] }), toCreate: [], toDelete: [], toUpdate: [], hasChanges: false, invalid: true };
     }
-    return planScheduleSync({ ...common, desired: buildRecurringSessions({ slots: slotsOk, weeksLabel: String(weeksForPlan) }, startDate) });
+    return planScheduleSync({ ...common, desired: buildRecurringSessions({ slots: slotsOk, weeksLabel: String(weeksForPlan) }, startDate, endDate || null) });
   }, [group, slots, startDate, endDate, status, instructor, instructorUid, groupSessions, siblingCount, weeksForPlan]);
   // Con calendario ya generado por el sistema se sincroniza por defecto; un aula
   // sin calendario (o con clases antiguas sin aula asociada) solo si se pide.
@@ -179,7 +179,8 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
           // publicada del curso.
           const content = await fetchCourseContent(courseId).catch(() => ({ modules: [] }));
           const weeks = courseWeeksFromModules(content.modules) || course?.duration;
-          const entries = buildRecurringSessions({ slots: cleanSlots, weeksLabel: String(weeks) }, startDate);
+          // Con fecha de cierre, el calendario cubre exactamente del inicio al cierre.
+          const entries = buildRecurringSessions({ slots: cleanSlots, weeksLabel: String(weeks) }, startDate, endDate || null);
           for (const entry of entries) {
             await scheduleLiveSession({
               courseId: course?.id ?? courseId, courseTitle: course?.title || '', title: entry.title,
@@ -196,6 +197,9 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
           addToast('Aula creada. Agrega fecha de inicio para generar el calendario de clases.', 'info');
         }
       }
+      // La ficha pública del curso muestra el horario del aula que se está
+      // ofreciendo (abierta o por abrir).
+      if (status !== 'closed') await updateCourseSchedule(course?.id ?? courseId, cleanSlots).catch(() => {});
       onSaved();
       onClose();
     } catch {
@@ -488,7 +492,16 @@ const AdminGrupos = () => {
   const [modal, setModal] = useState(null);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
-  const load = () => fetchGroups().then((list) => { setGroups(list); setLoading(false); });
+  // Inscritos por aula: se cuentan de las matrículas activas reales (el campo
+  // `enrolledCount` del aula nunca se actualizaba al matricular).
+  const [enrolledByGroup, setEnrolledByGroup] = useState({});
+  const load = () => Promise.all([fetchGroups(), fetchAllEnrollments().catch(() => [])]).then(([list, enrollments]) => {
+    const counts = {};
+    enrollments.filter((e) => e.groupId && (e.status || 'active') === 'active').forEach((e) => { counts[e.groupId] = (counts[e.groupId] || 0) + 1; });
+    setEnrolledByGroup(counts);
+    setGroups(list);
+    setLoading(false);
+  });
   useEffect(() => { load(); }, []);
 
   const filtered = groups.filter((g) => `${g.name} ${g.courseTitle}`.toLowerCase().includes(search.toLowerCase()));
@@ -552,7 +565,7 @@ const AdminGrupos = () => {
                     </td>
                     <td className="admin-cell-sub">{fmtDate(g.startDate)}<br />{fmtDate(g.endDate)}</td>
                     <td className="admin-cell-sub">{g.scheduleTime || g.scheduleDays || 'Sin horario'}<br />Hora de Perú · {g.instructor}</td>
-                    <td>{g.enrolledCount || 0} / {g.capacity}</td>
+                    <td>{enrolledByGroup[g.id] || 0} / {g.capacity}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>

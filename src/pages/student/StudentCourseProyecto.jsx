@@ -31,6 +31,8 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
       addToast('Tu proyecto quedó definido.', 'success');
       onSaved();
       onClose();
+    } catch {
+      addToast('No se pudo guardar tu proyecto. Intenta de nuevo.', 'error');
     } finally {
       setSaving(false);
     }
@@ -66,6 +68,7 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
 const StudentCourseProyecto = () => {
   const { course } = useOutletContext();
   const { currentUser } = useAuth();
+  const { addToast } = useUI();
   const navigate = useNavigate();
   const [modules, setModules] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -91,7 +94,11 @@ const StudentCourseProyecto = () => {
       setSubmissions(subsByModule);
       setSelectedId((prev) => (prev && mods.some((m) => m.id === prev)) ? prev : (mods.find((m) => m.deliverable?.open !== false)?.id || mods[0]?.id || null));
       setLoading(false);
+    }).catch(() => {
+      addToast('No se pudo cargar tu proyecto. Intenta de nuevo.', 'error');
+      setLoading(false);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id, currentUser]);
 
   useEffect(() => { load(); }, [load]);
@@ -115,8 +122,12 @@ const StudentCourseProyecto = () => {
   const submittedCount = Object.values(submissions).filter(Boolean).length;
 
   const toggleBullet = async (moduleId, idx) => {
-    const next = await toggleProjectAdvance(currentUser.uid, course.id, moduleId, idx);
-    setAdvances((prev) => ({ ...prev, [moduleId]: next }));
+    try {
+      const next = await toggleProjectAdvance(currentUser.uid, course.id, moduleId, idx);
+      setAdvances((prev) => ({ ...prev, [moduleId]: next }));
+    } catch {
+      addToast('No se pudo guardar tu avance. Intenta de nuevo.', 'error');
+    }
   };
 
   const mySubmissions = modules
@@ -127,7 +138,7 @@ const StudentCourseProyecto = () => {
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
         <div><h1 className="admin-page-title">Mi proyecto</h1><p className="admin-page-sub">{course.title}</p></div>
-        <button className="admin-btn-edit" onClick={() => setSubmitModule(selected)}><Send size={14} /> Presentar avance</button>
+        <button className="admin-btn-edit" onClick={() => setSubmitModule(selected)}><Send size={14} /> {submissions[selected.id] ? 'Reemplazar avance' : 'Presentar avance'}</button>
       </div>
 
       <div className="admin-stats-grid">
@@ -206,7 +217,7 @@ const StudentCourseProyecto = () => {
                 <button className="admin-btn-edit" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-1`)}><Video size={14} /> Ver la clase</button>
               )}
               <button className="admin-btn-ghost" onClick={() => navigate(`/student/curso/${course.id}/materiales`)}><FileText size={14} /> Consultar materiales</button>
-              <button className="admin-btn-ghost" onClick={() => setSubmitModule(selected)}><Send size={14} /> Presentar avance</button>
+              <button className="admin-btn-ghost" onClick={() => setSubmitModule(selected)}><Send size={14} /> {submissions[selected.id] ? 'Reemplazar avance' : 'Presentar avance'}</button>
             </div>
           </div>
 
@@ -259,8 +270,8 @@ const StudentCourseProyecto = () => {
 
       {profileModalOpen && <ProfileModal course={course} initial={profile} onClose={() => setProfileModalOpen(false)} onSaved={load} />}
       {submitModule && (
-        <SubmitDeliverableModal course={course} module={submitModule} onClose={() => setSubmitModule(null)} onSaved={load}
-          title="Presentar avance" noteLabel="Cuéntanos qué avanzaste o pega el link (opcional si adjuntas archivo)"
+        <SubmitDeliverableModal course={course} module={submitModule} existing={submissions[submitModule.id] || null} onClose={() => setSubmitModule(null)} onSaved={load}
+          title={submissions[submitModule.id] ? 'Reemplazar avance' : 'Presentar avance'} noteLabel="Cuéntanos qué avanzaste o pega el link (opcional si adjuntas archivo)"
           submitLabel="Enviar avance" successMsg="Avance presentado. Tu docente lo revisará pronto." />
       )}
     </div>

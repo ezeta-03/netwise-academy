@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { fetchMyEnrollments, enrollInCourse } from '../lib/db';
+import { fetchMyEnrollments } from '../lib/db';
 
-// Inscripción real de ESTE alumno a ESTE curso (progreso incluido). Antes
-// "inscrito" era un campo compartido en COURSES, igual para todos los
-// estudiantes y nunca actualizado -- así que "Mi Aprendizaje" quedaba
-// siempre vacío sin importar qué hiciera el alumno.
+// Inscripción real de ESTE alumno a ESTE curso (progreso incluido). La
+// matrícula la crea el admin al validar el pago (ver approveOrder): una
+// matrícula en estado 'pending' todavía no da acceso.
 export const useEnrollment = (course) => {
   const { currentUser } = useAuth();
   const [record, setRecord] = useState(null);
@@ -15,13 +14,7 @@ export const useEnrollment = (course) => {
     fetchMyEnrollments(currentUser.uid).then((map) => setRecord(map[course.id] || null));
   }, [currentUser, course]);
 
-  const isEnrolled = !!record;
+  const isEnrolled = !!record && (record.status || 'active') === 'active';
 
-  const enroll = useCallback(async () => {
-    if (!course || !currentUser || isEnrolled) return;
-    await enrollInCourse(currentUser.uid, course, currentUser);
-    setRecord({ courseId: course.id, progress: 0, completedLessonIds: [] });
-  }, [course, currentUser, isEnrolled]);
-
-  return { isEnrolled, progress: record?.progress ?? 0, enroll };
+  return { isEnrolled, progress: record?.progress ?? 0 };
 };

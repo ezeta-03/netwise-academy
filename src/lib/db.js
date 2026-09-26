@@ -1,5 +1,5 @@
 import { db, storage } from './firebase';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 
@@ -262,6 +262,13 @@ export const updateCoursePromo = (courseId, promoPercent) => patchCourseOffering
 // Docente a cargo del curso -- filtra lo que ve ese docente en su panel
 // (Mis cursos, dashboard, agenda). Un admin sigue viendo todos los cursos.
 export const updateCourseTeacher = (courseId, teacherUid) => patchCourseOffering(courseId, { teacherUid: teacherUid || null });
+// Horario público del curso (ficha /course/:id y programa descargable): lo
+// copia Admin > Aulas al guardar un aula abierta, porque `groups` solo lo lee
+// un usuario con sesión. `slots` = [{ day, start, end }] o null para volver al
+// horario de data.js.
+export const updateCourseSchedule = (courseId, slots) => patchCourseOffering(courseId, {
+  schedule: slots?.length ? slots.map(({ day, start, end }) => ({ day, start, end })) : null,
+});
 
 const patchCourseOffering = async (courseId, patch) => {
   if (!isConfigValid) {
@@ -372,32 +379,13 @@ export const fetchMyEnrollments = async (uid) => {
   return map;
 };
 
-export const enrollInCourse = async (uid, course, user) => {
-  const payload = {
-    uid,
-    courseId: course.id,
-    courseTitle: course.title,
-    studentName: user?.displayName || user?.email || null,
-    studentEmail: user?.email || null,
-    enrolledAt: new Date().toISOString(),
-    completedLessonIds: [],
-    progress: 0,
-  };
+// Solo las matrículas que dan acceso: 'pending' (pago o alta sin confirmar)
+// todavía no cuenta para cursos, agenda ni entregas del alumno.
+export const isActiveEnrollment = (e) => !!e && (e.status || 'active') === 'active';
 
-  if (!isConfigValid) {
-    const key = `mock_enrollments_${uid}`;
-    const map = JSON.parse(localStorage.getItem(key) || '{}');
-    if (!map[course.id]) {
-      map[course.id] = payload;
-      localStorage.setItem(key, JSON.stringify(map));
-    }
-    return;
-  }
-
-  const ref = doc(db, 'enrollments', `${uid}_${course.id}`);
-  const existing = await getDoc(ref);
-  if (existing.exists()) return; // ya estaba inscrito -- no reinicia el progreso
-  await setDoc(ref, payload);
+export const fetchMyActiveEnrollments = async (uid) => {
+  const map = await fetchMyEnrollments(uid);
+  return Object.fromEntries(Object.entries(map).filter(([, e]) => isActiveEnrollment(e)));
 };
 
 // --- Todas las inscripciones, para el Admin (colección `enrollments`) ---
@@ -458,7 +446,7 @@ export const fetchCourseClassmates = async (courseId) => {
 };
 
 // Alta manual de matrícula desde el Admin (ej. pago fuera de línea) --
-// separado de enrollInCourse (que es el alumno inscribiéndose a sí mismo)
+// (única vía de matrícula: las reglas no dejan que un alumno se matricule solo)
 // porque acá el admin puede dejarla "pending" para validar luego.
 export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, courseId, courseTitle, groupId, groupName, status, reason }) => {
   const payload = {
@@ -479,7 +467,7 @@ export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, co
   }
 
   // Un alumno con cuenta usa el id determinístico `${uid}_${courseId}` (el mismo
-  // de enrollInCourse/markLessonComplete): así hay una sola matrícula por
+  // de markLessonComplete): así hay una sola matrícula por
   // alumno+curso y las reglas le dejan ver a sus compañeros. Un alta manual sin
   // cuenta (uid `manual-...`) sigue con id automático.
   const ref = uid ? doc(db, 'enrollments', `${uid}_${courseId}`) : doc(collection(db, 'enrollments'));
@@ -541,9 +529,12 @@ export const markLessonComplete = async (uid, courseId, lessonId, totalLessons) 
     return map[courseId];
   }
 
+  // Solo actualiza una matrícula que ya existe: la crea el admin al validar
+  // el pago (las reglas no dejan que un alumno se matricule solo).
   const ref = doc(db, 'enrollments', `${uid}_${courseId}`);
   const existing = await getDoc(ref);
-  const current = existing.exists() ? existing.data() : { completedLessonIds: [] };
+  if (!existing.exists()) return null;
+  const current = existing.data();
   const completedLessonIds = (current.completedLessonIds || []).includes(lessonId)
     ? current.completedLessonIds
     : [...(current.completedLessonIds || []), lessonId];
@@ -756,11 +747,12 @@ export const uploadCourseMaterial = async (courseId, moduleId, file) => {
   return getDownloadURL(ref);
 };
 
-export const createOrder = async ({ uid, studentName, studentEmail, courseId, courseTitle, amount, status, paymentMethod, couponId, proofCode, proofUrl }) => {
+export const createOrder = async ({ uid, studentName, studentEmail, courseId, courseTitle, amount, status, paymentMethod, couponId, couponCode, proofCode, proofUrl }) => {
   const base = {
     uid, studentName, studentEmail: studentEmail || null, courseId, courseTitle, amount,
     paymentMethod: paymentMethod || null,
     couponId: couponId || null,
+    couponCode: couponCode || null,
     proofCode: proofCode || null,
     proofUrl: proofUrl || null,
     status: status || 'paid',
@@ -813,17 +805,21 @@ export const updateOrderStatus = async (orderId, status) => {
 // aquí para no gastar el cupón de un pago que nunca se valide) y el
 // pedido pasa a 'paid'. Antes de esto el alumno no tenía acceso al curso
 // -- ver handlePay en Checkout.jsx.
-export const approveOrder = async (order) => {
+// El cupón ya se canjeó al crear el pedido (ver handlePay): así los pedidos
+// pendientes también cuentan para el tope de usos. `group` (opcional) es el
+// aula donde queda matriculado.
+export const approveOrder = async (order, group = null) => {
   await adminCreateEnrollment({
     uid: order.uid,
     studentName: order.studentName,
     studentEmail: order.studentEmail || null,
     courseId: order.courseId,
     courseTitle: order.courseTitle,
+    groupId: group?.id || null,
+    groupName: group?.name || null,
     status: 'active',
     reason: `Pago validado manualmente (pedido ${order.code})`,
   });
-  if (order.couponId) await redeemCoupon(order.couponId);
   await updateOrderStatus(order.id, 'paid');
 };
 
@@ -884,7 +880,9 @@ const DEFAULT_ACADEMY_SETTINGS = {
   // único con formulario propio.
   paymentMethods: {
     yape: { enabled: true, number: '', accountName: '', note: '' },
-    card: { enabled: true },
+    // Sin pasarela conectada todavía: no se ofrece en el checkout (ver
+    // PAYMENT_METHODS.card.requiresGateway).
+    card: { enabled: false },
     transfer: { enabled: false, number: '', accountName: '', note: '' },
   },
 };
@@ -1201,10 +1199,16 @@ export const redeemCoupon = async (couponId) => {
     localStorage.setItem('mock_coupons', JSON.stringify(next));
     return;
   }
+  // Transacción: dos compras simultáneas no pueden leer el mismo contador y
+  // pasarse del tope (las reglas además rechazan usedCount > maxUses).
   const ref = doc(db, 'coupons', couponId);
-  const snap = await getDoc(ref);
-  const current = snap.exists() ? (snap.data().usedCount || 0) : 0;
-  await updateDoc(ref, { usedCount: current + 1 });
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('coupon-not-found');
+    const { usedCount = 0, maxUses = 0 } = snap.data();
+    if (maxUses && usedCount >= maxUses) throw new Error('coupon-limit-reached');
+    tx.update(ref, { usedCount: usedCount + 1 });
+  });
 };
 
 // --- Perfil de negocio del proyecto del alumno (colección `projectProfiles`) ---

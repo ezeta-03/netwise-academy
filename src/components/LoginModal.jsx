@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { authErrorMessage } from '../lib/authErrors';
 import ModalPortal from './ModalPortal';
 
 const LoginModal = ({ onClose }) => {
@@ -31,7 +32,7 @@ const LoginModal = ({ onClose }) => {
       }
       onClose();
     } catch (error) {
-      setErrorMsg(mode === 'register' ? 'Error al registrar usuario: ' + error.message : 'Credenciales incorrectas. Usa: demo@netwise.com / 12345');
+      setErrorMsg(authErrorMessage(error, mode === 'register' ? 'No se pudo crear la cuenta. Intenta de nuevo.' : 'Correo o contraseña incorrectos.'));
       setLoading(false);
     }
   };
@@ -42,8 +43,8 @@ const LoginModal = ({ onClose }) => {
     try {
       await loginWithGoogle();
       onClose();
-    } catch {
-      setErrorMsg('Error al conectar con Google.');
+    } catch (error) {
+      setErrorMsg(authErrorMessage(error, 'Error al conectar con Google.'));
       setSocialLoading(false);
     }
   };

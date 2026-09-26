@@ -20,6 +20,8 @@ const Player = () => {
   const [progress, setProgress] = useState(0);
   const [completedLessonIds, setCompletedLessonIds] = useState([]);
   const [marking, setMarking] = useState(false);
+  // null = cargando; docente/admin siempre pueden ver el reproductor.
+  const [hasAccess, setHasAccess] = useState(null);
 
   const course = COURSES.find(c => c.id.toString() === courseId);
 
@@ -32,9 +34,10 @@ const Player = () => {
     if (!currentUser || !courseId) return;
     fetchMyEnrollments(currentUser.uid).then((map) => {
       const record = map[courseId];
+      setHasAccess(currentUser.role !== 'student' || (!!record && (record.status || 'active') === 'active'));
       setProgress(record?.progress ?? 0);
       setCompletedLessonIds(record?.completedLessonIds ?? []);
-    });
+    }).catch(() => setHasAccess(false));
   }, [currentUser, courseId]);
 
   if (!course) {
@@ -49,7 +52,19 @@ const Player = () => {
     );
   }
 
-  if (modules === null) {
+  if (hasAccess === false) {
+    return (
+      <div className="view active">
+        <div className="empty-state" style={{ padding: '96px 24px' }}>
+          <div className="es-icon">🔒</div>
+          <p>Necesitas una matrícula activa en este curso para ver sus lecciones.</p>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => navigate(`/course/${course.id}`)}>Ver el curso</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (modules === null || hasAccess === null) {
     return (
       <div className="view active">
         <div className="empty-state" style={{ padding: '96px 24px' }}><p>Cargando lecciones...</p></div>
@@ -75,8 +90,8 @@ const Player = () => {
   const [modIdxRaw, lessIdxRaw] = (lessonId || '1-1').split('-').map(n => parseInt(n) - 1);
   const modIdx = modules[modIdxRaw] ? modIdxRaw : 0;
   const module = modules[modIdx];
-  const lessIdx = module.lessons[lessIdxRaw] ? lessIdxRaw : 0;
-  const lesson = module.lessons[lessIdx];
+  const lessIdx = module.lessons?.[lessIdxRaw] ? lessIdxRaw : 0;
+  const lesson = module.lessons?.[lessIdx];
 
   if (!lesson) {
     return (
@@ -90,7 +105,7 @@ const Player = () => {
     );
   }
 
-  const totalLessons = modules.reduce((sum, m) => sum + m.lessons.length, 0);
+  const totalLessons = modules.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
   const isLessonDone = completedLessonIds.includes(lesson.id);
 
   const handleMarkComplete = async () => {
@@ -98,11 +113,15 @@ const Player = () => {
     setMarking(true);
     try {
       const updated = await markLessonComplete(currentUser.uid, course.id, lesson.id, totalLessons);
-      if (updated) {
-        setProgress(updated.progress);
-        setCompletedLessonIds(updated.completedLessonIds);
+      if (!updated) {
+        addToast('Tu avance solo se guarda con una matrícula activa en este curso.', 'warning');
+        return;
       }
+      setProgress(updated.progress);
+      setCompletedLessonIds(updated.completedLessonIds);
       addToast('Lección marcada como completada.', 'success');
+    } catch {
+      addToast('No se pudo guardar tu avance. Intenta de nuevo.', 'error');
     } finally {
       setMarking(false);
     }

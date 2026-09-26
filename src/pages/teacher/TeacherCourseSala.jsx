@@ -48,6 +48,8 @@ const TeacherCourseSala = () => {
       setTitle(''); setStartsAt('');
       addToast('Clase en vivo programada.', 'success');
       load();
+    } catch {
+      addToast('No se pudo programar la clase. Intenta de nuevo.', 'error');
     } finally {
       setSaving(false);
     }

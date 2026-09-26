@@ -22,6 +22,9 @@ export const PAYMENT_METHODS = [
     label: 'Tarjeta de crédito/débito',
     icon: CreditCard,
     manual: false,
+    // Sin pasarela de cobro conectada todavía: el checkout no lo ofrece
+    // aunque esté "activo" (antes simulaba el cobro y matriculaba gratis).
+    requiresGateway: true,
   },
   {
     id: 'transfer',
@@ -40,6 +43,10 @@ export const PAYMENT_METHODS = [
 // AdminPagos), no hay número que mostrar y el QR ya se ve aparte (ver
 // checkout-yape-qr en Checkout.jsx); si el admin todavía no configuró nada,
 // cae a un mensaje genérico en vez de mostrar "al ...".
+// Métodos que el checkout puede ofrecer hoy según la configuración del admin.
+export const checkoutMethods = (settings) =>
+  PAYMENT_METHODS.filter((m) => !m.requiresGateway && settings?.[m.id]?.enabled);
+
 export const buildPaymentInstructions = (methodId, cfg, amountLabel) => {
   const meta = PAYMENT_METHODS.find((m) => m.id === methodId);
   if (!meta?.manual) return 'Nuestro equipo te contactará para completar tu pago.';

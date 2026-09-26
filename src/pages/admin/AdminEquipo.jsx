@@ -199,7 +199,7 @@ const AdminEquipo = () => {
         )}
         <div className="admin-footnote">
           <span>{filteredMembers.length} registro{filteredMembers.length === 1 ? '' : 's'} en total · Demostración</span>
-          <span>Guardado local en este navegador</span>
+          <span>Directorio interno · no cambia permisos</span>
         </div>
       </div>
 
@@ -274,7 +274,7 @@ const AdminEquipo = () => {
         </table>
       </div>
 
-      <p className="admin-page-footer">NETWISE ACADEMY · ADMIN V1.4 / Demostración HTML · Datos de ejemplo · Cambios en este navegador</p>
+      <p className="admin-page-footer">NETWISE ACADEMY · ADMIN V1.4</p>
 
       {modal && (
         <MemberModal

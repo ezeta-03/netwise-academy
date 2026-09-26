@@ -148,8 +148,9 @@ const AdminPromociones = () => {
 
   const scopeLabel = (scope) => scope === 'all' ? 'Todos los cursos' : (courses.find((c) => c.id.toString() === scope.toString())?.title || scope);
   const vigenciaLabel = (c) => {
-    const from = c.startDate ? new Date(c.startDate + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' }) : 'Sin inicio';
-    const to = c.endDate ? `Hasta ${new Date(c.endDate + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })}` : 'Hasta sin fecha límite';
+    const fmt = (d) => new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+    const from = c.startDate ? `Desde ${fmt(c.startDate)}` : 'Vigente ya';
+    const to = c.endDate ? `Hasta ${fmt(c.endDate)}` : 'Sin fecha de vencimiento';
     return <>{from}<br />{to}</>;
   };
 

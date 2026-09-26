@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Video, Film } from 'lucide-react';
 import { isSafeLink } from '../../lib/placeholders';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchLiveSessions, fetchMyEnrollments } from '../../lib/db';
+import { fetchLiveSessions, fetchMyActiveEnrollments } from '../../lib/db';
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -22,7 +22,7 @@ const StudentAgenda = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchMyEnrollments(currentUser.uid).then((map) => setEnrolledIds(Object.keys(map)));
+    fetchMyActiveEnrollments(currentUser.uid).then((map) => setEnrolledIds(Object.keys(map)));
     fetchLiveSessions().then(setSessions);
   }, [currentUser]);
 

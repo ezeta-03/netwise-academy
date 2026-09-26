@@ -125,6 +125,16 @@ export const AuthProvider = ({ children }) => {
     
     // Proper Firebase Login
     const credential = await signInWithEmailAndPassword(auth, email, password);
+    // Cuenta desactivada por el admin: onAuthStateChanged también cierra la
+    // sesión, pero aquí se avisa con un error propio para que la pantalla de
+    // login lo explique en vez de no hacer nada.
+    const profileSnap = await getDoc(doc(db, 'users', credential.user.uid)).catch(() => null);
+    if (profileSnap?.exists() && profileSnap.data().disabled) {
+      await firebaseSignOut(auth);
+      const err = new Error('app/account-disabled');
+      err.code = 'app/account-disabled';
+      throw err;
+    }
     track('login', { method: 'email' });
     return credential;
   };

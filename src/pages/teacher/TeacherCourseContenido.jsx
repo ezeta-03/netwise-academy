@@ -265,7 +265,7 @@ const TeacherCourseContenido = () => {
 
   const addModule = () => {
     const next = [...modules, emptyModule(modules.length + 1)];
-    persist(next);
+    persist(next, `Módulo ${next.length} agregado.`);
     setSelectedId(next[next.length - 1].id);
   };
 
@@ -277,35 +277,35 @@ const TeacherCourseContenido = () => {
   const deleteModule = (id) => {
     if (!confirm('¿Eliminar este módulo y todo su contenido?')) return;
     const next = modules.filter((m) => m.id !== id);
-    persist(next);
+    persist(next, 'Módulo eliminado.');
     setSelectedId(next[0]?.id || null);
   };
 
   const saveSession = (session) => {
     const exists = selected.lessons.some((l) => l.id === session.id);
     const lessons = exists ? selected.lessons.map((l) => (l.id === session.id ? session : l)) : [...selected.lessons, session];
-    persist(modules.map((m) => (m.id === selected.id ? { ...m, lessons } : m)));
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, lessons } : m)), exists ? 'Sesión grabada actualizada.' : 'Sesión grabada agregada.');
     setAddingSession(false);
     setEditingSessionId(null);
   };
 
   const deleteSession = (sessionId) => {
     if (!confirm('¿Eliminar esta sesión grabada?')) return;
-    persist(modules.map((m) => (m.id === selected.id ? { ...m, lessons: m.lessons.filter((l) => l.id !== sessionId) } : m)));
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, lessons: m.lessons.filter((l) => l.id !== sessionId) } : m)), 'Sesión grabada eliminada.');
   };
 
   const saveSessionDetail = (session) => {
     const current = selected.sessions || [];
     const exists = current.some((s) => s.id === session.id);
     const sessions = exists ? current.map((s) => (s.id === session.id ? session : s)) : [...current, session];
-    persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions } : m)));
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions } : m)), exists ? 'Sesión actualizada.' : 'Sesión agregada.');
     setAddingSessionDetail(false);
     setEditingSessionDetail(null);
   };
 
   const deleteSessionDetail = (sessionId) => {
     if (!confirm('¿Eliminar esta sesión del módulo?')) return;
-    persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions: (m.sessions || []).filter((s) => s.id !== sessionId) } : m)));
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions: (m.sessions || []).filter((s) => s.id !== sessionId) } : m)), 'Sesión eliminada.');
   };
 
   const saveMaterial = (material) => {

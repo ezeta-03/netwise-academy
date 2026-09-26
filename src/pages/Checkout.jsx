@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, Lock, UserCircle2, Paperclip, X } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, Loader2, Tag, UserCircle2, Paperclip, X } from 'lucide-react';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useEnrollment } from '../hooks/useEnrollment';
 import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchMyOrders, uploadPaymentProof, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
-import { PAYMENT_METHODS, buildPaymentInstructions } from '../lib/paymentMethods';
+import { PAYMENT_METHODS, checkoutMethods, buildPaymentInstructions } from '../lib/paymentMethods';
 import { track, courseItem } from '../lib/tracking';
+import { authErrorMessage } from '../lib/authErrors';
 import YapeInstructionsModal from '../components/YapeInstructionsModal';
 import TermsModal from '../components/TermsModal';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
@@ -30,7 +31,7 @@ const Checkout = () => {
   const { addToast } = useUI();
 
   const course = courses.find((c) => c.id.toString() === courseId);
-  const { isEnrolled, enroll } = useEnrollment(course);
+  const { isEnrolled } = useEnrollment(course);
 
   const [step, setStep] = useState(currentUser ? 2 : 1);
   const [authTab, setAuthTab] = useState('register');
@@ -56,15 +57,13 @@ const Checkout = () => {
   const [couponChecking, setCouponChecking] = useState(false);
 
   const [paymentMethod, setPaymentMethod] = useState('yape');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
   const [processing, setProcessing] = useState(false);
   const [showYapeInstructions, setShowYapeInstructions] = useState(false);
   const [orderPending, setOrderPending] = useState(false);
   const [proofCode, setProofCode] = useState('');
   const [proofFile, setProofFile] = useState(null);
   const [proofError, setProofError] = useState('');
+  const [payError, setPayError] = useState('');
 
   const [firstClass, setFirstClass] = useState(null);
   const [paymentSettings, setPaymentSettings] = useState(null);
@@ -74,8 +73,8 @@ const Checkout = () => {
   }, []);
 
   const availableMethods = paymentSettings
-    ? PAYMENT_METHODS.filter((m) => paymentSettings[m.id]?.enabled)
-    : PAYMENT_METHODS.filter((m) => m.id === 'yape' || m.id === 'card'); // fallback mientras carga
+    ? checkoutMethods(paymentSettings)
+    : PAYMENT_METHODS.filter((m) => m.id === 'yape'); // fallback mientras carga
 
   useEffect(() => {
     if (paymentSettings && availableMethods.length && !availableMethods.some((m) => m.id === paymentMethod)) {
@@ -119,7 +118,14 @@ const Checkout = () => {
     }).catch(() => {});
   }, [course, currentUser]);
 
-  if (!course) {
+  // Redirigir en un efecto, no durante el render.
+  const redirectToCourse = !!course && isEnrolled && step !== 3;
+  useEffect(() => {
+    if (redirectToCourse) navigate(`/student/curso/${course.id}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redirectToCourse]);
+
+  if (!course || course.visible === false) {
     return (
       <div className="view active">
         <div className="empty-state" style={{ padding: '96px 24px' }}>
@@ -130,17 +136,24 @@ const Checkout = () => {
     );
   }
 
-  if (isEnrolled && step !== 3) {
-    navigate(`/student/curso/${course.id}`, { replace: true });
-    return null;
-  }
+  if (redirectToCourse) return null;
 
   const originalPrice = course.promoPercent ? course.price / (1 - course.promoPercent / 100) : course.price;
   const promoDiscount = course.promoPercent ? originalPrice - course.price : 0;
-  const couponDiscount = appliedCoupon ? originalPrice * (appliedCoupon.discountPercent / 100) : 0;
+  // Cupón acumulable: se aplica sobre el precio ya promocional. Si no, gana el
+  // mayor descuento (promoción o cupón) sobre el precio regular.
+  const couponDiscountFor = (c) => {
+    if (!c) return 0;
+    return c.stackable
+      ? promoDiscount + course.price * (c.discountPercent / 100)
+      : originalPrice * (c.discountPercent / 100);
+  };
+  const couponDiscount = couponDiscountFor(appliedCoupon);
   const usingCoupon = !!appliedCoupon && couponDiscount > promoDiscount;
   const bestDiscount = Math.max(promoDiscount, couponDiscount);
-  const discountPercent = usingCoupon ? appliedCoupon.discountPercent : course.promoPercent;
+  const discountPercent = usingCoupon
+    ? Math.round((bestDiscount / originalPrice) * 100)
+    : course.promoPercent;
   const finalPrice = Math.round((originalPrice - bestDiscount) * 100) / 100;
 
   const handleRegister = async (e) => {
@@ -153,7 +166,7 @@ const Checkout = () => {
     try {
       await register(email, password, name);
     } catch (err) {
-      setAuthError(err.message?.includes('email-already') ? 'Ese correo ya tiene una cuenta. Inicia sesión.' : 'No se pudo crear la cuenta. Intenta de nuevo.');
+      setAuthError(authErrorMessage(err, 'No se pudo crear la cuenta. Intenta de nuevo.'));
       setAuthLoading(false);
     }
   };
@@ -164,8 +177,8 @@ const Checkout = () => {
     setAuthLoading(true);
     try {
       await login(loginEmail, loginPassword);
-    } catch {
-      setAuthError('Credenciales incorrectas.');
+    } catch (err) {
+      setAuthError(authErrorMessage(err, 'Correo o contraseña incorrectos.'));
       setAuthLoading(false);
     }
   };
@@ -190,11 +203,19 @@ const Checkout = () => {
       const match = list.find((c) => c.code?.toUpperCase() === couponCode.trim().toUpperCase());
       if (!match) { setCouponError('Cupón no válido.'); setAppliedCoupon(null); return; }
       if (match.active === false) { setCouponError('Este cupón ya no está activo.'); setAppliedCoupon(null); return; }
+      if (match.startDate && new Date(`${match.startDate}T00:00:00`) > new Date()) { setCouponError('Este cupón todavía no está vigente.'); setAppliedCoupon(null); return; }
       if (match.endDate && new Date(`${match.endDate}T23:59:59`) < new Date()) { setCouponError('Este cupón ya venció.'); setAppliedCoupon(null); return; }
       if (match.maxUses && (match.usedCount || 0) >= match.maxUses) { setCouponError('Este cupón alcanzó su límite de usos.'); setAppliedCoupon(null); return; }
       if (match.scope !== 'all' && match.scope?.toString() !== course.id.toString()) { setCouponError('Este cupón no aplica a este curso.'); setAppliedCoupon(null); return; }
+      if (couponDiscountFor(match) <= promoDiscount) {
+        setCouponError(`Este cupón no mejora el precio promocional actual (-${course.promoPercent}%), así que no se aplica.`);
+        setAppliedCoupon(null);
+        return;
+      }
       setAppliedCoupon(match);
       addToast('Cupón aplicado.', 'success');
+    } catch {
+      setCouponError('No se pudo validar el cupón. Intenta de nuevo.');
     } finally {
       setCouponChecking(false);
     }
@@ -221,6 +242,7 @@ const Checkout = () => {
 
   const handlePay = async () => {
     setProcessing(true);
+    setPayError('');
     const isFree = finalPrice === 0;
     track('add_payment_info', {
       ecommerce: {
@@ -230,68 +252,78 @@ const Checkout = () => {
         items: [courseItem(course, finalPrice)],
       },
     });
-    await new Promise((r) => setTimeout(r, 1400)); // simulación de pasarela, igual que el checkout de un curso
 
-    // La tarjeta simula una pasarela real que cobra al toque, así que
-    // matricula de inmediato. Yape/Transferencia son pagos manuales -- nadie
-    // valida todavía que el dinero llegó, así que el pedido queda 'pending'
-    // (con el N° de operación como evidencia mínima, y la captura como
-    // respaldo opcional) y recién se matricula cuando un admin lo aprueba
+    // Todos los métodos del checkout son manuales (Yape/Plin/transferencia):
+    // nadie valida todavía que el dinero llegó, así que el pedido queda
+    // 'pending' (con el N° de operación como evidencia mínima, y la captura
+    // como respaldo opcional) y recién se matricula cuando un admin lo aprueba
     // en Ventas (approveOrder, ver lib/db.js).
-    const isManual = paymentMethod !== 'card';
-    let proofUrl = null;
-
-    if (!isManual) {
-      await enroll();
-      if (usingCoupon) await redeemCoupon(appliedCoupon.id);
-    } else if (proofFile) {
-      // La captura es opcional (el N° de operación ya es la evidencia que se
-      // exige) -- si falla la subida no bloqueamos el pago, solo avisamos y
-      // seguimos sin adjunto.
-      try {
-        proofUrl = await uploadPaymentProof(currentUser.uid, course.id, proofFile);
-      } catch {
-        addToast('No se pudo adjuntar la captura, pero tu pedido se registró igual.', 'error');
+    try {
+      // El cupón se canjea al crear el pedido: así los pedidos pendientes
+      // también cuentan para el tope de usos.
+      if (usingCoupon) {
+        try {
+          await redeemCoupon(appliedCoupon.id);
+        } catch {
+          setAppliedCoupon(null);
+          setCouponError('Este cupón alcanzó su límite de usos.');
+          setPayError('El cupón ya no está disponible. Revisa el nuevo total y vuelve a confirmar.');
+          return;
+        }
       }
+
+      let proofUrl = null;
+      if (proofFile) {
+        // La captura es opcional (el N° de operación ya es la evidencia que se
+        // exige) -- si falla la subida no bloqueamos el pago, solo avisamos y
+        // seguimos sin adjunto.
+        try {
+          proofUrl = await uploadPaymentProof(currentUser.uid, course.id, proofFile);
+        } catch {
+          addToast('No se pudo adjuntar la captura, pero tu pedido se registró igual.', 'warning');
+        }
+      }
+
+      const order = await createOrder({
+        uid: currentUser.uid,
+        studentName: currentUser.displayName || currentUser.email,
+        studentEmail: currentUser.email,
+        courseId: course.id,
+        courseTitle: course.title,
+        amount: finalPrice,
+        paymentMethod,
+        status: 'pending',
+        couponId: usingCoupon ? appliedCoupon.id : null,
+        couponCode: usingCoupon ? appliedCoupon.code : null,
+        proofCode: proofCode.trim(),
+        proofUrl,
+      });
+
+      // Solo aquí, recién guardado el pedido -- si recarga, el checkout salta
+      // al paso 3 por fetchMyOrders sin pasar por handlePay, así que no se
+      // duplica. Un pago manual queda 'pending' hasta que el admin lo valida
+      // (y puede no pagarse nunca): no es una compra todavía, así que va como
+      // 'purchase_pending' para no inflar ventas ni entrenar las campañas.
+      track(isFree ? 'purchase' : 'purchase_pending', {
+        ecommerce: isFree
+          ? { transaction_id: `free-${currentUser.uid}-${course.id}`, currency: 'PEN', value: 0, items: [courseItem(course, 0)] }
+          : {
+              transaction_id: order.code || order.id,
+              currency: 'PEN',
+              value: finalPrice,
+              payment_type: paymentMethod,
+              ...(usingCoupon && { coupon: appliedCoupon.code }),
+              items: [courseItem(course, finalPrice)],
+            },
+      });
+
+      setOrderPending(true);
+      setStep(3);
+    } catch {
+      setPayError('No se pudo registrar tu pedido. Revisa tu conexión e intenta de nuevo.');
+    } finally {
+      setProcessing(false);
     }
-
-    const order = await createOrder({
-      uid: currentUser.uid,
-      studentName: currentUser.displayName || currentUser.email,
-      studentEmail: currentUser.email,
-      courseId: course.id,
-      courseTitle: course.title,
-      amount: finalPrice,
-      paymentMethod,
-      status: isManual ? 'pending' : 'paid',
-      couponId: isManual && usingCoupon ? appliedCoupon.id : null,
-      proofCode: isManual ? proofCode.trim() : null,
-      proofUrl,
-    });
-
-    // Solo aquí, recién guardado el pedido -- si recarga, el checkout salta
-    // al paso 3 por fetchMyOrders sin pasar por handlePay, así que no se
-    // duplica. transaction_id único: GA4 y Meta lo usan para deduplicar.
-    // Yape/Plin/transferencia quedan 'pending' hasta que el admin valida el
-    // pago (y pueden no pagarse nunca): no son una compra todavía, así que
-    // van como 'purchase_pending' para no inflar ventas ni entrenar las
-    // campañas con compras que no ocurrieron. 'purchase' = tarjeta o gratis.
-    track(isManual && !isFree ? 'purchase_pending' : 'purchase', {
-      ecommerce: isFree
-        ? { transaction_id: `free-${currentUser.uid}-${course.id}`, currency: 'PEN', value: 0, items: [courseItem(course, 0)] }
-        : {
-            transaction_id: order.code || order.id,
-            currency: 'PEN',
-            value: finalPrice,
-            payment_type: paymentMethod,
-            ...(usingCoupon && { coupon: appliedCoupon.code }),
-            items: [courseItem(course, finalPrice)],
-          },
-    });
-
-    setOrderPending(isManual);
-    setProcessing(false);
-    setStep(3);
   };
 
   return (
@@ -433,67 +465,56 @@ const Checkout = () => {
                           ))}
                         </div>
 
-                        {paymentMethod === 'card' ? (
-                          <>
-                            <div className="admin-field"><label>Número de tarjeta</label><input value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} placeholder="0000 0000 0000 0000" required /></div>
-                            <div className="checkout-field-row">
-                              <div className="admin-field"><label>Vencimiento</label><input value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} placeholder="MM/AA" required /></div>
-                              <div className="admin-field"><label>CVV</label><input value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} placeholder="123" required /></div>
+                        <div className="checkout-pay-placeholder">
+                          {paymentMethod === 'yape' && (
+                            <div className="checkout-yape-qr">
+                              <img src={qrZaazmago} alt="Código QR de Yape Empresas -- GRUPO ZAAZMAGO E.I.R.L." className="checkout-yape-qr-img" />
+                              <span className="checkout-yape-qr-label">GRUPO ZAAZMAGO E.I.R.L.</span>
                             </div>
-                            <p className="checkout-pay-note"><Lock size={13} /> Tu información está protegida y encriptada.</p>
-                          </>
-                        ) : (
-                          <div className="checkout-pay-placeholder">
-                            {paymentMethod === 'yape' && (
-                              <div className="checkout-yape-qr">
-                                <img src={qrZaazmago} alt="Código QR de Yape Empresas -- GRUPO ZAAZMAGO E.I.R.L." className="checkout-yape-qr-img" />
-                                <span className="checkout-yape-qr-label">GRUPO ZAAZMAGO E.I.R.L.</span>
-                              </div>
-                            )}
-                            {buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}
-                            {paymentMethod === 'yape' && (
-                              <button type="button" className="checkout-pay-howto" onClick={() => setShowYapeInstructions(true)}>
-                                Ver instructivo para pagar con Yape
-                              </button>
-                            )}
-                          </div>
-                        )}
+                          )}
+                          {buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}
+                          {paymentMethod === 'yape' && (
+                            <button type="button" className="checkout-pay-howto" onClick={() => setShowYapeInstructions(true)}>
+                              Ver instructivo para pagar con Yape
+                            </button>
+                          )}
+                        </div>
 
-                        {paymentMethod !== 'card' && (
-                          <>
-                            <div className="admin-field checkout-proof-field">
-                              <label>N.° de operación de Yape/Plin</label>
-                              <input
-                                value={proofCode}
-                                onChange={(e) => setProofCode(e.target.value)}
-                                placeholder="Ej. 00312845"
-                                required
-                              />
-                              <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>
-                                Te lo muestra la app al confirmar el pago -- lo usamos para ubicarlo en nuestra cuenta.
-                              </p>
-                            </div>
+                        <div className="admin-field checkout-proof-field">
+                          <label>{paymentMethod === 'transfer' ? 'N.° de operación de la transferencia' : 'N.° de operación de Yape/Plin'}</label>
+                          <input
+                            value={proofCode}
+                            onChange={(e) => setProofCode(e.target.value)}
+                            placeholder="Ej. 00312845"
+                            required
+                          />
+                          <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>
+                            {paymentMethod === 'transfer'
+                              ? 'Figura en la constancia de tu banco -- lo usamos para ubicarlo en nuestra cuenta.'
+                              : 'Te lo muestra la app al confirmar el pago -- lo usamos para ubicarlo en nuestra cuenta.'}
+                          </p>
+                        </div>
 
-                            <div className="admin-field checkout-proof-field">
-                              <label>Captura del pago (opcional)</label>
-                              {proofFile ? (
-                                <div className="checkout-proof-file">
-                                  <Paperclip size={14} />
-                                  <span>{proofFile.name}</span>
-                                  <button type="button" onClick={() => { setProofFile(null); setProofError(''); }} aria-label="Quitar archivo"><X size={13} /></button>
-                                </div>
-                              ) : (
-                                <input type="file" accept="image/*,.pdf" onChange={handleProofChange} />
-                              )}
-                              {proofError && <p className="checkout-coupon-msg error">{proofError}</p>}
+                        <div className="admin-field checkout-proof-field">
+                          <label>Captura del pago (opcional)</label>
+                          {proofFile ? (
+                            <div className="checkout-proof-file">
+                              <Paperclip size={14} />
+                              <span>{proofFile.name}</span>
+                              <button type="button" onClick={() => { setProofFile(null); setProofError(''); }} aria-label="Quitar archivo"><X size={13} /></button>
                             </div>
-                          </>
-                        )}
+                          ) : (
+                            <input type="file" accept="image/*,.pdf" onChange={handleProofChange} />
+                          )}
+                          {proofError && <p className="checkout-coupon-msg error">{proofError}</p>}
+                        </div>
+
+                        {payError && <div className="checkout-error" style={{ marginTop: 16 }}>{payError}</div>}
 
                         <button
                           className="checkout-submit-btn"
                           style={{ marginTop: 20 }}
-                          disabled={processing || (paymentMethod === 'card' ? (!cardNumber || !cardExpiry || !cardCvv) : !proofCode.trim())}
+                          disabled={processing || !proofCode.trim()}
                           onClick={handlePay}
                         >
                           {processing ? <Loader2 size={16} className="spin" /> : `Confirmar y pagar ${fmtMoney(finalPrice)} →`}
@@ -524,11 +545,13 @@ const Checkout = () => {
                   <div className="checkout-price-row"><span>Precio regular</span><span>S/ {originalPrice.toFixed(2)}</span></div>
                   {bestDiscount > 0 && (
                     <div className="checkout-price-row discount">
-                      <span>{usingCoupon ? `Descuento con cupón · ${discountPercent}%` : `Descuento promocional · ${discountPercent}%`}</span>
+                      <span>{usingCoupon
+                        ? (appliedCoupon.stackable ? `Promoción ${course.promoPercent}% + cupón ${appliedCoupon.discountPercent}%` : `Descuento con cupón · ${appliedCoupon.discountPercent}%`)
+                        : `Descuento promocional · ${discountPercent}%`}</span>
                       <span>-S/ {bestDiscount.toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="checkout-price-row total"><span>{step === 1 ? 'Subtotal de ejemplo' : 'Total de ejemplo'}</span><span>{fmtMoney(finalPrice)}</span></div>
+                  <div className="checkout-price-row total"><span>{step === 1 ? 'Subtotal' : 'Total a pagar'}</span><span>{fmtMoney(finalPrice)}</span></div>
                 </div>
 
                 {step === 1 && <button className="checkout-summary-cta" disabled>Confirmar y pagar {fmtMoney(finalPrice)} →</button>}

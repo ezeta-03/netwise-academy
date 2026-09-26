@@ -33,7 +33,7 @@ const downloadProgram = (course, modules) => {
     course.description,
     '',
     `Duración: ${course.duration} · Modalidad: Online en vivo · Nivel: ${course.level.replace('Nivel ', '')}`,
-    `Horario: ${course.scheduleDays.join(' y ')} · ${course.scheduleTime}`,
+    `Horario: ${course.scheduleLabel}`,
     `Proyecto final: ${course.projectFinal}`,
     '',
     'Módulos:',
@@ -73,7 +73,11 @@ const CourseDetail = () => {
     fetchCourseSummary(course.id).then((data) => setModules(data.modules || [])).catch(() => setModules([]));
   }, [course]);
 
-  if (!course) {
+  // Un curso oculto desde Admin > Cursos no se muestra por URL directa
+  // (salvo al equipo, para revisarlo, o a quien ya está inscrito).
+  const hiddenForViewer = course?.visible === false && !isEnrolled && currentUser?.role !== 'admin' && currentUser?.role !== 'teacher';
+
+  if (!course || hiddenForViewer) {
     return (
       <div className="view active">
         <div className="empty-state" style={{ padding: '96px 24px' }}>
@@ -88,7 +92,7 @@ const CourseDetail = () => {
   const isStaff = currentUser?.role === 'teacher' || currentUser?.role === 'admin';
   const Icon = OUTCOME_ICONS[course.icon] || Sparkles;
   const levelShort = course.level.replace('Nivel ', '');
-  const weeklyHours = hoursOfRange(course.scheduleTime) * course.scheduleDays.length;
+  const weeklyHours = course.scheduleSlots.reduce((sum, s) => sum + hoursOfRange(`${s.start}-${s.end}`), 0);
   const supportHours = (hoursOfRange(SUPPORT_HOURS.friday) + hoursOfRange(SUPPORT_HOURS.saturday));
   const originalPrice = course.price != null && course.promoPercent ? Math.round(course.price / (1 - course.promoPercent / 100)) : null;
 
@@ -198,12 +202,12 @@ const CourseDetail = () => {
               <div className="cd-schedule-card">
                 <div className="cd-schedule-course">{course.title}</div>
                 <div className="cd-schedule-days">
-                  {course.scheduleDays.map((day) => (
-                    <div key={day} className="cd-schedule-day">
+                  {course.scheduleSlots.map((slot) => (
+                    <div key={`${slot.day}-${slot.start}`} className="cd-schedule-day">
                       <Calendar size={16} />
                       <div>
-                        <div className="cd-schedule-day-name">{day}</div>
-                        <div className="cd-schedule-day-time">{course.scheduleTime}</div>
+                        <div className="cd-schedule-day-name">{slot.day}</div>
+                        <div className="cd-schedule-day-time">{slot.start}-{slot.end}</div>
                       </div>
                     </div>
                   ))}
@@ -238,8 +242,8 @@ const CourseDetail = () => {
                   <div className="cd-sidebar-title">Tu siguiente paso empieza aquí.</div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Modalidad</span><span className="cd-detail-value">Online en vivo</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Duración</span><span className="cd-detail-value">{course.duration}</span></div>
-                  <div className="cd-detail-row"><span className="cd-detail-label">Horario</span><span className="cd-detail-value">{course.scheduleDays.join(' y ')} · {course.scheduleTime}</span></div>
-                  <div className="cd-detail-row"><span className="cd-detail-label">Carga semanal</span><span className="cd-detail-value">{weeklyHours} horas · {course.scheduleDays.length} sesiones</span></div>
+                  <div className="cd-detail-row"><span className="cd-detail-label">Horario</span><span className="cd-detail-value">{course.scheduleLabel}</span></div>
+                  <div className="cd-detail-row"><span className="cd-detail-label">Carga semanal</span><span className="cd-detail-value">{weeklyHours} horas · {course.scheduleSlots.length} sesiones</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Horas extras</span><span className="cd-detail-value">{supportHours} horas · 2 sesiones</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Nivel</span><span className="cd-detail-value">{levelShort}</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Proyecto final</span><span className="cd-detail-value">{course.projectFinal}</span></div>

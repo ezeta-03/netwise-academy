@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { COURSES } from '../lib/data';
 import { fetchCourseOfferings } from '../lib/db';
+import { buildScheduleLabel } from '../lib/liveScheduleGenerator';
 
 const CourseOfferingsContext = createContext();
 
@@ -37,10 +38,19 @@ export const CourseOfferingsProvider = ({ children }) => {
   // original de data.js en vez de quedar realmente apagado/vacío.
   const courses = COURSES.map((c) => {
     const offer = offerings[c.id];
-    if (!offer) return { ...c, visible: true, enrollmentsOpen: true, promoPercent: c.promoPercent ?? null, teacherUid: null };
+    const staticSlots = c.scheduleDays.map((day) => {
+      const [start, end] = String(c.scheduleTime).split('-').map((t) => t.trim());
+      return { day, start, end };
+    });
+    const staticLabel = `${c.scheduleDays.join(' y ')} · ${c.scheduleTime}`;
+    if (!offer) return { ...c, scheduleSlots: staticSlots, scheduleLabel: staticLabel, visible: true, enrollmentsOpen: true, promoPercent: c.promoPercent ?? null, teacherUid: null };
     const has = (field) => Object.prototype.hasOwnProperty.call(offer, field);
+    // Horario del aula abierta (ver updateCourseSchedule); si no hay, el de data.js.
+    const slots = Array.isArray(offer.schedule) && offer.schedule.length ? offer.schedule : null;
     return {
       ...c,
+      scheduleSlots: slots || staticSlots,
+      scheduleLabel: slots ? buildScheduleLabel(slots) : staticLabel,
       price: has('price') ? offer.price : c.price,
       startDate: has('startDate') ? offer.startDate : (c.startDate ?? null),
       visible: offer.visible ?? true,

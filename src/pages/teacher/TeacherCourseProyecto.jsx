@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import ModalPortal from '../../components/ModalPortal';
 import { fetchAllEnrollments, fetchCourseContent, updateEnrollmentFollowUp } from '../../lib/db';
+import { courseRoster } from '../../lib/roster';
 
 const FOLLOW_UP = {
   ok: { label: 'Al día', cls: 'admin-status-green' },
@@ -22,6 +23,8 @@ const StudentDetailModal = ({ row, onClose, onSaved }) => {
       addToast('Seguimiento actualizado.', 'success');
       onSaved();
       onClose();
+    } catch {
+      addToast('No se pudo actualizar el seguimiento. Intenta de nuevo.', 'error');
     } finally {
       setSaving(false);
     }
@@ -62,18 +65,23 @@ const TeacherCourseProyecto = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
+  const { addToast } = useUI();
 
   const load = useCallback(() => {
     Promise.all([fetchAllEnrollments(course.id), fetchCourseContent(course.id)]).then(([enrollments, content]) => {
-      const totalSessions = (content.modules || []).reduce((sum, m) => sum + m.lessons.length, 0) || 1;
-      const courseEnrollments = enrollments.filter((e) => e.courseId?.toString() === course.id.toString());
+      const totalSessions = (content.modules || []).reduce((sum, m) => sum + (m.lessons?.length || 0), 0) || 1;
+      const courseEnrollments = courseRoster(enrollments, course.id).map((r) => enrollments.find((e) => e.uid === r.uid && e.courseId?.toString() === course.id.toString()));
       setRows(courseEnrollments.map((e) => ({
         id: e.id, uid: e.uid, studentName: e.studentName || e.uid, studentEmail: e.studentEmail,
         progress: e.progress || 0, attended: (e.completedLessonIds || []).length, totalSessions,
         followUp: e.followUp || 'ok', courseId: e.courseId,
       })));
       setLoading(false);
+    }).catch(() => {
+      addToast('No se pudo cargar el seguimiento de alumnos.', 'error');
+      setLoading(false);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id]);
 
   useEffect(() => { load(); }, [load]);

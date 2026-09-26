@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from './AuthContext';
@@ -27,6 +27,7 @@ export const UIProvider = ({ children }) => {
   const { courses } = useCourseOfferings();
   const navigate = useNavigate();
   const [toasts, setToasts] = useState([]);
+  const toastSeq = useRef(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [readIds, setReadIds] = useState(new Set());
@@ -89,7 +90,8 @@ export const UIProvider = ({ children }) => {
   }, [currentUser, loadNotifications]);
 
   const addToast = useCallback((message, type = 'info') => {
-    const id = Date.now();
+    // Contador propio: dos toasts en el mismo milisegundo compartían id.
+    const id = `${Date.now()}-${++toastSeq.current}`;
     setToasts(prev => [...prev, { id, message, type }]);
 
     // Auto remove after 3.5s

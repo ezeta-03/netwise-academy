@@ -12,8 +12,11 @@ const ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.webp,.zip
 const ALLOWED_TYPES = /^(application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\..+|application\/vnd\.ms-powerpoint|application\/vnd\.ms-excel|image\/(png|jpeg|webp)|application\/(x-)?zip(-compressed)?)$/;
 
 // Entrega de un módulo: archivo (Storage) y/o link o descripción. Lo usan
-// Alumno > Evaluación (entregables) y Alumno > Proyecto (avances).
-const SubmitDeliverableModal = ({ course, module, onClose, onSaved, title, noteLabel, submitLabel, successMsg }) => {
+// Alumno > Evaluación (entregables) y Alumno > Proyecto (avances): ambos
+// escriben la MISMA entrega del módulo (submissions/{uid}_{curso}_{módulo}).
+// `existing` es la entrega actual: si ya estaba calificada, se avisa que
+// reemplazarla deja la nota sin contar hasta que el docente la revise.
+const SubmitDeliverableModal = ({ course, module, existing = null, onClose, onSaved, title, noteLabel, submitLabel, successMsg }) => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
   const [note, setNote] = useState('');
@@ -59,6 +62,14 @@ const SubmitDeliverableModal = ({ course, module, onClose, onSaved, title, noteL
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head"><div className="admin-modal-title">{title}</div><button className="admin-modal-close" onClick={onClose} disabled={saving}><X size={18} /></button></div>
           <p className="admin-cell-sub" style={{ marginBottom: 12 }}>{module.deliverable?.description || module.title}</p>
+          {existing?.status === 'reviewed' && (
+            <div className="checkout-error" role="alert" style={{ marginBottom: 12 }}>
+              Esta entrega ya está calificada ({existing.grade ?? '—'}/20). Si la reemplazas, esa nota deja de contar en tu promedio hasta que tu docente revise la nueva versión.
+            </div>
+          )}
+          {existing && existing.status !== 'reviewed' && (
+            <p className="admin-panel-caption" style={{ marginTop: 0 }}>Ya enviaste una versión: la nueva reemplaza a la anterior.</p>
+          )}
           <div className="admin-field">
             <label>Archivo (opcional, hasta {SUBMISSION_MAX_MB} MB)</label>
             <input ref={inputRef} type="file" accept={ACCEPT} onChange={pickFile} hidden />

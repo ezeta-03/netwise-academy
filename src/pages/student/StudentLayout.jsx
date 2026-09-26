@@ -4,7 +4,7 @@ import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, L
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchMyEnrollments } from '../../lib/db';
+import { fetchMyActiveEnrollments } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import SidebarLogo from '../../components/SidebarLogo';
 
@@ -53,7 +53,7 @@ const StudentLayout = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchMyEnrollments(currentUser.uid).then((enrollments) => {
+    fetchMyActiveEnrollments(currentUser.uid).then((enrollments) => {
       const enrolledCourses = courses.filter((c) => enrollments[c.id]);
       fetchMyDeliverables(currentUser.uid, enrolledCourses).then((items) => {
         setPendingCount(items.filter((i) => i.status === 'pending').length);

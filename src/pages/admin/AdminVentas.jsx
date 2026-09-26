@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Download, Eye, X, Check, Loader2 } from 'lucide-react';
-import { fetchOrders, approveOrder, logChange } from '../../lib/db';
+import { fetchOrders, fetchGroups, approveOrder, logChange } from '../../lib/db';
 import { downloadCsv } from '../../lib/csv';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
@@ -34,18 +34,41 @@ const AdminVentas = () => {
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
   const [approvingId, setApprovingId] = useState(null);
+  const [groups, setGroups] = useState([]);
+  // Aula elegida en el detalle del pedido ('' = sin aula).
+  const [groupChoice, setGroupChoice] = useState('');
 
   useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }).catch(() => setLoading(false)); }, []);
+  useEffect(() => { fetchGroups().then(setGroups).catch(() => {}); }, []);
 
-  const handleApprove = async (order) => {
+  const courseGroups = (order) => groups.filter((g) => g.courseId?.toString() === order.courseId?.toString() && g.status !== 'closed');
+  // Si el curso tiene una sola aula abierta, el alumno queda en ella; con
+  // varias, el admin elige en el detalle del pedido.
+  const defaultGroupId = (order) => {
+    const list = courseGroups(order);
+    return list.length === 1 ? list[0].id : '';
+  };
+
+  const openOrder = (order) => {
+    setViewing(order);
+    setGroupChoice(defaultGroupId(order));
+  };
+
+  const handleApprove = async (order, groupId = defaultGroupId(order)) => {
+    if (!groupId && courseGroups(order).length > 1) {
+      openOrder(order);
+      addToast('Este curso tiene varias aulas: elige en cuál matricular al alumno.', 'warning');
+      return;
+    }
+    const group = groups.find((g) => g.id === groupId) || null;
     setApprovingId(order.id);
     try {
-      await approveOrder(order);
+      await approveOrder(order, group);
       await logChange(adminName, `Validó el pago de ${order.studentName} -- pedido ${order.code} (${order.courseTitle}).`);
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: 'paid' } : o)));
       setViewing((v) => (v?.id === order.id ? { ...v, status: 'paid' } : v));
       refreshNotifications();
-      addToast('Pago validado. El alumno ya tiene acceso al curso.', 'success');
+      addToast(group ? `Pago validado. ${order.studentName} ya tiene acceso al curso (aula ${group.name}).` : 'Pago validado. El alumno ya tiene acceso al curso.', 'success');
     } catch {
       addToast('No se pudo validar el pago. Intenta de nuevo.', 'error');
     } finally {
@@ -96,7 +119,7 @@ const AdminVentas = () => {
                     <td className="admin-price">S/ {Number(o.amount).toFixed(2)}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
                     <td style={{ display: 'flex', gap: 6 }}>
-                      <button className="admin-icon-btn" onClick={() => setViewing(o)}><Eye size={14} /></button>
+                      <button className="admin-icon-btn" onClick={() => openOrder(o)} aria-label={`Ver pedido ${o.code}`}><Eye size={14} /></button>
                       {o.status === 'pending' && (
                         <button className="admin-btn-edit" style={{ padding: '6px 10px', fontSize: '.78rem' }} disabled={approvingId === o.id} onClick={() => handleApprove(o)}>
                           {approvingId === o.id ? <Loader2 size={13} className="spin" /> : <Check size={13} />} Aprobar
@@ -111,7 +134,7 @@ const AdminVentas = () => {
         )}
       </div>
 
-      <p className="admin-page-footer">NETWISE ACADEMY · ADMIN V1.4 / Demostración HTML · Datos de ejemplo · Cambios en este navegador</p>
+      <p className="admin-page-footer">NETWISE ACADEMY · ADMIN V1.4</p>
 
       {viewing && (
         <ModalPortal>
@@ -125,6 +148,7 @@ const AdminVentas = () => {
             <div className="admin-field"><label>Curso</label><div>{viewing.courseTitle}</div></div>
             <div className="admin-field"><label>Importe</label><div>S/ {Number(viewing.amount).toFixed(2)}</div></div>
             <div className="admin-field"><label>Método de pago</label><div>{PAYMENT_LABELS[viewing.paymentMethod] || 'No especificado'}</div></div>
+            <div className="admin-field"><label>Cupón</label><div>{viewing.couponCode || (viewing.couponId ? 'Sí (código no registrado)' : 'Sin cupón')}</div></div>
             <div className="admin-field"><label>Fecha</label><div>{new Date(viewing.createdAt).toLocaleString('es-PE')}</div></div>
             <div className="admin-field"><label>Estado</label><div>{(ORDER_STATUS[viewing.status] || ORDER_STATUS.pending).label}</div></div>
 
@@ -151,8 +175,18 @@ const AdminVentas = () => {
             </div>
 
             {viewing.status === 'pending' && (
+              <div className="admin-field">
+                <label>Aula donde se matricula</label>
+                <select value={groupChoice} onChange={(e) => setGroupChoice(e.target.value)}>
+                  <option value="">Sin aula por ahora</option>
+                  {courseGroups(viewing).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+            )}
+
+            {viewing.status === 'pending' && (
               <div className="admin-modal-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
-                <button className="admin-btn-edit" disabled={approvingId === viewing.id} onClick={() => handleApprove(viewing)}>
+                <button className="admin-btn-edit" disabled={approvingId === viewing.id} onClick={() => handleApprove(viewing, groupChoice)}>
                   {approvingId === viewing.id ? <Loader2 size={14} className="spin" /> : <Check size={14} />} Validar pago y matricular
                 </button>
               </div>

@@ -14,6 +14,7 @@ import { APPROVAL } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
 import { attendanceStats } from '../../lib/attendance';
 import { courseRoster } from '../../lib/roster';
+import { SubmissionContent } from '../../components/SubmitDeliverableModal';
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -112,8 +113,12 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
 
   const openReview = (row) => {
     setReviewingUid(row.uid);
-    setGradeDraft(row.submission?.grade ?? '');
-    setFeedbackDraft(row.submission?.feedback || '');
+    // Una reentrega llega con la nota/comentario de la versión anterior (las
+    // reglas no dejan que el alumno los borre): el formulario arranca vacío
+    // para no volver a guardar la nota vieja sin revisar la nueva versión.
+    const isReviewed = row.submission?.status === 'reviewed';
+    setGradeDraft(isReviewed ? (row.submission?.grade ?? '') : '');
+    setFeedbackDraft(isReviewed ? (row.submission?.feedback || '') : '');
   };
 
   const goRelative = (dir) => {
@@ -169,6 +174,11 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
             )}
           </div>
           <div className="admin-panel">
+            {reviewingRow.submission?.status === 'submitted' && reviewingRow.submission?.grade != null && (
+              <p className="admin-panel-caption" style={{ marginTop: 0 }}>
+                Reentrega: la versión anterior tenía {reviewingRow.submission.grade}/20{reviewingRow.submission.feedback ? ` · "${reviewingRow.submission.feedback}"` : ''}. Califica la nueva versión.
+              </p>
+            )}
             <div className="admin-field"><label>Nota (sobre 20)</label><input className="grade-cell-input" style={{ width: '100%' }} type="number" min="0" max="20" value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)} /></div>
             <div className="admin-field"><label>Retroalimentación</label><textarea rows={5} value={feedbackDraft} onChange={(e) => setFeedbackDraft(e.target.value)} placeholder="Qué hizo bien, qué debe mejorar y cuál es su siguiente paso." /></div>
             <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={saveGrade} disabled={saving}><Save size={13} /> {saving ? 'Guardando...' : 'Guardar calificación'}</button>
@@ -272,6 +282,7 @@ const RegistroNotas = ({ course, modules, roster, submissions, attendance, score
         await setCourseScore({ courseId: course.id, uid: student.uid, studentName: student.studentName, key: comp.key, value: n });
       }
       await onGradeSaved();
+      addToast(n === null ? `Nota de ${student.studentName} borrada.` : `Nota de ${student.studentName} guardada: ${n}/20.`, 'success');
       return true;
     } catch {
       addToast('No se pudo guardar la nota. Intenta de nuevo.', 'error');

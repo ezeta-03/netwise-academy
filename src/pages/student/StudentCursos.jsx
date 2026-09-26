@@ -4,7 +4,7 @@ import { Video, ArrowRight, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
-import { fetchMyEnrollments, fetchMyPreregistrations } from '../../lib/db';
+import { fetchMyEnrollments, fetchMyPreregistrations, fetchMyOrders } from '../../lib/db';
 
 const StudentCursos = () => {
   const navigate = useNavigate();
@@ -12,21 +12,32 @@ const StudentCursos = () => {
   const { courses } = useCourseOfferings();
   const [enrollments, setEnrollments] = useState({});
   const [preregisteredIds, setPreregisteredIds] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
-    Promise.all([fetchMyEnrollments(currentUser.uid), fetchMyPreregistrations(currentUser.uid)]).then(([enr, prereg]) => {
+    Promise.all([
+      fetchMyEnrollments(currentUser.uid),
+      fetchMyPreregistrations(currentUser.uid),
+      fetchMyOrders(currentUser.uid).catch(() => []),
+    ]).then(([enr, prereg, orders]) => {
       setEnrollments(enr);
       setPreregisteredIds(prereg);
+      setPendingOrders(orders.filter((o) => o.status === 'pending'));
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [currentUser]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tus cursos...</div>;
 
-  const enrolledCourses = courses.filter((c) => enrollments[c.id]);
-  const preregisteredCourses = courses.filter((c) => preregisteredIds.includes(c.id) && !enrollments[c.id]);
+  const isActive = (c) => enrollments[c.id] && (enrollments[c.id].status || 'active') === 'active';
+  const enrolledCourses = courses.filter(isActive);
+  // Pago enviado y aún sin validar, o matrícula que el admin dejó pendiente.
+  const waitingCourses = courses.filter((c) => !isActive(c) && (
+    enrollments[c.id] || pendingOrders.some((o) => o.courseId?.toString() === c.id.toString())
+  ));
+  const preregisteredCourses = courses.filter((c) => preregisteredIds.includes(c.id) && !enrollments[c.id] && !waitingCourses.includes(c));
 
   return (
     <div className="anim-fade-up d1">
@@ -37,14 +48,30 @@ const StudentCursos = () => {
         </div>
       </div>
 
+      {waitingCourses.length > 0 && (
+        <div className="admin-panel" style={{ marginBottom: 24 }}>
+          {waitingCourses.map((c) => (
+            <div key={c.id} className="dash-list-row">
+              <div>
+                <div className="dash-list-row-title">{c.title}</div>
+                <div className="dash-list-row-sub" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Clock size={13} /> {enrollments[c.id] ? 'Tu matrícula está pendiente de activación.' : 'Estamos validando tu pago -- te damos acceso en cuanto se confirme.'}
+                </div>
+              </div>
+              <span className="admin-status admin-status-amber">En validación</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {enrolledCourses.length === 0 ? (
-        <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B', marginBottom: 24 }}>
-          Todavía no estás inscrito en ningún curso. Explora el <a onClick={() => navigate('/catalog')} style={{ color: 'var(--accent)', cursor: 'pointer' }}>catálogo</a>.
+        waitingCourses.length === 0 && <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B', marginBottom: 24 }}>
+          Todavía no estás inscrito en ningún curso. Explora el <a href="/catalog" onClick={(e) => { e.preventDefault(); navigate('/catalog'); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>catálogo</a>.
         </div>
       ) : (
         <div className="home-courses-grid" style={{ marginBottom: preregisteredCourses.length ? 32 : 0 }}>
           {enrolledCourses.map((c) => (
-            <div className="home-course-card" key={c.id} onClick={() => navigate(`/student/curso/${c.id}`)}>
+            <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => navigate(`/student/curso/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/student/curso/${c.id}`); } }}>
               <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
               <div className="home-course-body">
                 <div className="home-course-meta-row">

@@ -146,7 +146,7 @@ const TeacherInicio = () => {
       </div>
       <div className="home-courses-grid">
         {courses.map((c) => (
-          <div className="home-course-card" key={c.id} onClick={() => navigate(`/teacher/curso/${c.id}`)}>
+          <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => navigate(`/teacher/curso/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/teacher/curso/${c.id}`); } }}>
             <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
             <div className="home-course-body">
               <div className="home-course-meta-row">

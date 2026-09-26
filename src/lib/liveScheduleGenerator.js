@@ -126,9 +126,15 @@ export const buildScheduleLabel = (slots) => {
 // Acepta `slots` (franjas con su propia hora) o el formato anterior
 // (scheduleDays + un único scheduleTime). Si los datos no son válidos
 // devuelve [] en vez de fechas "NaN".
-export const buildRecurringSessions = ({ slots, scheduleDays, scheduleTime, weeksLabel }, firstDate) => {
-  const weeks = parseInt(weeksLabel, 10) || 8;
+// `lastDate` (opcional, "AAAA-MM-DD"): fecha de cierre del aula. Si se da,
+// manda sobre `weeksLabel`: se generan todas las clases entre la fecha de
+// inicio y la de cierre, ambas incluidas.
+export const buildRecurringSessions = ({ slots, scheduleDays, scheduleTime, weeksLabel }, firstDate, lastDate = null) => {
   const baseMs = parseDate(firstDate);
+  const lastMs = lastDate ? parseDate(lastDate) : null;
+  const weeks = lastMs !== null && baseMs !== null && lastMs >= baseMs
+    ? Math.floor((lastMs - baseMs) / (7 * DAY_MS)) + 1
+    : (parseInt(weeksLabel, 10) || 8);
   const resolved = resolveSlots({ slots, scheduleDays, scheduleTime });
   if (baseMs === null || resolved.length === 0) return [];
 
@@ -144,7 +150,7 @@ export const buildRecurringSessions = ({ slots, scheduleDays, scheduleTime, week
       entries.push({ startsAt, durationMin: slot.durationMin, title: `Semana ${week + 1} · ${slot.day}` });
     }
   }
-  return entries;
+  return lastMs !== null && lastDate ? entries.filter((e) => e.startsAt.slice(0, 10) <= lastDate) : entries;
 };
 
 const DAY_WORDS = /(lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bados?|domingos?)/gi;

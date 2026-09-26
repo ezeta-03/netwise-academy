@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchMyEnrollments } from '../../lib/db';
+import { fetchMyActiveEnrollments } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 
 const TABS = [
@@ -36,7 +36,7 @@ const StudentEntregas = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchMyEnrollments(currentUser.uid).then((map) => {
+    fetchMyActiveEnrollments(currentUser.uid).then((map) => {
       setEnrollments(map);
       const enrolled = courses.filter((c) => map[c.id]);
       fetchMyDeliverables(currentUser.uid, enrolled).then((data) => {

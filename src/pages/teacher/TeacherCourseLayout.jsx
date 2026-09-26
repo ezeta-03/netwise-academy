@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu } from 'lucide-react';
+import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu, ListChecks, CalendarClock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -26,6 +26,8 @@ const SUB_NAV = [
   { to: 'materiales', label: 'Materiales', icon: FolderOpen },
   { to: 'proyecto', label: 'Mi proyecto', icon: Target },
   { to: 'evaluacion', label: 'Evaluación', icon: ClipboardCheck },
+  { to: 'rubrica', label: 'Rúbrica', icon: ListChecks },
+  { to: 'cronograma', label: 'Cronograma', icon: CalendarClock },
   { to: 'comunidad', label: 'Comunidad', icon: Users },
   { to: 'grupos', label: 'Grupos de trabajo', icon: UsersRound },
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },

@@ -68,22 +68,34 @@ const StudentCourseLayout = () => {
 
   useEffect(() => {
     if (!currentUser) return;
+    // `cancelled` evita el doble aviso cuando el efecto se ejecuta dos veces
+    // (StrictMode, o un cambio rápido de curso).
+    let cancelled = false;
     Promise.all([fetchGroups(), fetchMyEnrollments(currentUser.uid)]).then(([groups, enrollments]) => {
+      if (cancelled) return;
       const enr = enrollments[courseId] || null;
       // Un curso puede tener varias aulas abiertas a la vez -- usar el
-      // groupId de la matrícula del alumno (si el admin ya se lo asignó) en
-      // vez de tomar la primera aula que coincida por curso, que le mostraba
-      // el horario/grupo equivocado apenas había más de un aula.
-      setGroup(groups.find((g) => g.id === enr?.groupId) || groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
-      setEnrollment(enr);
+      // groupId de la matrícula del alumno (si el admin ya se lo asignó). Sin
+      // groupId solo se asume el aula si el curso tiene una sola; con varias
+      // se mostraría el horario/grupo equivocado.
+      const courseGroups = groups.filter((g) => g.courseId?.toString() === courseId?.toString());
+      setGroup(groups.find((g) => g.id === enr?.groupId) || (courseGroups.length === 1 ? courseGroups[0] : null));
+      // Una matrícula 'pending' (pago o alta aún sin confirmar) todavía no da acceso.
+      const active = enr && (enr.status || 'active') === 'active';
+      setEnrollment(active ? enr : null);
       setLoading(false);
-      // Sin matrícula en este curso no hay nada que ver: se vuelve a "Cursos"
-      // en vez de mostrar el curso vacío (o el de otro alumno) por URL directa.
-      if (!enr) {
-        addToast('No estás inscrito en este curso.', 'warning');
+      // Sin matrícula activa en este curso no hay nada que ver: se vuelve a
+      // "Cursos" en vez de mostrar el curso vacío por URL directa.
+      if (!active) {
+        addToast(enr ? 'Tu matrícula en este curso todavía está pendiente de activación.' : 'No estás inscrito en este curso.', 'warning');
         navigate('/student/cursos', { replace: true });
       }
+    }).catch(() => {
+      if (cancelled) return;
+      addToast('No se pudo cargar el curso. Intenta de nuevo.', 'error');
+      navigate('/student/cursos', { replace: true });
     });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, currentUser]);
 
