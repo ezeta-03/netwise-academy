@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:emu": "vite --mode emulator --port 5174",
+    "emulators": "firebase emulators:start --project demo-netwise --export-on-exit=./.emulator-data",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

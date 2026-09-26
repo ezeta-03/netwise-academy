@@ -3,9 +3,19 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
+// En modo emulador (pruebas locales) se quita Google Tag Manager para que las
+// pruebas no ensucien GA4.
+const stripGtm = (mode) => ({
+  name: 'strip-gtm-in-emulator',
+  transformIndexHtml: (html) => mode === 'emulator'
+    ? html.replace(/<!-- Google Tag Manager[\s\S]*?<!-- End Google Tag Manager[^>]*-->/g, '')
+    : html,
+})
+
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    stripGtm(mode),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
@@ -29,4 +39,4 @@ export default defineConfig({
       },
     }),
   ],
-})
+}))
