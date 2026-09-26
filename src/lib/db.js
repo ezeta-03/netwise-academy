@@ -161,6 +161,28 @@ export const updateUserRole = async (uid, role) => {
   await setDoc(doc(db, 'users', uid), { role }, { merge: true });
 };
 
+// Tutoriales ya vistos por el usuario (`users/{uid}.toursSeen.<clave>` =
+// fecha). Se guarda en el perfil para que no reaparezca en otro dispositivo;
+// localStorage es solo una copia rápida para no parpadear al cargar.
+const tourCacheKey = (uid, key) => `nw_tour_${key}_${uid}`;
+
+export const hasSeenTour = async (uid, key) => {
+  try {
+    if (localStorage.getItem(tourCacheKey(uid, key))) return true;
+  } catch { /* almacenamiento bloqueado: se consulta Firestore */ }
+  if (!isConfigValid) return false;
+  const snap = await getDoc(doc(db, 'users', uid));
+  const seen = !!snap.data()?.toursSeen?.[key];
+  if (seen) { try { localStorage.setItem(tourCacheKey(uid, key), '1'); } catch { /* sin caché */ } }
+  return seen;
+};
+
+export const markTourSeen = async (uid, key) => {
+  try { localStorage.setItem(tourCacheKey(uid, key), '1'); } catch { /* sin caché */ }
+  if (!isConfigValid) return;
+  await setDoc(doc(db, 'users', uid), { toursSeen: { [key]: new Date().toISOString() } }, { merge: true });
+};
+
 // Bloquea/desbloquea el acceso de una cuenta (ver AuthContext: si
 // `disabled` es true, se cierra su sesión apenas inicia y no puede volver a
 // entrar mientras siga así). No borra nada -- es la forma real de "dar de

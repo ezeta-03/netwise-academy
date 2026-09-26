@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu } from 'lucide-react';
+import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
-import { fetchGroups, fetchMyEnrollments } from '../../lib/db';
+import { fetchGroups, fetchMyEnrollments, hasSeenTour, markTourSeen } from '../../lib/db';
+import CourseTour from '../../components/CourseTour';
+import { COURSE_TOUR_KEY, buildCourseTourSteps } from '../../lib/courseTourSteps';
 import SidebarLogo from '../../components/SidebarLogo';
 
 // Mismos enlaces que StudentLayout.jsx -- este sidebar de curso lo reemplaza
@@ -52,6 +54,8 @@ const StudentCourseLayout = () => {
   const [group, setGroup] = useState(null);
   const [enrollment, setEnrollment] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [tourOpen, setTourOpen] = useState(false);
+  const helpBtnRef = useRef(null);
 
   // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
   const handleCollapseClick = () => {
@@ -99,6 +103,30 @@ const StudentCourseLayout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, currentUser]);
 
+  // Recorrido guiado: se abre solo la primera vez que el alumno entra a un
+  // aula (en cualquier curso); después queda en el botón "Ver tutorial".
+  useEffect(() => {
+    if (!currentUser || !enrollment) return;
+    let cancelled = false;
+    hasSeenTour(currentUser.uid, COURSE_TOUR_KEY)
+      .then((seen) => { if (!cancelled && !seen) setTourOpen(true); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUser, enrollment]);
+
+  const closeTour = useCallback((reason) => {
+    setTourOpen(false);
+    setMobileOpen(false);
+    markTourSeen(currentUser.uid, COURSE_TOUR_KEY).catch(() => {});
+    if (reason === 'skipped') addToast('Puedes ver el tutorial cuando quieras desde "Ver tutorial".', 'info');
+    helpBtnRef.current?.focus();
+  }, [currentUser, addToast]);
+
+  // En el teléfono el menú lateral es un cajón: se abre para los pasos que lo resaltan.
+  const prepareTourStep = useCallback((step) => {
+    if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(!!step.inSidebar);
+  }, []);
+
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
 
@@ -132,6 +160,7 @@ const StudentCourseLayout = () => {
           <ArrowLeft size={14} /> <span className="admin-nav-label">Todos mis cursos</span>
         </button>
 
+        <div data-tour="course-context">
         <div className="dash-course-context">
           <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} />
           <div className="admin-nav-label">
@@ -145,12 +174,13 @@ const StudentCourseLayout = () => {
             <div className="dash-mini-progress-track"><div className="dash-mini-progress-fill" style={{ width: `${enrollment?.progress || 0}%` }}></div></div>
           </div>
         </div>
+        </div>
 
         <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
           {SUB_NAV.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink key={item.to} to={item.to} data-tour={`nav-${item.to}`} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
                 <Icon size={17} />
                 <span className="admin-nav-label">{item.label}</span>
               </NavLink>
@@ -173,7 +203,10 @@ const StudentCourseLayout = () => {
             <span className="admin-breadcrumb-link" onClick={() => navigate('/student/cursos')}>Mis cursos</span> / <span className="admin-breadcrumb-link" onClick={() => navigate(`/student/curso/${course.id}`)}>{course.title}</span> / <strong>{currentLabel}</strong>
           </div>
           <div className="admin-topbar-right">
-            <button className="admin-topbar-bell" title="Notificaciones" onClick={toggleSidebar}>
+            <button ref={helpBtnRef} type="button" className="tour-help-btn" data-tour="tour-help" onClick={() => setTourOpen(true)} title="Ver el tutorial del aula" aria-label="Ver el tutorial del aula">
+              <HelpCircle size={16} /> <span className="tour-help-label">Ver tutorial</span>
+            </button>
+            <button className="admin-topbar-bell" data-tour="notifications" title="Notificaciones" aria-label="Notificaciones" onClick={toggleSidebar}>
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
@@ -186,6 +219,8 @@ const StudentCourseLayout = () => {
           <Outlet context={{ course, group, enrollment }} />
         </div>
       </div>
+
+      {tourOpen && <CourseTour steps={buildCourseTourSteps(course)} onClose={closeTour} onBeforeStep={prepareTourStep} />}
     </div>
   );
 };
