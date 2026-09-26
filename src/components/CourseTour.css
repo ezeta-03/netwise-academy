@@ -1,32 +1,52 @@
-/* Recorrido guiado del aula (CourseTour.jsx). Mismo lenguaje visual que los
-   paneles del aula: tarjeta blanca, texto #14141F, acento violeta. */
-.tour-root { position: fixed; inset: 0; z-index: 3000; }
+/* Recorrido guiado del estudiante (CourseTour.jsx). Mismo lenguaje visual que
+   los paneles de la plataforma: tarjeta blanca, texto #14141F, acento violeta. */
+.tour-root {
+  position: fixed; inset: 0; z-index: 3000;
+  --tour-ease: cubic-bezier(.22, 1, .36, 1);
+  --tour-move: .55s;
+}
 
-.tour-backdrop { position: fixed; inset: 0; }
-.tour-backdrop-dim { background: rgba(10, 8, 24, .62); }
+.tour-backdrop { position: fixed; inset: 0; animation: tourFade .4s ease both; }
+.tour-backdrop-dim { background: rgba(10, 8, 24, .62); transition: background .4s ease; }
 
-/* El recorte iluminado: la sombra gigante oscurece todo lo demás. */
+/* El recorte iluminado: la sombra gigante oscurece todo lo demás. Se desliza
+   suavemente de un elemento al siguiente y "respira" mientras está quieto. */
 .tour-spotlight {
   position: fixed; border-radius: 12px; pointer-events: none;
   box-shadow: 0 0 0 9999px rgba(10, 8, 24, .62), 0 0 0 3px var(--accent), 0 0 24px 4px rgba(125, 51, 255, .55);
-  transition: top .28s ease, left .28s ease, width .28s ease, height .28s ease;
+  transition: top var(--tour-move) var(--tour-ease), left var(--tour-move) var(--tour-ease),
+    width var(--tour-move) var(--tour-ease), height var(--tour-move) var(--tour-ease);
+  animation: tourFade .4s ease both, tourGlow 2.4s ease-in-out .6s infinite;
+}
+
+/* Anillo secundario: la opción del menú de la página que se está mostrando. */
+.tour-ring {
+  position: fixed; border-radius: 10px; pointer-events: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--accent), 0 0 18px 2px rgba(125, 51, 255, .6);
+  transition: top var(--tour-move) var(--tour-ease), left var(--tour-move) var(--tour-ease),
+    width var(--tour-move) var(--tour-ease), height var(--tour-move) var(--tour-ease);
+  animation: tourPop .45s var(--tour-ease) both;
 }
 
 .tour-card {
   position: fixed; width: 340px; max-width: calc(100vw - 24px);
   background: #fff; color: #14141F; border-radius: 16px; padding: 18px 20px 16px;
   box-shadow: 0 24px 60px rgba(10, 8, 24, .35); outline: none;
-  transition: top .28s ease, left .28s ease;
-  animation: tourIn .22s ease;
+  transition: top var(--tour-move) var(--tour-ease), left var(--tour-move) var(--tour-ease);
+  animation: tourCardIn .45s var(--tour-ease) both;
 }
 .tour-card:focus-visible { box-shadow: 0 24px 60px rgba(10, 8, 24, .35), 0 0 0 3px rgba(125, 51, 255, .45); }
-.tour-card-centered { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; }
+.tour-card-centered { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; animation-name: tourCardInCentered; }
 
-.tour-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+/* El contenido de cada paso entra deslizándose (se re-monta por paso). */
+.tour-card-content { animation: tourStepIn .4s var(--tour-ease) both; }
+
+.tour-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .tour-step-count { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
 .tour-skip {
-  display: inline-flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; background: none; border: none; cursor: pointer; flex-shrink: 0;
   font: inherit; font-size: .8rem; color: #8B8A9B; padding: 4px 6px; border-radius: 6px;
+  transition: color .2s, background .2s;
 }
 .tour-skip:hover { color: #14141F; background: #F3F2F8; }
 
@@ -34,16 +54,20 @@
 .tour-icon {
   display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
   width: 32px; height: 32px; border-radius: 9px; background: var(--accent-bg); color: var(--accent);
+  animation: tourPop .5s var(--tour-ease) .05s both;
 }
 .tour-title { font-size: 1.05rem; font-weight: 700; line-height: 1.3; margin: 0; color: #14141F; }
 
 .tour-body { font-size: .88rem; line-height: 1.55; color: #4A4860; }
 .tour-body p { margin: 0 0 8px; }
 .tour-body ul { margin: 0 0 4px; padding-left: 18px; }
-.tour-body li { margin-bottom: 3px; }
+.tour-body li { margin-bottom: 3px; animation: tourStepIn .4s var(--tour-ease) both; }
+.tour-body li:nth-child(2) { animation-delay: .05s; }
+.tour-body li:nth-child(3) { animation-delay: .1s; }
+.tour-body li:nth-child(4) { animation-delay: .15s; }
 
-.tour-progress { display: flex; gap: 5px; margin: 14px 0; }
-.tour-progress span { height: 4px; flex: 1; border-radius: 2px; background: #ECEAF3; transition: background .2s; }
+.tour-progress { display: flex; gap: 4px; margin: 14px 0; }
+.tour-progress span { height: 4px; flex: 1; border-radius: 2px; background: #ECEAF3; transition: background .4s ease; }
 .tour-progress span.done { background: rgba(125, 51, 255, .4); }
 .tour-progress span.active { background: var(--accent); }
 
@@ -51,7 +75,9 @@
 .tour-btn-primary, .tour-btn-ghost {
   display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .85rem; font-weight: 600;
   border-radius: 9px; padding: 9px 14px; cursor: pointer; min-height: 38px;
+  transition: filter .2s, background .2s, transform .2s var(--tour-ease);
 }
+.tour-btn-primary:active, .tour-btn-ghost:active { transform: scale(.97); }
 .tour-btn-primary { background: var(--accent); color: #fff; border: none; }
 .tour-btn-primary:hover { filter: brightness(1.08); }
 .tour-btn-ghost { background: #fff; color: #14141F; border: 1px solid #ECEAF3; }
@@ -61,20 +87,32 @@
    opciones: al llevar un paso a la vista, dejar ese espacio libre. */
 .admin-sidebar [data-tour] { scroll-margin-bottom: 96px; scroll-margin-top: 12px; }
 
-/* Botón fijo "Ver tutorial" de la barra superior del aula. */
+/* Botón fijo "Ver tutorial" de la barra superior. */
 .tour-help-btn {
   display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .82rem; font-weight: 600;
   color: var(--accent); background: var(--accent-bg); border: none; border-radius: 999px;
-  padding: 7px 12px; cursor: pointer;
+  padding: 7px 12px; cursor: pointer; transition: background .2s;
 }
 .tour-help-btn:hover { background: rgba(125, 51, 255, .2); }
 
-@keyframes tourIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tourFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tourCardIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes tourCardInCentered {
+  from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(.97); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
+}
+@keyframes tourStepIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes tourPop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+@keyframes tourGlow {
+  0%, 100% { box-shadow: 0 0 0 9999px rgba(10, 8, 24, .62), 0 0 0 3px var(--accent), 0 0 18px 2px rgba(125, 51, 255, .45); }
+  50% { box-shadow: 0 0 0 9999px rgba(10, 8, 24, .62), 0 0 0 3px var(--accent), 0 0 30px 8px rgba(125, 51, 255, .65); }
+}
 
 /* Teléfono: la tarjeta queda anclada abajo, a lo ancho, para no tapar el menú. */
 @media (max-width: 640px) {
   .tour-card, .tour-card-centered {
     top: auto; left: 12px; right: 12px; bottom: 12px; width: auto; transform: none;
+    animation-name: tourCardIn;
   }
   .tour-help-btn .tour-help-label { display: none; }
   /* Si lo resaltado queda en la parte baja, la tarjeta sube para no taparlo. */
@@ -83,5 +121,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tour-spotlight, .tour-card { transition: none; animation: none; }
+  .tour-root *, .tour-backdrop { transition: none !important; animation: none !important; }
 }

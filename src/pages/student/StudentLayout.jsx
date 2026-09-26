@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, LogOut, Menu } from 'lucide-react';
+import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, LogOut, Menu, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchMyActiveEnrollments } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import SidebarLogo from '../../components/SidebarLogo';
+import { useStudentTour } from '../../context/StudentTourContext';
 
 const NAV_ITEMS = [
   { to: '/student/inicio', label: 'Inicio', icon: Home },
@@ -37,6 +38,11 @@ const StudentLayout = () => {
   const { toggleSidebar, unreadCount } = useUI();
   const { courses } = useCourseOfferings();
   const [pendingCount, setPendingCount] = useState(0);
+  const { startTour, sidebarRequest } = useStudentTour();
+
+  // Mientras el tutorial está abierto, él decide si el menú lateral del
+  // teléfono se ve (null = sin tutorial, manda el estado propio).
+  const drawerOpen = sidebarRequest ?? mobileOpen;
 
   const currentLabel = PAGE_LABELS[location.pathname] || 'Mi campus';
 
@@ -63,8 +69,8 @@ const StudentLayout = () => {
 
   return (
     <div className="admin-shell">
-      <div className={`overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
-      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div className={`overlay ${drawerOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
+      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${drawerOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
           <SidebarLogo />
           <button className="admin-sidebar-collapse-btn" onClick={handleCollapseClick} title={collapsed ? 'Expandir' : 'Colapsar'}>
@@ -76,7 +82,7 @@ const StudentLayout = () => {
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             return (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
+              <NavLink key={item.to} to={item.to} data-tour={`nav-${item.to}`} className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}>
                 <Icon size={17} />
                 <span className="admin-nav-label">{item.label}</span>
                 {item.to === '/student/entregas' && pendingCount > 0 && (
@@ -100,7 +106,10 @@ const StudentLayout = () => {
           <button className="admin-sidebar-mobile-toggle" title="Menú" onClick={() => setMobileOpen(true)}><Menu size={18} /></button>
           <div className="admin-breadcrumb"><span className="admin-breadcrumb-link" onClick={() => navigate('/student/inicio')}>Mi campus</span> / <strong>{currentLabel}</strong></div>
           <div className="admin-topbar-right">
-            <button className="admin-topbar-bell" title="Notificaciones" onClick={toggleSidebar}>
+            <button type="button" className="tour-help-btn" data-tour="tour-help" onClick={() => startTour()} title="Ver el tutorial" aria-label="Ver el tutorial">
+              <HelpCircle size={16} /> <span className="tour-help-label">Ver tutorial</span>
+            </button>
+            <button className="admin-topbar-bell" data-tour="notifications" title="Notificaciones" aria-label="Notificaciones" onClick={toggleSidebar}>
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
@@ -111,7 +120,7 @@ const StudentLayout = () => {
           </div>
         </div>
 
-        <div className="admin-content">
+        <div className="admin-content" data-tour="page">
           <Outlet />
         </div>
       </div>

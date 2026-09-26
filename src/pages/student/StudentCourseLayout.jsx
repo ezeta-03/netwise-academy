@@ -1,13 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
-import { fetchGroups, fetchMyEnrollments, hasSeenTour, markTourSeen } from '../../lib/db';
-import CourseTour from '../../components/CourseTour';
-import { COURSE_TOUR_KEY, buildCourseTourSteps } from '../../lib/courseTourSteps';
+import { fetchGroups, fetchMyEnrollments } from '../../lib/db';
+import { useStudentTour } from '../../context/StudentTourContext';
+import { COURSE_TOUR_START } from '../../lib/studentTourSteps';
 import SidebarLogo from '../../components/SidebarLogo';
 
 // Mismos enlaces que StudentLayout.jsx -- este sidebar de curso lo reemplaza
@@ -54,8 +54,7 @@ const StudentCourseLayout = () => {
   const [group, setGroup] = useState(null);
   const [enrollment, setEnrollment] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tourOpen, setTourOpen] = useState(false);
-  const helpBtnRef = useRef(null);
+  const { startTour, sidebarRequest } = useStudentTour();
 
   // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
   const handleCollapseClick = () => {
@@ -103,29 +102,9 @@ const StudentCourseLayout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, currentUser]);
 
-  // Recorrido guiado: se abre solo la primera vez que el alumno entra a un
-  // aula (en cualquier curso); después queda en el botón "Ver tutorial".
-  useEffect(() => {
-    if (!currentUser || !enrollment) return;
-    let cancelled = false;
-    hasSeenTour(currentUser.uid, COURSE_TOUR_KEY)
-      .then((seen) => { if (!cancelled && !seen) setTourOpen(true); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [currentUser, enrollment]);
-
-  const closeTour = useCallback((reason) => {
-    setTourOpen(false);
-    setMobileOpen(false);
-    markTourSeen(currentUser.uid, COURSE_TOUR_KEY).catch(() => {});
-    if (reason === 'skipped') addToast('Puedes ver el tutorial cuando quieras desde "Ver tutorial".', 'info');
-    helpBtnRef.current?.focus();
-  }, [currentUser, addToast]);
-
-  // En el teléfono el menú lateral es un cajón: se abre para los pasos que lo resaltan.
-  const prepareTourStep = useCallback((step) => {
-    if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(!!step.inSidebar);
-  }, []);
+  // Mientras el tutorial está abierto, él decide si el menú lateral del
+  // teléfono se ve (null = sin tutorial, manda el estado propio).
+  const drawerOpen = sidebarRequest ?? mobileOpen;
 
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
@@ -134,8 +113,8 @@ const StudentCourseLayout = () => {
 
   return (
     <div className="admin-shell">
-      <div className={`overlay ${mobileOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
-      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
+      <div className={`overlay ${drawerOpen ? 'active' : ''}`} onClick={() => setMobileOpen(false)}></div>
+      <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''} ${drawerOpen ? 'mobile-open' : ''}`}>
         <div className="admin-sidebar-header">
           <SidebarLogo />
           <button className="admin-sidebar-collapse-btn" onClick={handleCollapseClick}><ChevronLeft size={16} /></button>
@@ -146,7 +125,7 @@ const StudentCourseLayout = () => {
             const Icon = item.icon;
             const isCursos = item.to === '/student/cursos';
             return (
-              <NavLink key={item.to} to={item.to} className={() => `admin-nav-link ${isCursos ? 'active' : ''}`}>
+              <NavLink key={item.to} to={item.to} data-tour={`nav-${item.to}`} className={() => `admin-nav-link ${isCursos ? 'active' : ''}`}>
                 <Icon size={17} />
                 <span className="admin-nav-label">{item.label}</span>
               </NavLink>
@@ -203,7 +182,7 @@ const StudentCourseLayout = () => {
             <span className="admin-breadcrumb-link" onClick={() => navigate('/student/cursos')}>Mis cursos</span> / <span className="admin-breadcrumb-link" onClick={() => navigate(`/student/curso/${course.id}`)}>{course.title}</span> / <strong>{currentLabel}</strong>
           </div>
           <div className="admin-topbar-right">
-            <button ref={helpBtnRef} type="button" className="tour-help-btn" data-tour="tour-help" onClick={() => setTourOpen(true)} title="Ver el tutorial del aula" aria-label="Ver el tutorial del aula">
+            <button type="button" className="tour-help-btn" data-tour="tour-help" onClick={() => startTour(COURSE_TOUR_START)} title="Ver el tutorial" aria-label="Ver el tutorial">
               <HelpCircle size={16} /> <span className="tour-help-label">Ver tutorial</span>
             </button>
             <button className="admin-topbar-bell" data-tour="notifications" title="Notificaciones" aria-label="Notificaciones" onClick={toggleSidebar}>
@@ -215,12 +194,10 @@ const StudentCourseLayout = () => {
           </div>
         </div>
 
-        <div className="admin-content">
+        <div className="admin-content" data-tour="page">
           <Outlet context={{ course, group, enrollment }} />
         </div>
       </div>
-
-      {tourOpen && <CourseTour steps={buildCourseTourSteps(course)} onClose={closeTour} onBeforeStep={prepareTourStep} />}
     </div>
   );
 };

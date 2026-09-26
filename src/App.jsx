@@ -5,6 +5,7 @@ import WhatsAppButton from './components/WhatsAppButton';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UIProvider } from './context/UIContext';
 import { CourseOfferingsProvider } from './context/CourseOfferingsContext';
+import { StudentTourProvider } from './context/StudentTourContext';
 
 // Pages
 import Home from './pages/Home';
@@ -124,6 +125,7 @@ function App() {
     <CourseOfferingsProvider>
     <AuthProvider>
       <UIProvider>
+      <StudentTourProvider>
           <ScrollToTop />
           {/* Navbar hides itself on login/player routes internally via useLocation */}
           <Navbar />
@@ -205,6 +207,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </div>
+      </StudentTourProvider>
       </UIProvider>
     </AuthProvider>
     </CourseOfferingsProvider>

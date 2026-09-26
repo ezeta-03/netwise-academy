@@ -25,13 +25,18 @@ const NAV_ITEMS = [
 
 const EvalSidePanel = ({ vista, setVista, summary }) => (
   <>
-    <div className="admin-panel" style={{ marginBottom: 20 }}>
+    <div className="admin-panel" style={{ marginBottom: 20 }} data-tour="eval-nav">
       <div className="admin-panel-head"><span className="admin-panel-title">Mi evaluación</span></div>
       <div className="eval-nav-card">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
-            <div key={item.key} className={`eval-nav-row ${vista === item.key ? 'active' : ''}`} onClick={() => setVista(item.key)}>
+            <div
+              key={item.key} data-tour={`eval-${item.key}`} className={`eval-nav-row ${vista === item.key ? 'active' : ''}`}
+              role="button" tabIndex={0} aria-pressed={vista === item.key}
+              onClick={() => setVista(item.key)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setVista(item.key); } }}
+            >
               <div className="eval-nav-row-icon"><Icon size={15} /></div>
               <div><div className="eval-nav-row-title">{item.label}</div><div className="eval-nav-row-sub">{item.sub}</div></div>
             </div>
@@ -39,7 +44,7 @@ const EvalSidePanel = ({ vista, setVista, summary }) => (
         })}
       </div>
     </div>
-    <div className="admin-panel">
+    <div className="admin-panel" data-tour="eval-resumen">
       <div className="admin-panel-head"><span className="admin-panel-title">Mi resumen</span></div>
       <div className="dash-profile-stats" style={{ gridTemplateColumns: '1fr', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
@@ -282,7 +287,7 @@ const StudentCourseEvaluacion = () => {
 
   return (
     <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
-      <div>
+      <div data-tour="eval-main">
         {vista === 'entregas' && <EntregasNotas course={course} group={group} modules={modules} submissions={submissions} scores={scores[0]?.scores} onSubmitted={load} />}
         {vista === 'notas' && <MisNotas course={course} modules={modules} submissions={submissions} attendance={attendance} scores={scores[0]?.scores} />}
         {vista === 'asistencia' && <MiAsistencia course={course} modules={modules} attendance={attendance} />}
