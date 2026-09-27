@@ -119,7 +119,7 @@ const Masterclass = () => {
 
   return (
     <div className="mcl" ref={pageRef}>
-      <div className="mcl-promo"><p><b>Promociones y descuentos</b> disponibles <b>hasta el 30/09</b></p></div>
+      <div className="mcl-promo"><p><b>Promociones y descuentos</b> disponibles <b>hasta el 16/10</b></p></div>
 
       <header className="mcl-hero" ref={heroRef} aria-roledescription="carrusel" aria-label="Masterclass destacadas" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div className="mcl-hero-bgs" ref={bgsRef} aria-hidden="true">

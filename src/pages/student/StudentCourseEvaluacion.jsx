@@ -75,8 +75,8 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   const proxima = withDeliverable.filter((m) => dueOf(m) && !subFor(m.id)).sort((a, b) => new Date(dueOf(a)) - new Date(dueOf(b)))[0];
 
-  const statusBadge = (sub) => {
-    if (sub?.status === 'reviewed') return { label: 'Calificado', cls: 'admin-status-green' };
+  const statusBadge = (sub, graded) => {
+    if (sub?.status === 'reviewed') return { label: graded ? 'Calificado' : 'Revisado', cls: 'admin-status-green' };
     if (sub?.status === 'submitted') return { label: 'En revisión', cls: 'admin-status-gray' };
     return { label: 'Por entregar', cls: 'admin-status-amber' };
   };
@@ -94,7 +94,8 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
       <div className="dash-eyebrow" style={{ marginBottom: 8 }}>Tus entregables</div>
       {withDeliverable.length === 0 ? <p className="admin-panel-caption">Todavía no hay entregables publicados.</p> : withDeliverable.map((m) => {
         const sub = subFor(m.id);
-        const badge = statusBadge(sub);
+        const graded = m.deliverable.graded !== false;
+        const badge = statusBadge(sub, graded);
         return (
           <div key={m.id} className="admin-panel" style={{ marginBottom: 14 }}>
             <div className="admin-panel-head">
@@ -105,7 +106,9 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className={`admin-status ${badge.cls}`}>{badge.label}</span>
                 {/* Tras una reentrega la nota anterior ya no cuenta: solo se muestra si está revisada. */}
-                <strong>{sub?.status === 'reviewed' ? (sub.grade ?? '—') : '—'}/20</strong>
+                {graded
+                  ? <strong>{sub?.status === 'reviewed' ? (sub.grade ?? '—') : '—'}/20</strong>
+                  : <span className="admin-status admin-status-gray" title="Entregable de práctica: no cuenta en tu promedio">Sin nota</span>}
               </div>
             </div>
             <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 2 }}>Qué debes entregar</p>
@@ -120,10 +123,10 @@ const EntregasNotas = ({ course, group, modules, submissions, scores, onSubmitte
             <p style={{ fontSize: '.82rem', fontWeight: 700, color: '#14141F', marginBottom: 2 }}>Retroalimentación del docente</p>
             <p className="admin-cell-sub" style={{ marginBottom: 0 }}>
               {!sub
-                ? 'Cuando presentes tu entrega, aquí verás tu nota y los comentarios de tu docente.'
+                ? (graded ? 'Cuando presentes tu entrega, aquí verás tu nota y los comentarios de tu docente.' : 'Entregable de práctica: no lleva nota, pero tu docente lo revisará y te dejará comentarios.')
                 : sub.status === 'reviewed'
-                  ? (sub.feedback || 'Tu docente calificó la entrega sin dejar comentarios.')
-                  : 'Tu docente está revisando esta versión. Aquí verás tu nota y sus comentarios.'}
+                  ? (sub.feedback || (graded ? 'Tu docente calificó la entrega sin dejar comentarios.' : 'Tu docente revisó la entrega sin dejar comentarios.'))
+                  : graded ? 'Tu docente está revisando esta versión. Aquí verás tu nota y sus comentarios.' : 'Tu docente está revisando esta versión. Aquí verás sus comentarios.'}
             </p>
           </div>
         );

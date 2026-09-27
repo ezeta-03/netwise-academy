@@ -26,7 +26,7 @@ const DownloadProgramModal = ({ course, onClose, onDownload }) => {
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal admin-modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head">
             <div />

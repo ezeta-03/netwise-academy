@@ -5,8 +5,15 @@
 
 const round2 = (n) => Math.round(n * 100) / 100;
 
-// Solo los módulos con un entregable definido cuentan para notas y pesos.
-export const deliverableModules = (modules) => (modules || []).filter((m) => m.deliverable?.description);
+// Un entregable puede ser solo de práctica (`deliverable.graded === false`):
+// se presenta y el docente lo revisa con retroalimentación, pero no lleva nota.
+export const isGradedDeliverable = (m) => !!m?.deliverable?.description && m.deliverable.graded !== false;
+
+// Todos los módulos con entregable (calificable o no) -- para listar entregas.
+export const allDeliverableModules = (modules) => (modules || []).filter((m) => m.deliverable?.description);
+
+// Solo los entregables calificables cuentan para notas y pesos.
+export const deliverableModules = (modules) => (modules || []).filter(isGradedDeliverable);
 
 export const equalWeight = (count) => (count > 0 ? round2(100 / count) : 0);
 

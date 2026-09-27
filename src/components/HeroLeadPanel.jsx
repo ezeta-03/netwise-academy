@@ -48,6 +48,7 @@ const HeroLeadPanel = ({ courses }) => {
 
   return (
     <div className="home-lead-panel">
+      <span className="home-lead-glow" aria-hidden="true" />
       <h3 className="home-lead-panel-title">Da el siguiente paso</h3>
       <p className="home-lead-panel-sub">Cuéntanos qué quieres aprender.</p>
 

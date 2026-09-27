@@ -55,14 +55,14 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
         await logChange(adminName, `Actualizó el acceso de ${studentName} a "${course?.title}".`);
         addToast('Acceso actualizado.', 'success');
       } else {
-        await adminCreateEnrollment({
+        const created = await adminCreateEnrollment({
           uid: selectedUid || undefined,
           studentName: studentName.trim(), studentEmail: studentEmail.trim(),
           courseId: course?.id ?? courseId, courseTitle: course?.title || '', groupId: group?.id, groupName: group?.name,
           status, reason,
         });
         await logChange(adminName, `Matriculó a ${studentName} en "${course?.title}".`);
-        addToast('Matrícula creada.', 'success');
+        addToast(created?.groupName ? `Matrícula creada en el aula ${created.groupName}.` : 'Matrícula creada.', 'success');
       }
       onSaved();
       onClose();
@@ -75,7 +75,7 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div className="admin-modal-title">{isEdit ? 'Editar acceso' : 'Nueva matrícula'}</div>
@@ -110,7 +110,7 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
           <div className="admin-field">
             <label>Grupo</label>
             <select value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-              <option value="">Sin asignar</option>
+              <option value="">{isEdit ? 'Sin asignar' : 'Automática (próxima aula con cupos)'}</option>
               {courseGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </div>

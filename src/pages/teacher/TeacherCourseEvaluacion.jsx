@@ -8,7 +8,7 @@ import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore } from '../../lib/db';
 import { computeGradeSummary } from '../../lib/gradebook';
 import { getGradingModel, buildStudentRows, effectiveModuleWeights } from '../../lib/gradingScheme';
-import { deliverableModules } from '../../lib/weights';
+import { allDeliverableModules } from '../../lib/weights';
 import { downloadCsv as downloadCsvFile } from '../../lib/csv';
 import { APPROVAL } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
@@ -126,9 +126,11 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
     if (next) openReview(next);
   };
 
+  const isGraded = module.deliverable?.graded !== false;
+
   const saveGrade = async () => {
-    const grade = Number(gradeDraft);
-    if (gradeDraft === '' || !Number.isFinite(grade) || grade < 0 || grade > 20) {
+    const grade = isGraded ? Number(gradeDraft) : null;
+    if (isGraded && (gradeDraft === '' || !Number.isFinite(grade) || grade < 0 || grade > 20)) {
       addToast('Ingresa una nota entre 0 y 20 para dejar la entrega revisada.', 'error');
       return;
     }
@@ -140,7 +142,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
         deliverableTitle: module.deliverable?.description || module.title,
         status: 'reviewed', grade, feedback: feedbackDraft,
       });
-      addToast(`Calificación guardada para ${reviewingRow.studentName}.`, 'success');
+      addToast(isGraded ? `Calificación guardada para ${reviewingRow.studentName}.` : `Revisión guardada para ${reviewingRow.studentName}.`, 'success');
       await onReloadSubmissions();
     } catch {
       addToast('No se pudo guardar la calificación. Intenta de nuevo.', 'error');
@@ -179,9 +181,13 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
                 Reentrega: la versión anterior tenía {reviewingRow.submission.grade}/20{reviewingRow.submission.feedback ? ` · "${reviewingRow.submission.feedback}"` : ''}. Califica la nueva versión.
               </p>
             )}
-            <div className="admin-field"><label>Nota (sobre 20)</label><input className="grade-cell-input" style={{ width: '100%' }} type="number" min="0" max="20" value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)} /></div>
+            {isGraded ? (
+              <div className="admin-field"><label>Nota (sobre 20)</label><input className="grade-cell-input" style={{ width: '100%' }} type="number" min="0" max="20" value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)} /></div>
+            ) : (
+              <p className="dash-notice" style={{ marginTop: 0 }}>Este entregable no lleva nota: deja tu retroalimentación y márcalo como revisado.</p>
+            )}
             <div className="admin-field"><label>Retroalimentación</label><textarea rows={5} value={feedbackDraft} onChange={(e) => setFeedbackDraft(e.target.value)} placeholder="Qué hizo bien, qué debe mejorar y cuál es su siguiente paso." /></div>
-            <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={saveGrade} disabled={saving}><Save size={13} /> {saving ? 'Guardando...' : 'Guardar calificación'}</button>
+            <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={saveGrade} disabled={saving}><Save size={13} /> {saving ? 'Guardando...' : isGraded ? 'Guardar calificación' : 'Marcar como revisado'}</button>
           </div>
         </div>
       </div>
@@ -195,7 +201,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
       <div className="admin-toolbar" style={{ gap: 8, marginBottom: 16 }}>
         {withDeliverable.map((m, i) => (
           <button key={m.id} className="admin-btn-ghost" style={m.id === module.id ? { background: 'var(--accent-bg)', color: 'var(--accent)', borderColor: 'transparent' } : undefined} onClick={() => setModuleId(m.id)}>
-            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{effectiveModuleWeights(course.id, modules)[m.id]}%</span>
+            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{m.deliverable?.graded === false ? 'Sin nota' : `${effectiveModuleWeights(course.id, modules)[m.id]}%`}</span>
           </button>
         ))}
       </div>
@@ -519,7 +525,7 @@ const TeacherCourseEvaluacion = () => {
     }
   };
 
-  const deliverableIds = new Set(deliverableModules(modules).map((m) => m.id));
+  const deliverableIds = new Set(allDeliverableModules(modules).map((m) => m.id));
   const pendingCount = submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length;
 
   const classSummary = useMemo(() => {

@@ -51,7 +51,7 @@ const NewRoomModal = ({ course, group, currentUser, classmates, onClose, onCreat
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div>

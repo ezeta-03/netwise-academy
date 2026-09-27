@@ -5,7 +5,7 @@ import { Lock, Calendar, CheckSquare, Check } from 'lucide-react';
 import { fetchCourseContent, fetchCourseRubric, fetchCourseSubmissions, fetchAllEnrollments, fetchCourseGrades } from '../../lib/db';
 import { courseRoster } from '../../lib/roster';
 import { deliverableDueDate } from '../../lib/deliveryDates';
-import { resolveWeights, deliverableModules } from '../../lib/weights';
+import { resolveWeights, allDeliverableModules } from '../../lib/weights';
 import { getGradingModel, moduleLabel } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
 
@@ -40,7 +40,7 @@ const TeacherCourseCronograma = () => {
     Promise.all([fetchCourseContent(course.id), fetchCourseRubric(course.id), fetchCourseSubmissions(course.id), fetchAllEnrollments(course.id), fetchCourseGrades(course.id)]).then(([content, rubric, submissions, enrollments, grades]) => {
       setModules(content.modules || []);
       setPolicy(resolveApprovalPolicy(course.id, rubric.policy));
-      const deliverableIds = new Set(deliverableModules(content.modules).map((m) => m.id));
+      const deliverableIds = new Set(allDeliverableModules(content.modules).map((m) => m.id));
       setPendingCount(submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length);
       setSubs(submissions);
       setScores(grades);

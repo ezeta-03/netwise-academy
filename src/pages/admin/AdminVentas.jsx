@@ -35,40 +35,32 @@ const AdminVentas = () => {
   const [viewing, setViewing] = useState(null);
   const [approvingId, setApprovingId] = useState(null);
   const [groups, setGroups] = useState([]);
-  // Aula elegida en el detalle del pedido ('' = sin aula).
+  // Aula elegida en el detalle del pedido ('' = automática, ver lib/groupAssignment.js).
   const [groupChoice, setGroupChoice] = useState('');
 
   useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }).catch(() => setLoading(false)); }, []);
   useEffect(() => { fetchGroups().then(setGroups).catch(() => {}); }, []);
 
   const courseGroups = (order) => groups.filter((g) => g.courseId?.toString() === order.courseId?.toString() && g.status !== 'closed');
-  // Si el curso tiene una sola aula abierta, el alumno queda en ella; con
-  // varias, el admin elige en el detalle del pedido.
-  const defaultGroupId = (order) => {
-    const list = courseGroups(order);
-    return list.length === 1 ? list[0].id : '';
-  };
 
   const openOrder = (order) => {
     setViewing(order);
-    setGroupChoice(defaultGroupId(order));
+    setGroupChoice('');
   };
 
-  const handleApprove = async (order, groupId = defaultGroupId(order)) => {
-    if (!groupId && courseGroups(order).length > 1) {
-      openOrder(order);
-      addToast('Este curso tiene varias aulas: elige en cuál matricular al alumno.', 'warning');
-      return;
-    }
-    const group = groups.find((g) => g.id === groupId) || null;
+  // Sin aula elegida, approveOrder la asigna sola: la próxima aula del curso
+  // con cupos (ver lib/groupAssignment.js). El admin puede elegir otra.
+  const handleApprove = async (order, groupId = '') => {
+    const chosen = groups.find((g) => g.id === groupId) || null;
     setApprovingId(order.id);
     try {
-      await approveOrder(order, group);
+      const enrollment = await approveOrder(order, chosen);
+      const group = chosen || (enrollment?.groupId ? { id: enrollment.groupId, name: enrollment.groupName } : null);
       await logChange(adminName, `Validó el pago de ${order.studentName} -- pedido ${order.code} (${order.courseTitle}).`);
       setOrders((list) => list.map((o) => (o.id === order.id ? { ...o, status: 'paid' } : o)));
       setViewing((v) => (v?.id === order.id ? { ...v, status: 'paid' } : v));
       refreshNotifications();
-      addToast(group ? `Pago validado. ${order.studentName} ya tiene acceso al curso (aula ${group.name}).` : 'Pago validado. El alumno ya tiene acceso al curso.', 'success');
+      addToast(group ? `Pago validado. ${order.studentName} ya tiene acceso al curso (aula ${group.name}).` : 'Pago validado. El alumno ya tiene acceso, pero no hay aula con cupos: asígnalo en Aulas y horarios.', group ? 'success' : 'warning');
     } catch {
       addToast('No se pudo validar el pago. Intenta de nuevo.', 'error');
     } finally {
@@ -138,7 +130,7 @@ const AdminVentas = () => {
 
       {viewing && (
         <ModalPortal>
-        <div className="admin-modal-overlay" onClick={() => setViewing(null)}>
+        <div className="admin-modal-overlay">
           <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
             <div className="admin-modal-head">
               <div className="admin-modal-title">Pedido {viewing.code}</div>
@@ -178,7 +170,7 @@ const AdminVentas = () => {
               <div className="admin-field">
                 <label>Aula donde se matricula</label>
                 <select value={groupChoice} onChange={(e) => setGroupChoice(e.target.value)}>
-                  <option value="">Sin aula por ahora</option>
+                  <option value="">Automática (próxima aula con cupos)</option>
                   {courseGroups(viewing).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
                 </select>
               </div>

@@ -83,7 +83,8 @@ const StudentEntregas = () => {
                 {item.dueDate && <div className="dash-list-row-sub" style={item.status === 'pending' && item.dueDate < todayIso() ? { color: '#BE123C', fontWeight: 600 } : undefined}>Fecha límite: {formatDate(item.dueDate)}{item.status === 'pending' && item.dueDate < todayIso() ? ' · Vencida' : ''}</div>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className={`admin-status ${badge.cls}`}>{badge.label}</span>
+                {!item.graded && <span className="admin-status admin-status-gray" title="Entregable de práctica: no cuenta en tu promedio">Sin nota</span>}
+                <span className={`admin-status ${badge.cls}`}>{item.status === 'reviewed' && !item.graded ? 'Revisada' : badge.label}</span>
                 <button className="admin-btn-edit" onClick={() => navigate(`/student/curso/${item.courseId}/proyecto`)}><ArrowRight size={13} /> Abrir proyecto</button>
               </div>
             </div>

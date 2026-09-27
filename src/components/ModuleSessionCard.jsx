@@ -16,20 +16,30 @@ const STATUS_META = {
   scheduled: { label: 'Programada', badgeClass: 'admin-status-gray', checkClass: '' },
 };
 
+// Etiqueta del entregable del módulo: con nota (cuenta en el promedio) o solo
+// de práctica (`deliverable.graded === false`).
+export const GradedBadge = ({ graded }) => (
+  <span className={`admin-status ${graded ? 'admin-status-violet' : 'admin-status-gray'}`} title={graded ? 'Lleva nota y cuenta en el promedio' : 'Se revisa con retroalimentación, sin nota'}>
+    {graded ? 'Con nota' : 'Sin nota'}
+  </span>
+);
+
 const ModuleSessionCard = ({ session, number, defaultOpen = false, onEdit, onDelete }) => {
   const [open, setOpen] = useState(defaultOpen);
   const status = session.status || (session.done ? 'done' : 'scheduled');
   const meta = STATUS_META[status] || STATUS_META.scheduled;
+  const numberLabel = number != null ? String(number).padStart(2, '0') : '';
+  const hasDetail = !!(session.learn || session.doInClass || session.task);
 
   return (
-    <div className={`dash-session-card ${status === 'next' ? 'next' : ''}`}>
+    <div className={`dash-session-card ${status === 'next' ? 'next' : ''} ${open ? 'open' : ''}`}>
       <div className="dash-session-head" onClick={() => setOpen((o) => !o)}>
         <div className={`dash-session-check ${meta.checkClass}`}>
-          {status === 'done' ? <Check size={13} /> : <span>{number}</span>}
+          {status === 'done' ? <Check size={13} /> : <span>{numberLabel}</span>}
         </div>
         <div className="dash-session-main">
           <div className="dash-session-meta">
-            {number != null && `Sesión ${String(number).padStart(2, '0')}`}
+            {number != null && `Sesión ${numberLabel}`}
             {session.dateLabel && ` · ${session.dateLabel}${session.time ? ` · ${session.time}` : ''}`}
           </div>
           <div className="dash-session-title">{session.title}</div>
@@ -42,7 +52,7 @@ const ModuleSessionCard = ({ session, number, defaultOpen = false, onEdit, onDel
           {onDelete && (
             <button className="admin-icon-btn" onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}><Trash2 size={13} /></button>
           )}
-          <button className="dash-session-toggle" onClick={() => setOpen((o) => !o)}>
+          <button className="dash-session-toggle" aria-expanded={open} aria-label={open ? 'Ocultar detalle' : 'Ver detalle'} onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
             {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
         </div>
@@ -50,6 +60,7 @@ const ModuleSessionCard = ({ session, number, defaultOpen = false, onEdit, onDel
 
       {open && (
         <div className="dash-session-body">
+          {!hasDetail && <div className="dash-session-block-text">El detalle de esta sesión se publicará pronto.</div>}
           {session.learn && (
             <div className="dash-session-block">
               <div className="dash-session-block-icon"><BookOpen size={15} /></div>

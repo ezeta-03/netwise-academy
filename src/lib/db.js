@@ -2,6 +2,7 @@ import { db, storage } from './firebase';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
+import { pickGroup } from './groupAssignment';
 
 // Determine env (Firebase valid vs Mock)
 const isConfigValid = !db.app.options.apiKey.includes('DummyKey');
@@ -470,12 +471,34 @@ export const fetchCourseClassmates = async (courseId) => {
 // Alta manual de matrícula desde el Admin (ej. pago fuera de línea) --
 // (única vía de matrícula: las reglas no dejan que un alumno se matricule solo)
 // porque acá el admin puede dejarla "pending" para validar luego.
-export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, courseId, courseTitle, groupId, groupName, status, reason }) => {
+// Aula sugerida para un alumno nuevo del curso (ver lib/groupAssignment.js).
+export const suggestGroupForCourse = async (courseId) => {
+  const [groups, enrollments] = await Promise.all([fetchGroups(), fetchAllEnrollments(courseId)]);
+  return pickGroup(groups, enrollments, courseId);
+};
+
+// Sin aula elegida, una matrícula activa queda asignada sola al aula que
+// corresponde (`autoAssignGroup`): así el alumno ya ve su horario, docente y
+// clases al entrar, sin esperar a que el admin lo ubique a mano.
+export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, courseId, courseTitle, groupId, groupName, status, reason, autoAssignGroup = true }) => {
+  const finalStatus = status || 'active';
+  const existingRef = isConfigValid && uid ? doc(db, 'enrollments', `${uid}_${courseId}`) : null;
+  const existingSnap = existingRef ? await getDoc(existingRef) : null;
+  const previous = existingSnap?.exists() ? existingSnap.data() : null;
+
+  if (!groupId && previous?.groupId) {
+    // Ya estaba en un aula: se conserva.
+    groupId = previous.groupId; groupName = previous.groupName;
+  } else if (!groupId && autoAssignGroup && finalStatus === 'active') {
+    const suggested = await suggestGroupForCourse(courseId).catch(() => null);
+    if (suggested) { groupId = suggested.id; groupName = suggested.name; }
+  }
+
   const payload = {
     uid: uid || `manual-${Date.now()}`,
     studentName, studentEmail, courseId, courseTitle,
     groupId: groupId || null, groupName: groupName || null,
-    status: status || 'active', reason: reason || 'Matrícula manual',
+    status: finalStatus, reason: reason || 'Matrícula manual',
     completedLessonIds: [], progress: 0,
     enrolledAt: new Date().toISOString(),
   };
@@ -492,16 +515,13 @@ export const adminCreateEnrollment = async ({ uid, studentName, studentEmail, co
   // de markLessonComplete): así hay una sola matrícula por
   // alumno+curso y las reglas le dejan ver a sus compañeros. Un alta manual sin
   // cuenta (uid `manual-...`) sigue con id automático.
-  const ref = uid ? doc(db, 'enrollments', `${uid}_${courseId}`) : doc(collection(db, 'enrollments'));
-  if (uid) {
+  const ref = existingRef || doc(collection(db, 'enrollments'));
+  if (previous) {
     // Si el alumno ya tenía matrícula, no se le borra el avance.
-    const existing = await getDoc(ref);
-    if (existing.exists()) {
-      const rest = { ...payload };
-      ['completedLessonIds', 'progress', 'enrolledAt'].forEach((k) => delete rest[k]);
-      await setDoc(ref, rest, { merge: true });
-      return { id: ref.id, ...existing.data(), ...rest };
-    }
+    const rest = { ...payload };
+    ['completedLessonIds', 'progress', 'enrolledAt'].forEach((k) => delete rest[k]);
+    await setDoc(ref, rest, { merge: true });
+    return { id: ref.id, ...previous, ...rest };
   }
   await setDoc(ref, payload);
   return { id: ref.id, ...payload };
@@ -831,7 +851,7 @@ export const updateOrderStatus = async (orderId, status) => {
 // pendientes también cuentan para el tope de usos. `group` (opcional) es el
 // aula donde queda matriculado.
 export const approveOrder = async (order, group = null) => {
-  await adminCreateEnrollment({
+  const enrollment = await adminCreateEnrollment({
     uid: order.uid,
     studentName: order.studentName,
     studentEmail: order.studentEmail || null,
@@ -843,6 +863,7 @@ export const approveOrder = async (order, group = null) => {
     reason: `Pago validado manualmente (pedido ${order.code})`,
   });
   await updateOrderStatus(order.id, 'paid');
+  return enrollment;
 };
 
 // --- Equipo de la academia (colección Firestore `teamMembers`) ---

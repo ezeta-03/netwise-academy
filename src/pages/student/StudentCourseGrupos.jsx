@@ -39,7 +39,7 @@ const NewGroupModal = ({ course, currentUser, onClose, onCreated }) => {
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head"><div><div className="admin-modal-title">Crear grupo</div><div className="admin-modal-sub">Arma tu equipo para el proyecto final.</div></div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
           <div className="admin-field-row">
@@ -85,7 +85,7 @@ const InviteModal = ({ group, classmates, onClose, onInvited }) => {
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head"><div className="admin-modal-title">Invitar a {group.name}</div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
           {invitable.length === 0 ? <p className="admin-panel-caption">No hay más compañeros disponibles para invitar.</p> : invitable.map((c) => (
@@ -132,7 +132,7 @@ const NewRoomModal = ({ course, currentUser, classmates, onClose, onCreated }) =
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head"><div><div className="admin-modal-title">Crear sala privada</div><div className="admin-modal-sub">Prepara un espacio para conversar y trabajar con tu grupo.</div></div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
           <div className="admin-field"><label>Nombre de la sala</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Equipo 02 · Proyecto de contenidos" /></div>

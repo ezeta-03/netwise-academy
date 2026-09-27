@@ -21,7 +21,7 @@ export const fetchMyDeliverables = async (uid, enrolledCourses) => {
       return {
         courseId: course.id, courseTitle: course.title, moduleId: m.id, moduleTitle: m.title,
         deliverableTitle: m.deliverable.description, dueDate: deliverableDueDate(m, allModules.indexOf(m), group),
-        status, note: mine?.note || '',
+        status, note: mine?.note || '', graded: m.deliverable.graded !== false,
       };
     }));
   }));

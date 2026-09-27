@@ -56,7 +56,7 @@ const CouponModal = ({ coupon, courses, adminName, onClose, onSaved }) => {
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal admin-modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div className="admin-modal-title">{coupon ? 'Editar cupón' : 'Crear cupón'}</div>

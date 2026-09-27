@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Plus, X, BookOpen } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
@@ -45,7 +46,7 @@ const EditCourseModal = ({ course, adminName, adminUid, onClose, onSaved }) => {
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div>
@@ -89,6 +90,7 @@ const EditCourseModal = ({ course, adminName, adminUid, onClose, onSaved }) => {
 
 const AdminCursos = () => {
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const { addToast } = useUI();
   const { courses, refresh } = useCourseOfferings();
   const [search, setSearch] = useState('');
@@ -207,7 +209,12 @@ const AdminCursos = () => {
                     </label>
                   </td>
                   <td>
-                    <button className="admin-btn-edit" onClick={() => setEditing(c)}>Editar curso</button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button className="admin-btn-edit" onClick={() => setEditing(c)}>Editar curso</button>
+                      {/* Módulos, objetivos, contenidos, sesiones, materiales y entregables:
+                          el admin usa el mismo editor del docente (TeacherCourseContenido). */}
+                      <button className="admin-btn-ghost" onClick={() => navigate(`/teacher/curso/${c.id}/contenido`)}><BookOpen size={14} /> Editar contenido</button>
+                    </div>
                   </td>
                 </tr>
               );

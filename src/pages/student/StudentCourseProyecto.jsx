@@ -40,7 +40,7 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head"><div className="admin-modal-title">Define tu empresa</div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
         <div className="admin-banner" style={{ marginBottom: 16 }}>

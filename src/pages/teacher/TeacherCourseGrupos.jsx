@@ -46,7 +46,7 @@ const NewGroupModal = ({ course, roster, onClose, onCreated }) => {
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head">
             <div><div className="admin-modal-title">Crear grupo</div><div className="admin-modal-sub">Arma un equipo de proyecto para este curso.</div></div>
@@ -84,7 +84,7 @@ const NewGroupModal = ({ course, roster, onClose, onCreated }) => {
 
 const ViewGroupModal = ({ group, onClose }) => (
   <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div><div className="admin-modal-title">{group.name}</div><div className="admin-modal-sub">{group.description || 'Sin descripción.'}</div></div>

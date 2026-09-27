@@ -32,7 +32,7 @@ const RequestModal = ({ requesterUid, requesterName, requesterRole, onClose, onS
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div className="admin-modal-title">Nueva solicitud</div>

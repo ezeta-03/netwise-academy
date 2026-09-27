@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom
 import { Check, CheckCircle2, FileText, Sparkles, Target, Video } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { fetchCourseContent, fetchProjectAdvances, fetchProjectProfile } from '../../lib/db';
-import ModuleSessionCard from '../../components/ModuleSessionCard';
+import ModuleSessionCard, { GradedBadge } from '../../components/ModuleSessionCard';
 import { isPendingUrl } from '../../lib/placeholders';
 
 const StudentCourseContenido = () => {
@@ -121,6 +121,7 @@ const StudentCourseContenido = () => {
           <div className="admin-panel">
             <div className="admin-panel-head">
               <span className="admin-panel-title">Entregable</span>
+              {selected.deliverable?.description && <GradedBadge graded={selected.deliverable.graded !== false} />}
               {moduleClosed && <span className="admin-status admin-status-green">Módulo completado</span>}
             </div>
             <p style={{ fontSize: '.88rem', color: '#4A4860', marginBottom: 10 }}>{selected.deliverable?.description || 'Este módulo todavía no tiene un entregable definido.'}</p>

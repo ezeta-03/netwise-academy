@@ -32,7 +32,7 @@ const RecordingLinkModal = ({ session, onClose, onSaved }) => {
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head">
             <div><div className="admin-modal-title">Grabación de la clase</div><div className="admin-modal-sub">{session.courseTitle} · {session.title}</div></div>

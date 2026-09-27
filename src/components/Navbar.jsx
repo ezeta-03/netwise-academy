@@ -72,7 +72,7 @@ const Navbar = () => {
   return (
     <>
       {(location.pathname === '/' || location.pathname === '/metodologia') && (
-        <div className="home-promo">Promociones y descuentos disponibles hasta el 30/09</div>
+        <div className="home-promo">Promociones y descuentos disponibles hasta el 16/10</div>
       )}
       <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`} id="navbar">
         <Link to="/" className="nav-logo">

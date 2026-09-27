@@ -18,6 +18,18 @@ export default defineConfig(({ mode }) => ({
     stripGtm(mode),
     VitePWA({
       registerType: 'autoUpdate',
+      // El registro lo hace src/lib/swUpdate.js (recarga segura tras un deploy).
+      injectRegister: false,
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // index.html siempre se pide a la red primero (si hay conexión).
+        navigateFallback: null,
+        runtimeCaching: [
+          { urlPattern: ({ request }) => request.mode === 'navigate', handler: 'NetworkFirst', options: { cacheName: 'pages', networkTimeoutSeconds: 4 } },
+        ],
+      },
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
       devOptions: { enabled: true, type: 'module' },
       manifest: {

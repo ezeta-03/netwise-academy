@@ -39,7 +39,9 @@ const MODULE_1_UPDATE = {
   sessions: [
     {
       id: 's_1', dateLabel: 'lun, 10 ago', time: '19:00-21:00', title: 'Mapa del ecosistema digital', done: true,
-      learn: '', doInClass: '', task: '',
+      learn: 'Canales propios, ganados y pagados. Rol de cada red en el recorrido del cliente: atraer, convencer y convertir. Arquitectura de canales y puntos de fuga.',
+      doInClass: 'Dibuja en grupo el mapa de canales de una marca de caso y detecta dónde se pierde el usuario antes de comprar.',
+      task: 'Mapea los canales de tu proyecto: qué red atrae, cuál convence y dónde se concreta la venta.',
     },
     {
       id: 's_2', dateLabel: 'mié, 12 ago', time: '19:00-21:00', title: 'Cómo deciden los algoritmos', done: true,

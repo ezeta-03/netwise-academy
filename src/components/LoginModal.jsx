@@ -51,7 +51,7 @@ const LoginModal = ({ onClose }) => {
 
   return (
     <ModalPortal>
-      <div className="auth-modal-overlay" onClick={onClose}>
+      <div className="auth-modal-overlay">
         <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
           <button className="auth-modal-close" onClick={onClose}><X size={18} /></button>
 

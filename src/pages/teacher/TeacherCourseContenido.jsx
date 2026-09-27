@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Uploa
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
-import ModuleSessionCard from '../../components/ModuleSessionCard';
+import ModuleSessionCard, { GradedBadge } from '../../components/ModuleSessionCard';
 import { isPendingUrl, isSafeLink } from '../../lib/placeholders';
 import { getGradingScheme } from '../../lib/gradingScheme';
 import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels';
@@ -172,6 +172,61 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   );
 };
 
+// Lápiz de edición en línea (título, objetivo, contenidos): lo ven el docente
+// del curso y el admin -- ambos pueden editar el contenido (canManageCourse).
+const EditPencil = ({ onClick, label }) => (
+  <button type="button" className="inline-edit-btn" onClick={onClick} title={label} aria-label={label}><Pencil size={15} /></button>
+);
+
+const InlineActions = ({ onSave, onCancel, disabled }) => (
+  <div className="inline-edit-actions">
+    <button type="button" className="admin-btn-ghost" onClick={onCancel}><X size={13} /> Cancelar</button>
+    <button type="button" className="admin-btn-edit" onClick={onSave} disabled={disabled}><Save size={13} /> Guardar</button>
+  </div>
+);
+
+const TitleEditor = ({ module, onSave, onCancel }) => {
+  const [title, setTitle] = useState(module.title || '');
+  const [weeksLabel, setWeeksLabel] = useState(module.weeksLabel || '');
+  return (
+    <div className="inline-edit-box">
+      <div className="admin-field-row">
+        <div className="admin-field" style={{ flex: 2 }}><label>Nombre del módulo</label><input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus /></div>
+        <div className="admin-field"><label>Semanas</label><input value={weeksLabel} onChange={(e) => setWeeksLabel(e.target.value)} placeholder="Ej. Semanas 1-2" /></div>
+      </div>
+      <InlineActions disabled={!title.trim()} onCancel={onCancel} onSave={() => onSave({ title: title.trim(), weeksLabel: weeksLabel.trim() })} />
+    </div>
+  );
+};
+
+const ObjectiveEditor = ({ module, onSave, onCancel }) => {
+  const [objective, setObjective] = useState(module.objective || '');
+  return (
+    <div className="inline-edit-box">
+      <div className="admin-field"><label>Objetivo</label><textarea rows={3} value={objective} onChange={(e) => setObjective(e.target.value)} autoFocus /></div>
+      <InlineActions onCancel={onCancel} onSave={() => onSave({ objective: objective.trim() })} />
+    </div>
+  );
+};
+
+const PracticeEditor = ({ module, onSave, onCancel }) => {
+  const [practiceIntro, setPracticeIntro] = useState(module.practiceIntro || '');
+  const [bullets, setBullets] = useState((module.practiceBullets || []).join('\n'));
+  const [tools, setTools] = useState((module.tools || []).join(' · '));
+  return (
+    <div className="inline-edit-box">
+      <div className="admin-field"><label>Introducción</label><textarea rows={3} value={practiceIntro} onChange={(e) => setPracticeIntro(e.target.value)} autoFocus /></div>
+      <div className="admin-field"><label>Puntos (uno por línea)</label><textarea rows={5} value={bullets} onChange={(e) => setBullets(e.target.value)} /></div>
+      <div className="admin-field"><label>Herramientas de las sesiones (separadas por ·)</label><input value={tools} onChange={(e) => setTools(e.target.value)} placeholder="Ej. Meta Business Suite · ChatGPT / Claude" /></div>
+      <InlineActions onCancel={onCancel} onSave={() => onSave({
+        practiceIntro: practiceIntro.trim(),
+        practiceBullets: bullets.split('\n').map((b) => b.trim()).filter(Boolean),
+        tools: tools.split('·').map((t) => t.trim()).filter(Boolean),
+      })} />
+    </div>
+  );
+};
+
 const ModuleEditForm = ({ module, weightLocked, onSave, onCancel }) => {
   const [title, setTitle] = useState(module.title);
   const [weeksLabel, setWeeksLabel] = useState(module.weeksLabel || '');
@@ -182,6 +237,7 @@ const ModuleEditForm = ({ module, weightLocked, onSave, onCancel }) => {
   const [deliverable, setDeliverable] = useState(module.deliverable?.description || '');
   const [dueDate, setDueDate] = useState(module.deliverable?.dueDate || '');
   const [weight, setWeight] = useState(module.deliverable?.weight ?? '');
+  const [graded, setGraded] = useState(module.deliverable?.graded !== false);
   const [checklist, setChecklist] = useState((module.deliverable?.checklist || []).join('\n'));
 
   return (
@@ -197,8 +253,13 @@ const ModuleEditForm = ({ module, weightLocked, onSave, onCancel }) => {
       <div className="admin-field-row">
         <div className="admin-field" style={{ flex: 1 }}><label>Entregable</label><textarea rows={2} value={deliverable} onChange={(e) => setDeliverable(e.target.value)} /></div>
         <div className="admin-field"><label>Fecha límite (opcional)</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
-        <div className="admin-field"><label>Peso en la nota final (%)</label><input type="number" min="0" max="100" value={weightLocked ? '' : weight} onChange={(e) => setWeight(e.target.value)} placeholder={weightLocked ? 'Lo fija el esquema de notas' : 'Ej. 25'} disabled={weightLocked} /></div>
+        <div className="admin-field"><label>Peso en la nota final (%)</label><input type="number" min="0" max="100" value={weightLocked || !graded ? '' : weight} onChange={(e) => setWeight(e.target.value)} placeholder={!graded ? 'Sin nota' : weightLocked ? 'Lo fija el esquema de notas' : 'Ej. 25'} disabled={weightLocked || !graded} /></div>
       </div>
+      <label className="admin-field-checkbox" style={{ marginBottom: 14 }}>
+        <input type="checkbox" checked={graded} onChange={(e) => setGraded(e.target.checked)} />
+        {' '}Este entregable se califica (lleva nota y cuenta en el promedio)
+      </label>
+      {!graded && <p className="admin-cell-sub" style={{ marginTop: -8, marginBottom: 14 }}>Sin nota: los alumnos lo presentan y tú lo revisas con retroalimentación, pero no cuenta en el promedio.</p>}
       <div className="admin-field"><label>Tu entregable debe incluir (uno por línea)</label><textarea rows={4} value={checklist} onChange={(e) => setChecklist(e.target.value)} /></div>
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
@@ -208,7 +269,8 @@ const ModuleEditForm = ({ module, weightLocked, onSave, onCancel }) => {
           tools: tools.split('·').map((t) => t.trim()).filter(Boolean),
           deliverable: {
             ...module.deliverable, description: deliverable, dueDate: dueDate || null,
-            weight: weight === '' ? null : Number(weight),
+            weight: !graded || weight === '' ? null : Number(weight),
+            graded,
             checklist: checklist.split('\n').map((c) => c.trim()).filter(Boolean),
           },
         })}><Save size={13} /> Guardar módulo</button>
@@ -232,6 +294,8 @@ const TeacherCourseContenido = () => {
   const [addingSessionDetail, setAddingSessionDetail] = useState(false);
   const [editingSessionDetail, setEditingSessionDetail] = useState(null);
   const [addingMaterial, setAddingMaterial] = useState(false);
+  // Campo en edición en línea: 'title' | 'objective' | 'practice' | null.
+  const [inlineField, setInlineField] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -267,6 +331,11 @@ const TeacherCourseContenido = () => {
     const next = [...modules, emptyModule(modules.length + 1)];
     persist(next, `Módulo ${next.length} agregado.`);
     setSelectedId(next[next.length - 1].id);
+  };
+
+  const saveInline = (patch, msg) => {
+    persist(modules.map((m) => (m.id === selected.id ? { ...m, ...patch } : m)), msg);
+    setInlineField(null);
   };
 
   const saveModule = (updated) => {
@@ -344,25 +413,60 @@ const TeacherCourseContenido = () => {
           ) : (
             <>
               <span className="dash-eyebrow">{selected.weeksLabel ? `${selected.title.toUpperCase()} · ${selected.weeksLabel}` : selected.title.toUpperCase()}</span>
-              <h1 className="admin-page-title">{selected.title}</h1>
+              {inlineField === 'title' ? (
+                <TitleEditor module={selected} onCancel={() => setInlineField(null)} onSave={(patch) => saveInline(patch, 'Título actualizado.')} />
+              ) : (
+                <div className="inline-edit-row">
+                  <h1 className="admin-page-title">{selected.title}</h1>
+                  <EditPencil label="Editar título del módulo" onClick={() => setInlineField('title')} />
+                </div>
+              )}
               <p className="admin-page-sub" style={{ marginBottom: 20 }}>{course.title}</p>
 
-              {selected.objective && (
-                <div className="dash-callout">
+              {inlineField === 'objective' ? (
+                <ObjectiveEditor module={selected} onCancel={() => setInlineField(null)} onSave={(patch) => saveInline(patch, 'Objetivo actualizado.')} />
+              ) : (
+                <div className={`dash-callout inline-edit-target ${selected.objective ? '' : 'empty'}`}>
                   <div className="dash-callout-label">Objetivo</div>
-                  <div className="dash-callout-text">{selected.objective}</div>
+                  <div className="dash-callout-text">
+                    {selected.objective || 'Todavía no defines el objetivo de este módulo.'}
+                    <EditPencil label="Editar objetivo" onClick={() => setInlineField('objective')} />
+                  </div>
                 </div>
               )}
 
-              {(selected.practiceIntro || selected.practiceBullets?.length > 0) && (
-                <div style={{ marginBottom: 22 }}>
-                  <h3 style={{ fontSize: '1rem', color: '#14141F', marginBottom: 6 }}>Contenidos y práctica</h3>
-                  {selected.practiceIntro && <p style={{ fontSize: '.88rem', color: '#4A4860' }}>{selected.practiceIntro}</p>}
-                  {selected.practiceBullets?.length > 0 && (
-                    <ul className="dash-bullets">{selected.practiceBullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
-                  )}
-                </div>
-              )}
+              <div style={{ marginBottom: 22 }}>
+                <h3 style={{ fontSize: '1rem', color: '#14141F', marginBottom: 6 }}>Contenidos y práctica</h3>
+                {inlineField === 'practice' ? (
+                  <PracticeEditor module={selected} onCancel={() => setInlineField(null)} onSave={(patch) => saveInline(patch, 'Contenidos actualizados.')} />
+                ) : (
+                  <div className="inline-edit-target">
+                    {/* El lápiz va al final del último texto (último punto, o la intro). */}
+                    {selected.practiceIntro && (
+                      <p style={{ fontSize: '.88rem', color: '#4A4860' }}>
+                        {selected.practiceIntro}
+                        {!selected.practiceBullets?.length && <EditPencil label="Editar contenidos y práctica" onClick={() => setInlineField('practice')} />}
+                      </p>
+                    )}
+                    {selected.practiceBullets?.length > 0 && (
+                      <ul className="dash-bullets">
+                        {selected.practiceBullets.map((b, i) => (
+                          <li key={i}>
+                            {b}
+                            {i === selected.practiceBullets.length - 1 && <EditPencil label="Editar contenidos y práctica" onClick={() => setInlineField('practice')} />}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {!selected.practiceIntro && !selected.practiceBullets?.length && (
+                      <p className="admin-panel-caption" style={{ margin: 0 }}>
+                        Todavía no defines los contenidos de este módulo.
+                        <EditPencil label="Editar contenidos y práctica" onClick={() => setInlineField('practice')} />
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div style={{ marginBottom: 22 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -440,7 +544,10 @@ const TeacherCourseContenido = () => {
               </div>
 
               <div className="admin-panel">
-                <div className="admin-panel-head"><span className="admin-panel-title">Entregable</span></div>
+                <div className="admin-panel-head">
+                  <span className="admin-panel-title">Entregable</span>
+                  {selected.deliverable?.description && <GradedBadge graded={selected.deliverable.graded !== false} />}
+                </div>
                 <p style={{ fontSize: '.88rem', color: '#4A4860', marginBottom: selected.deliverable?.checklist?.length ? 10 : 16 }}>{selected.deliverable?.description || 'Todavía no defines el entregable de este módulo.'}</p>
                 {selected.deliverable?.checklist?.length > 0 && (
                   <>
@@ -465,7 +572,7 @@ const TeacherCourseContenido = () => {
         <div>
           <ModulesRailPanel
             courseId={course.id} modules={modules} activeModuleId={selectedId}
-            onModuleClick={(id) => { setSelectedId(id); setEditingModule(false); setSearchParams({}); }}
+            onModuleClick={(id) => { setSelectedId(id); setEditingModule(false); setInlineField(null); setSearchParams({}); }}
             onAddModule={addModule}
             onDeleteModule={modules.length > 1 ? () => deleteModule(selectedId) : null}
           />

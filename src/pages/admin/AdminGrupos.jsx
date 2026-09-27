@@ -5,7 +5,9 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
+import AdminAsignarAlumnos from './AdminAsignarAlumnos';
+import { countByGroup, freeSeats, unassignedEnrollments } from '../../lib/groupAssignment';
+import { fetchOrders, fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
@@ -60,10 +62,10 @@ const initialSlots = (group, options) => {
   return [withId({ day: 'Martes', start: '19:00', end: '21:00' })];
 };
 
-const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
+const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSaved }) => {
   const { addToast } = useUI();
   const [name, setName] = useState(group?.name || '');
-  const [courseId, setCourseId] = useState(group?.courseId ?? courses[0]?.id ?? '');
+  const [courseId, setCourseId] = useState(group?.courseId ?? defaultCourseId ?? courses[0]?.id ?? '');
   const [startDate, setStartDate] = useState(group?.startDate || '');
   const [endDate, setEndDate] = useState(group?.endDate || '');
   const scheduleOptions = buildScheduleOptions(courses);
@@ -211,7 +213,7 @@ const GroupModal = ({ group, courses, adminName, onClose, onSaved }) => {
 
   return (
     <ModalPortal>
-    <div className="admin-modal-overlay" onClick={onClose}>
+    <div className="admin-modal-overlay">
       <div className="admin-modal admin-modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="admin-modal-head">
           <div className="admin-modal-title">{group ? 'Editar aula' : 'Crear aula'}</div>
@@ -492,17 +494,24 @@ const AdminGrupos = () => {
   const [modal, setModal] = useState(null);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
+  const [tab, setTab] = useState('aulas');
   // Inscritos por aula: se cuentan de las matrículas activas reales (el campo
   // `enrolledCount` del aula nunca se actualizaba al matricular).
-  const [enrolledByGroup, setEnrolledByGroup] = useState({});
-  const load = () => Promise.all([fetchGroups(), fetchAllEnrollments().catch(() => [])]).then(([list, enrollments]) => {
-    const counts = {};
-    enrollments.filter((e) => e.groupId && (e.status || 'active') === 'active').forEach((e) => { counts[e.groupId] = (counts[e.groupId] || 0) + 1; });
-    setEnrolledByGroup(counts);
+  const [enrollments, setEnrollments] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const load = () => Promise.all([fetchGroups(), fetchAllEnrollments().catch(() => []), fetchOrders().catch(() => [])]).then(([list, allEnrollments, allOrders]) => {
+    setEnrollments(allEnrollments);
+    setOrders(allOrders);
     setGroups(list);
     setLoading(false);
   });
   useEffect(() => { load(); }, []);
+  const enrolledByGroup = countByGroup(enrollments);
+
+  const activeGroups = groups.filter((g) => g.status !== 'closed');
+  const paid = enrollments.filter((e) => (e.status || 'active') === 'active');
+  const unassigned = unassignedEnrollments(enrollments, groups);
+  const freeInActive = activeGroups.reduce((sum, g) => { const f = freeSeats(g, enrolledByGroup); return f === Infinity ? sum : sum + f; }, 0);
 
   const filtered = groups.filter((g) => `${g.name} ${g.courseTitle}`.toLowerCase().includes(search.toLowerCase()));
 
@@ -531,64 +540,96 @@ const AdminGrupos = () => {
 
   const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+  const renderGroupsTable = (list, compact = false) => (
+    <table className={`admin-table ${compact ? 'admin-table-compact' : ''}`}>
+      <thead><tr><th>Grupo / Curso</th><th>Fechas</th><th>Horario y docente</th><th>Cupos activo</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+        {list.map((g) => {
+          const status = GROUP_STATUS[g.status] || GROUP_STATUS.open;
+          return (
+            <tr key={g.id}>
+              <td>
+                <div className="admin-cell-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {g.name}
+                  {g.classLink && <a href={g.classLink} target="_blank" rel="noreferrer" title="Enlace de clase" onClick={(e) => e.stopPropagation()}><Link2 size={13} color="var(--accent)" /></a>}
+                </div>
+                <div className="admin-cell-sub">{g.courseTitle}</div>
+              </td>
+              <td className="admin-cell-sub">{fmtDate(g.startDate)}<br />{fmtDate(g.endDate)}</td>
+              <td className="admin-cell-sub">{g.scheduleTime || g.scheduleDays || 'Sin horario'}<br />Hora de Perú · {g.instructor}</td>
+              <td>{enrolledByGroup[g.id] || 0} / {g.capacity}</td>
+              <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
+              <td>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', group: g })} title="Editar"><Pencil size={14} /></button>
+                  <button className="admin-icon-btn" onClick={() => toggleClosed(g)} title={g.status === 'closed' ? 'Reactivar' : 'Desactivar'} style={g.status === 'closed' ? undefined : { color: '#BE123C' }}>
+                    {g.status === 'closed' ? <RotateCcw size={14} /> : <Ban size={14} />}
+                  </button>
+                  <button className="admin-icon-btn" onClick={() => handleDeleteGroup(g)} title="Eliminar" style={{ color: '#BE123C' }}><Trash2 size={14} /></button>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
         <div>
           <h1 className="admin-page-title">Aulas y horarios</h1>
-          <p className="admin-page-sub">Fechas, cupos y docentes para cada edición de un curso.</p>
+          <p className="admin-page-sub">Cada curso puede tener varias aulas en paralelo, con su fecha de inicio, horario, cupos y profesor. Aquí asignas a los alumnos que ya pagaron.</p>
         </div>
         <button className="admin-btn-edit" onClick={() => setModal({ mode: 'new' })}><Plus size={15} /> Crear aula</button>
       </div>
 
-      <div className="admin-toolbar">
-        <div className="admin-search"><Search size={15} /><input placeholder="Buscar cada grupo, bien organizado..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+      <div className="admin-stats-grid">
+        <div className="admin-stat-card"><div className="admin-stat-label">Aulas activas</div><div className="admin-stat-value">{activeGroups.length}</div><div className="admin-cell-sub">{groups.length} en total</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Alumnos pagados</div><div className="admin-stat-value">{paid.length}</div><div className="admin-cell-sub">matrículas confirmadas</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Asignados a un aula</div><div className="admin-stat-value">{paid.length - unassigned.length}</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Sin aula</div><div className="admin-stat-value" style={unassigned.length ? { color: '#B45309' } : undefined}>{unassigned.length}</div><div className="admin-cell-sub">{freeInActive} cupos libres en aulas activas</div></div>
       </div>
 
-      <div className="admin-table-wrap" style={{ marginBottom: 24 }}>
-        {loading ? <div className="admin-empty-hint">Cargando aulas...</div> : filtered.length === 0 ? (
-          <div className="admin-empty-hint">Todavía no has creado ninguna aula.</div>
-        ) : (
-          <table className="admin-table">
-            <thead><tr><th>Grupo / Curso</th><th>Fechas</th><th>Horario y docente</th><th>Cupos activo</th><th>Estado</th><th>Acciones</th></tr></thead>
-            <tbody>
-              {filtered.map((g) => {
-                const status = GROUP_STATUS[g.status] || GROUP_STATUS.open;
-                return (
-                  <tr key={g.id}>
-                    <td>
-                      <div className="admin-cell-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {g.name}
-                        {g.classLink && <a href={g.classLink} target="_blank" rel="noreferrer" title="Enlace de clase" onClick={(e) => e.stopPropagation()}><Link2 size={13} color="var(--accent)" /></a>}
-                      </div>
-                      <div className="admin-cell-sub">{g.courseTitle}</div>
-                    </td>
-                    <td className="admin-cell-sub">{fmtDate(g.startDate)}<br />{fmtDate(g.endDate)}</td>
-                    <td className="admin-cell-sub">{g.scheduleTime || g.scheduleDays || 'Sin horario'}<br />Hora de Perú · {g.instructor}</td>
-                    <td>{enrolledByGroup[g.id] || 0} / {g.capacity}</td>
-                    <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', group: g })} title="Editar"><Pencil size={14} /></button>
-                        <button className="admin-icon-btn" onClick={() => toggleClosed(g)} title={g.status === 'closed' ? 'Reactivar' : 'Desactivar'} style={g.status === 'closed' ? undefined : { color: '#BE123C' }}>
-                          {g.status === 'closed' ? <RotateCcw size={14} /> : <Ban size={14} />}
-                        </button>
-                        <button className="admin-icon-btn" onClick={() => handleDeleteGroup(g)} title="Eliminar" style={{ color: '#BE123C' }}><Trash2 size={14} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="admin-tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'aulas'} className={`admin-tab ${tab === 'aulas' ? 'active' : ''}`} onClick={() => setTab('aulas')}>Aulas</button>
+        <button role="tab" aria-selected={tab === 'asignar'} className={`admin-tab ${tab === 'asignar' ? 'active' : ''}`} onClick={() => setTab('asignar')}>Asignar alumnos · {unassigned.length} sin aula</button>
       </div>
 
-      <LiveClassesPanel courses={courses} />
+      {tab === 'asignar' ? (
+        loading ? <div className="admin-empty-hint">Cargando alumnos...</div> : (
+          <AdminAsignarAlumnos
+            courses={courses}
+            groups={groups}
+            enrollments={enrollments}
+            orders={orders}
+            adminName={adminName}
+            onChanged={load}
+            onCreateGroup={(courseId) => setModal({ mode: 'new', courseId })}
+            renderGroupsTable={renderGroupsTable}
+          />
+        )
+      ) : (
+        <>
+          <div className="admin-toolbar">
+            <div className="admin-search"><Search size={15} /><input placeholder="Buscar cada grupo, bien organizado..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+          </div>
+
+          <div className="admin-table-wrap" style={{ marginBottom: 24 }}>
+            {loading ? <div className="admin-empty-hint">Cargando aulas...</div> : filtered.length === 0 ? (
+              <div className="admin-empty-hint">Todavía no has creado ninguna aula.</div>
+            ) : renderGroupsTable(filtered)}
+          </div>
+
+          <LiveClassesPanel courses={courses} />
+        </>
+      )}
 
       {modal && (
         <GroupModal
           group={modal.mode === 'edit' ? modal.group : null}
+          defaultCourseId={modal.courseId}
           courses={courses}
           adminName={adminName}
           onClose={() => setModal(null)}

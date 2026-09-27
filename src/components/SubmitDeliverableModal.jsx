@@ -58,11 +58,11 @@ const SubmitDeliverableModal = ({ course, module, existing = null, onClose, onSa
 
   return (
     <ModalPortal>
-      <div className="admin-modal-overlay" onClick={saving ? undefined : onClose}>
+      <div className="admin-modal-overlay">
         <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
           <div className="admin-modal-head"><div className="admin-modal-title">{title}</div><button className="admin-modal-close" onClick={onClose} disabled={saving}><X size={18} /></button></div>
           <p className="admin-cell-sub" style={{ marginBottom: 12 }}>{module.deliverable?.description || module.title}</p>
-          {existing?.status === 'reviewed' && (
+          {existing?.status === 'reviewed' && module.deliverable?.graded !== false && (
             <div className="checkout-error" role="alert" style={{ marginBottom: 12 }}>
               Esta entrega ya está calificada ({existing.grade ?? '—'}/20). Si la reemplazas, esa nota deja de contar en tu promedio hasta que tu docente revise la nueva versión.
             </div>
