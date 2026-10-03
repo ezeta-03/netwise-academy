@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { captureMasterclassLead } from '../../lib/db';
 import { MASTERCLASSES, MASTERCLASS_TIME } from '../../data/masterclasses';
 import TermsModal from '../TermsModal';
@@ -14,6 +14,22 @@ const leadSource = () => {
   }
 };
 
+// Inscripción ya hecha en este navegador: evita que la misma persona se
+// registre dos veces al recargar, o al abrir el otro formulario de la página
+// (el del hero y el del modal son instancias distintas).
+const SIGNUP_KEY = 'nw_masterclass_signup';
+const SIGNUP_EVENT = 'nw-masterclass-signup';
+const alreadySignedUp = () => {
+  try { return !!localStorage.getItem(SIGNUP_KEY); } catch { return false; }
+};
+const rememberSignup = (email) => {
+  try { localStorage.setItem(SIGNUP_KEY, email); } catch { /* sin storage: solo vale para esta carga */ }
+  window.dispatchEvent(new Event(SIGNUP_EVENT));
+};
+const forgetSignup = () => {
+  try { localStorage.removeItem(SIGNUP_KEY); } catch { /* nada que borrar */ }
+};
+
 // Formulario "Elige tu masterclass" -- el mismo en el hero de /masterclass y
 // en el modal de "Reservar mi cupo". Términos obligatorios (se marcan solos al
 // pulsar "Entendido" en el modal legal); promociones opcionales y sin
@@ -27,7 +43,34 @@ const MasterclassForm = ({ onClose }) => {
   const [legalTab, setLegalTab] = useState(null);
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sent, setSent] = useState(alreadySignedUp);
+  const sendingRef = useRef(false);
+  const cardRef = useRef(null);
+  const justSent = useRef(false);
+
+  // La otra instancia del formulario acaba de inscribir a esta persona.
+  useEffect(() => {
+    const onSignup = () => setSent(true);
+    window.addEventListener(SIGNUP_EVENT, onSignup);
+    return () => window.removeEventListener(SIGNUP_EVENT, onSignup);
+  }, []);
+
+  // En móvil el botón queda al final de un formulario largo: al enviarlo la
+  // tarjeta se encoge y la confirmación quedaba fuera de pantalla.
+  useEffect(() => {
+    if (!sent || !justSent.current) return;
+    justSent.current = false;
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [sent]);
+
+  const signUpAgain = () => {
+    forgetSignup();
+    setPicked([]);
+    setValues({ firstName: '', lastName: '', email: '', whatsapp: '' });
+    setAcceptedTerms(false);
+    setMarketingConsent(false);
+    setSent(false);
+  };
 
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const setField = (k) => (e) => {
@@ -37,6 +80,8 @@ const MasterclassForm = ({ onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // El `disabled` del botón llega un render tarde: un doble toque rápido entraba dos veces.
+    if (sendingRef.current) return;
     const bad = {
       firstName: !values.firstName.trim(),
       lastName: !values.lastName.trim(),
@@ -48,23 +93,27 @@ const MasterclassForm = ({ onClose }) => {
     if (Object.values(bad).some(Boolean)) { setError('Completa tus datos correctamente.'); return; }
     if (!acceptedTerms) { setError('Debes aceptar los Términos y la Política de privacidad.'); return; }
     setError('');
+    sendingRef.current = true;
     setSending(true);
     try {
       const ordered = MASTERCLASSES.map((m) => m.id).filter((id) => picked.includes(id));
       await captureMasterclassLead({ ...values, masterclasses: ordered, marketingConsent, source: leadSource() });
       // Evento para Google Tag Manager (conversiones de campañas).
       window.dataLayer?.push({ event: 'masterclass_signup', masterclasses: ordered.join(',') });
+      justSent.current = true;
       setSent(true);
+      rememberSignup(values.email.trim().toLowerCase());
     } catch {
       setError('No pudimos enviar tus datos. Inténtalo de nuevo.');
     } finally {
+      sendingRef.current = false;
       setSending(false);
     }
   };
 
   if (sent) {
     return (
-      <div className="mcl-form-card">
+      <div className="mcl-form-card" ref={cardRef}>
         <div className="mcl-form-ok" role="status">
           <div className="mcl-ok-ic">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
@@ -72,13 +121,14 @@ const MasterclassForm = ({ onClose }) => {
           <h3>¡Tu cupo está reservado!</h3>
           <p>Te enviaremos el acceso a Google Meet antes de la clase.</p>
           {onClose && <button type="button" className="mcl-submit" style={{ marginTop: 20 }} onClick={onClose}>Listo</button>}
+          <button type="button" className="mcl-ok-again" onClick={signUpAgain}>Inscribir a otra persona</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mcl-form-card">
+    <div className="mcl-form-card" ref={cardRef}>
       {onClose && (
         <button type="button" className="mcl-modal-close" onClick={onClose} aria-label="Cerrar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>

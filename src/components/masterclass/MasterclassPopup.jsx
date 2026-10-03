@@ -7,7 +7,7 @@ import logo from '../../assets/masterclass/logo.svg';
 import photo from '../../assets/masterclass/hero-branding.webp';
 import './masterclassPopup.css';
 
-const OPEN_DELAY_MS = 5000;
+const OPEN_DELAY_MS = 1500;
 const AUTO_CLOSE_MS = 5000;
 const SEEN_KEY = 'nw_masterclass_popup_seen';
 
@@ -18,7 +18,7 @@ const markSeen = () => {
   try { sessionStorage.setItem(SEEN_KEY, '1'); } catch { /* sin storage: puede volver a salir */ }
 };
 
-// Popup de las masterclass en el Inicio: aparece a los 5 s y se cierra solo
+// Popup de las masterclass en el Inicio: aparece a los 1,5 s y se cierra solo
 // 5 s después, salvo que la persona interactúe (pasa el mouse, toca o enfoca
 // algo dentro), en cuyo caso se queda hasta que lo cierre. Una vez por sesión
 // y solo mientras dure la campaña (ver MASTERCLASS_CAMPAIGN_ENDS).
@@ -35,6 +35,8 @@ const MasterclassPopup = () => {
 
   useEffect(() => {
     if (!isMasterclassCampaignActive() || alreadySeen()) return undefined;
+    // Descarga la foto durante la espera, para que el popup no salga con el hueco vacío.
+    new Image().src = photo;
     const t = setTimeout(() => {
       // No encima de otro modal (login, términos...).
       if (document.querySelector('[aria-modal="true"], .admin-modal-overlay')) return;

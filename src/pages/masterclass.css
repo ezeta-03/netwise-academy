@@ -120,6 +120,7 @@
 .mcl-ok-ic { width: 56px; height: 56px; border-radius: 50%; background: #f1e9ff; display: grid; place-items: center; margin: 0 auto 16px; color: var(--mcl-violet); animation: mcl-pop .5s var(--mcl-ease) .15s backwards; }
 .mcl-form-ok h3 { font-size: 20px; font-weight: 600; letter-spacing: -.5px; color: var(--mcl-ink); margin: 0; }
 .mcl-form-ok p { font-size: 13px; color: #5e586a; margin: 8px 0 0; line-height: 20px; }
+.mcl-ok-again { display: block; margin: 16px auto 0; padding: 4px 8px; font-size: 12px; color: var(--mcl-violet) !important; background: none !important; text-decoration: underline; }
 
 /* ---------- Franja de casos ---------- */
 .mcl-cases { background: var(--mcl-violet); }

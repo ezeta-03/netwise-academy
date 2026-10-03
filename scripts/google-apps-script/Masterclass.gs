@@ -64,11 +64,12 @@ function doPost(e) {
 
     lock.waitLock(10000);
     const sheet = getOrCreateSheet();
-    sheet.appendRow([
+    const email = clean(data.email).toLowerCase();
+    const row = [
       data.createdAt ? new Date(data.createdAt) : new Date(),
       clean(data.firstName),
       clean(data.lastName),
-      clean(data.email).toLowerCase(),
+      email,
       // Apóstrofo: que Sheets no convierta el número en fórmula ni le quite el "+".
       "'" + String(data.whatsapp == null ? '' : data.whatsapp).trim().slice(0, 30),
       ...MASTERCLASSES.map((m) => (picked.indexOf(m.id) >= 0 ? 'Sí' : 'No')),
@@ -77,7 +78,27 @@ function doPost(e) {
       data.marketingConsent ? 'Sí' : 'No',
       clean(data.source) || 'landing',
       ...MASTERCLASSES_ADDED.map((m) => (picked.indexOf(m.id) >= 0 ? 'Sí' : 'No')),
-    ]);
+    ];
+
+    // Mismo correo ya inscrito: se actualiza su fila en vez de duplicarla.
+    // Conserva la fecha original y suma las masterclass (nunca quita una ya
+    // elegida); nombre, WhatsApp y promociones quedan con lo último enviado.
+    const existingRow = findRowByEmail(sheet, email);
+    if (existingRow) {
+      const range = sheet.getRange(existingRow, 1, 1, HEADERS.length);
+      const old = range.getValues()[0];
+      const mcCols = [
+        ...MASTERCLASSES.map((m, i) => 5 + i),
+        ...MASTERCLASSES_ADDED.map((m, i) => 5 + MASTERCLASSES.length + 4 + i),
+      ];
+      mcCols.forEach((c) => { if (old[c] === 'Sí') row[c] = 'Sí'; });
+      row[0] = old[0] || row[0];
+      row[5 + MASTERCLASSES.length] = mcCols.filter((c) => row[c] === 'Sí').length;
+      range.setValues([row]);
+      return jsonResponse({ ok: true, updated: true });
+    }
+
+    sheet.appendRow(row);
     return jsonResponse({ ok: true });
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
@@ -89,6 +110,14 @@ function doPost(e) {
 // GET solo para comprobar en el navegador que la implementación está activa.
 function doGet() {
   return jsonResponse({ ok: true, message: 'Webhook de masterclass activo. Usa POST para registrar una inscripción.' });
+}
+
+// Fila (1-based) donde ya está ese correo, o 0 si no está.
+function findRowByEmail(sheet, email) {
+  const last = sheet.getLastRow();
+  if (!email || last < 2) return 0;
+  const hit = sheet.getRange(2, 4, last - 1, 1).createTextFinder(email).matchEntireCell(true).findNext();
+  return hit ? hit.getRow() : 0;
 }
 
 // Evita inyección de fórmulas (=, +, -, @ al inicio) y recorta el largo.

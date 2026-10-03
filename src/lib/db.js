@@ -1162,8 +1162,17 @@ const sendLeadToSheet = (payload, url = LEADS_WEBAPP_URL, secret = LEADS_WEBAPP_
     mode: 'no-cors',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ ...payload, secret: secret || null }),
+    // Que el envío termine aunque la persona cierre o cambie de pestaña justo
+    // después (frecuente en el navegador interno de Instagram/Facebook).
+    keepalive: true,
   }).catch(() => {});
 };
+
+// addDoc no resuelve hasta que el servidor confirma: con mala señal (o en un
+// navegador interno que corta la conexión) el botón se quedaba en "Enviando…"
+// y la gente recargaba y se inscribía de nuevo. Pasado este tiempo damos el
+// envío por hecho: el Sheet ya lo recibió y Firestore lo sigue intentando.
+const FIRESTORE_ACK_TIMEOUT_MS = 6000;
 
 // Inscripciones a las masterclass gratuitas (landing /masterclass). Van a su
 // PROPIO Google Sheet -- ver scripts/google-apps-script/Masterclass.gs -- y
@@ -1189,7 +1198,9 @@ export const captureMasterclassLead = async ({ firstName, lastName, email, whats
     return payload;
   }
 
-  await addDoc(collection(db, 'masterclassLeads'), payload);
+  const write = addDoc(collection(db, 'masterclassLeads'), payload);
+  write.catch(() => {}); // si falla tras el tiempo de espera, que no quede sin manejar
+  await Promise.race([write, new Promise((resolve) => setTimeout(resolve, FIRESTORE_ACK_TIMEOUT_MS))]);
   return payload;
 };
 
