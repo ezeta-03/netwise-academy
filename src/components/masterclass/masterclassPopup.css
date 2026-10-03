@@ -57,7 +57,26 @@
 
 .mcp-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: #7d33ff; transform-origin: left; animation: mcp-timer linear forwards; }
 
+/* Pastilla que queda al cerrar el popup. A la izquierda: la derecha es del botón de WhatsApp. */
+.mcp-pill {
+  position: fixed; left: calc(24px + env(safe-area-inset-left)); bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 40;
+  display: flex; align-items: center; height: 44px; padding: 0 6px 0 4px; border-radius: 99px;
+  background: #0f0e18; border: 1px solid rgba(125, 51, 255, .55); box-shadow: 0 12px 30px -10px rgba(0, 0, 0, .7);
+  font-family: "Poppins", system-ui, sans-serif; animation: mcp-in .45s cubic-bezier(.22, 1, .36, 1);
+}
+.mcp-pill-open {
+  display: inline-flex; align-items: center; gap: 9px; height: 100%; padding: 0 10px 0 14px; border: 0; background: none;
+  color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.mcp-pill-open i { width: 8px; height: 8px; border-radius: 50%; background: #7d33ff; box-shadow: 0 0 0 3px rgba(125, 51, 255, .3); }
+.mcp-pill-x {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, .1); color: #c9c7d6; transition: background .2s;
+}
+.mcp-pill-x:hover { background: rgba(255, 255, 255, .22); }
+
 @media (max-width: 640px) {
+  .mcp-pill { left: calc(16px + env(safe-area-inset-left)); bottom: calc(19px + env(safe-area-inset-bottom)); }
   .mcp { grid-template-columns: 1fr; max-width: 380px; }
   .mcp-media { height: 200px; min-height: 0; }
   .mcp-photo { object-position: 45% 18%; }
@@ -70,5 +89,5 @@
   .mcp-note-mobile { display: inline; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .mcp, .mcp-overlay { animation: none; }
+  .mcp, .mcp-overlay, .mcp-pill { animation: none; }
 }

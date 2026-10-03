@@ -17,21 +17,41 @@ const alreadySeen = () => {
 const markSeen = () => {
   try { sessionStorage.setItem(SEEN_KEY, '1'); } catch { /* sin storage: puede volver a salir */ }
 };
+const PILL_DISMISSED_KEY = 'nw_masterclass_pill_dismissed';
+const pillDismissed = () => {
+  try { return sessionStorage.getItem(PILL_DISMISSED_KEY) === '1'; } catch { return false; }
+};
 
 // Popup de las masterclass en el Inicio: aparece a los 1,5 s y se cierra solo
 // 5 s después, salvo que la persona interactúe (pasa el mouse, toca o enfoca
 // algo dentro), en cuyo caso se queda hasta que lo cierre. Una vez por sesión
-// y solo mientras dure la campaña (ver MASTERCLASS_CAMPAIGN_ENDS).
+// y solo mientras dure la campaña (ver MASTERCLASS_CAMPAIGN_ENDS). Al cerrarse
+// deja una pastilla flotante para volver a abrirlo, hasta que la descarten.
 const MasterclassPopup = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [held, setHeld] = useState(false);
+  const [pill, setPill] = useState(() => isMasterclassCampaignActive() && alreadySeen() && !pillDismissed());
   const closeTimer = useRef(null);
 
   const close = useCallback(() => {
     clearTimeout(closeTimer.current);
     setOpen(false);
+    setPill(!pillDismissed());
   }, []);
+
+  // Reabierto a pedido: sin cierre automático.
+  const reopen = () => {
+    window.dataLayer?.push({ event: 'masterclass_pill_click' });
+    setPill(false);
+    setHeld(true);
+    setOpen(true);
+  };
+
+  const dismissPill = () => {
+    try { sessionStorage.setItem(PILL_DISMISSED_KEY, '1'); } catch { /* sin storage: vuelve al recargar */ }
+    setPill(false);
+  };
 
   useEffect(() => {
     if (!isMasterclassCampaignActive() || alreadySeen()) return undefined;
@@ -68,7 +88,17 @@ const MasterclassPopup = () => {
     navigate('/masterclass');
   };
 
-  if (!open) return null;
+  if (!open) {
+    if (!pill) return null;
+    return (
+      <ModalPortal>
+        <div className="mcp-pill">
+          <button type="button" className="mcp-pill-open" onClick={reopen}><i /> {MASTERCLASSES.length} masterclass gratis</button>
+          <button type="button" className="mcp-pill-x" onClick={dismissPill} aria-label="Ocultar aviso de masterclass"><X size={14} /></button>
+        </div>
+      </ModalPortal>
+    );
+  }
 
   return (
     <ModalPortal>
