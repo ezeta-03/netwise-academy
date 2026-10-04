@@ -163,7 +163,7 @@ const AdminVentas = () => {
                 const expected = o.status === 'pending' ? amountMismatch(o) : null;
                 return (
                   <tr key={o.id}>
-                    <td><div className="admin-cell-name">{o.code}</div><div className="admin-cell-sub">{new Date(o.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</div></td>
+                    <td><div className="admin-cell-name">{o.code}{o.demo ? <span className="admin-cell-sub"> · ejemplo</span> : null}</div><div className="admin-cell-sub">{new Date(o.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</div></td>
                     <td>{o.studentName}</td>
                     <td>{o.courseTitle}</td>
                     <td className="admin-price">S/ {Number(o.amount).toFixed(2)}{expected !== null && <div className="admin-cell-sub" style={{ color: '#B45309' }} title="El importe del pedido no coincide con el precio vigente"><AlertTriangle size={11} /> Esperado S/ {expected.toFixed(2)}</div>}</td>

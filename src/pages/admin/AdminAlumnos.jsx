@@ -300,7 +300,7 @@ const AdminAlumnos = () => {
                 const order = paymentOf(e, orders);
                 return (
                   <tr key={e.id || `${e.uid}_${e.courseId}`}>
-                    <td><div className="admin-cell-name">{e.studentName || e.uid}</div><div className="admin-cell-sub">{e.studentEmail}</div></td>
+                    <td><div className="admin-cell-name">{e.studentName || e.uid}</div><div className="admin-cell-sub">{e.studentEmail}{e.demo ? ' · ejemplo' : ''}</div></td>
                     <td>{e.courseTitle}</td>
                     <td>
                       {group ? (

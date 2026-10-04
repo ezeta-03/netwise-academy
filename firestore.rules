@@ -293,7 +293,9 @@ service cloud.firestore {
       // admin puede pasarlo a 'paid' al validar el comprobante -- ver
       // approveOrder en lib/db.js.
       allow update: if isAdmin();
-      allow delete: if false;
+      // Un pedido real nunca se borra. Solo los de ejemplo (marcados `demo`
+      // por "Poblar con datos de ejemplo" en Configuración) los puede quitar el admin.
+      allow delete: if isAdmin() && resource.data.get('demo', false) == true;
     }
 
     // Bitácora de cambios del panel de Admin. Solo el admin la ve y escribe
