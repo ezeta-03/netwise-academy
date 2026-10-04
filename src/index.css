@@ -2497,3 +2497,49 @@ body {
 .auth-action-link { display: block; width: 100%; margin-top: 14px; background: none; border: 0; cursor: pointer; font-family: inherit; font-size: .86rem; font-weight: 600; color: var(--accent); }
 .auth-action-foot { margin-top: 20px; font-size: .78rem; color: #9795A8; text-align: center; }
 @media (max-width: 640px) { .auth-action-card { padding: 30px 22px; } .auth-action-title { font-size: 1.25rem; } }
+
+/* Formularios con secciones y casillas en tarjeta (Registrar docente) */
+.admin-modal-section { font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 18px 0 10px; }
+.admin-modal-section:first-of-type { margin-top: 4px; }
+.admin-check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 6px; }
+.admin-check-card { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #E4E2EE; border-radius: 10px; font-size: .84rem; font-weight: 600; color: #14141F; cursor: pointer; }
+.admin-check-card:hover { border-color: var(--accent); }
+.admin-check-card input { margin-top: 2px; width: 15px; height: 15px; accent-color: var(--accent); flex-shrink: 0; }
+.admin-check-card:has(input:checked) { border-color: var(--accent); background: var(--accent-bg); }
+
+/* "Selecciona un aula" (components/AulaPickerModal.jsx) */
+.aula-picker-list { display: grid; gap: 10px; }
+.aula-picker-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 14px 16px; border: 1px solid #E4E2EE; border-radius: 12px; background: #fff; cursor: pointer; text-align: left; font-family: inherit; color: #14141F; }
+.aula-picker-item strong { display: block; font-size: .95rem; margin-bottom: 4px; }
+.aula-picker-sub { display: block; font-size: .8rem; color: #6B6980; }
+.aula-picker-enter { display: inline-flex; align-items: center; gap: 4px; font-size: .82rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.aula-picker-item:hover, .aula-picker-item:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-bg); }
+
+/* Subir QR (Admin > Métodos de pago) */
+.qr-upload-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 26px 16px; border-radius: 12px; background: var(--accent-bg); border: 1.5px dashed #CDBDFA; color: var(--accent); font-size: .84rem; text-align: center; cursor: pointer; }
+.qr-upload-drop span { color: #4A4860; }
+.qr-upload-drop.over, .qr-upload-drop:hover, .qr-upload-drop:focus-visible { border-color: var(--accent); outline: none; }
+.qr-upload-preview { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.qr-upload-preview img { width: 132px; height: 132px; object-fit: contain; border-radius: 10px; border: 1px solid #E4E2EE; background: #fff; }
+.qr-upload-preview > div { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; flex: 1; min-width: 180px; }
+
+/* Indicaciones de clase (guion de cada sesión) */
+.guion-session { padding: 14px 0; border-top: 1px solid #ECEAF3; }
+.guion-session:first-of-type { border-top: 0; padding-top: 0; }
+.guion-session-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.guion-session-num { flex-shrink: 0; padding: 3px 8px; border-radius: 8px; background: var(--accent-bg); color: var(--accent); font-size: .72rem; font-weight: 800; }
+.guion-list { margin: 0; display: grid; gap: 4px; }
+.guion-list dt { display: flex; align-items: center; gap: 6px; font-size: .78rem; font-weight: 700; color: #14141F; margin-top: 8px; }
+.guion-list dt:first-child { margin-top: 0; }
+.guion-list dd { margin: 0 0 0 20px; font-size: .86rem; line-height: 1.55; color: #4A4860; }
+
+/* Asistencia: tardanza y leyenda */
+.session-chip.late { background: #FEF3DC; color: #B45309; border-color: transparent; }
+.attendance-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; font-size: .78rem; color: #6B6980; }
+.attendance-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.attendance-legend i { font-style: normal; font-weight: 700; padding: 2px 7px; border-radius: 6px; font-size: .72rem; }
+
+/* Contenido en solo lectura (docente sin permiso de edición) */
+.content-readonly .admin-icon-btn:not(.content-keep) { display: none; }
+
+@media (max-width: 640px) { .admin-check-grid { grid-template-columns: 1fr; } }

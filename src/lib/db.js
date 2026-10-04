@@ -200,7 +200,7 @@ const randomPassword = () => {
   return `Nw!${Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('')}`;
 };
 
-export const createTeacherAccount = async ({ name, email, phone = '', courseIds = [] }) => {
+export const createTeacherAccount = async ({ name, email, phone = '', courseIds = [], specialty = '', bio = '', permissions = null }) => {
   if (!isConfigValid) throw new Error('app/needs-firebase');
   const cleanEmail = email.trim().toLowerCase();
   let uid;
@@ -214,9 +214,26 @@ export const createTeacherAccount = async ({ name, email, phone = '', courseIds 
     if (!data?.uid) throw err;
     uid = data.uid;
   }
-  await setDoc(doc(db, 'users', uid), { email: cleanEmail, displayName: name.trim(), phone: phone.trim(), role: 'teacher', createdAt: new Date().toISOString() }, { merge: true });
+  await setDoc(doc(db, 'users', uid), {
+    email: cleanEmail, displayName: name.trim(), phone: phone.trim(), role: 'teacher', createdAt: new Date().toISOString(),
+    specialty, bio, ...(permissions ? { permissions } : {}),
+  }, { merge: true });
   for (const courseId of courseIds) await updateCourseTeacher(courseId, uid);
   return { uid };
+};
+
+// Ficha de un docente (Admin > Docentes): nombre, celular, especialidad,
+// biografía y qué funciones del panel puede usar (lib/permissions.js). Solo se
+// escriben los campos que llegan.
+export const updateTeacherProfile = async (uid, { displayName, phone, specialty, bio, permissions }) => {
+  if (!isConfigValid) return;
+  const patch = {};
+  if (displayName !== undefined && displayName.trim()) patch.displayName = displayName.trim();
+  if (phone !== undefined) patch.phone = phone;
+  if (specialty !== undefined) patch.specialty = specialty;
+  if (bio !== undefined) patch.bio = bio;
+  if (permissions) patch.permissions = permissions;
+  await setDoc(doc(db, 'users', uid), patch, { merge: true });
 };
 
 // Enlace de un solo uso a la página propia de la academia para crear o cambiar
@@ -846,6 +863,23 @@ export const uploadPaymentProof = async (uid, courseId, file) => {
   const path = `paymentProofs/${uid}/${courseId}_${Date.now()}_${file.name}`;
   const ref = storageRef(storage, path);
   await uploadBytes(ref, file);
+  return getDownloadURL(ref);
+};
+
+// Código QR de un método de pago (Admin > Métodos de pago): lo sube el admin
+// y lo ve cualquiera en el checkout. En modo mock queda como data URL.
+export const uploadPaymentQr = async (methodId, file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const ref = storageRef(storage, `paymentQr/${methodId}_${Date.now()}.${ext}`);
+  await uploadBytes(ref, file, { contentType: file.type });
   return getDownloadURL(ref);
 };
 
@@ -1511,9 +1545,11 @@ export const fetchCourseAttendance = async (courseId, uid) => {
 
 // `excused`: la sesión no aplica para ese alumno (se matriculó después o tiene
 // la falta justificada) y no entra en su porcentaje -- ver lib/attendance.js.
-export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studentName, present, excused = false }) => {
+// `late`: llegó tarde -- cuenta como presente, pero queda anotada la tardanza.
+export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studentName, present, excused = false, late = false }) => {
   const docId = `${uid}_${courseId}_${sessionId}`;
-  const payload = { courseId, sessionId, moduleId, uid, studentName, present: !!present && !excused, excused: !!excused, updatedAt: new Date().toISOString() };
+  const isPresent = !!present && !excused;
+  const payload = { courseId, sessionId, moduleId, uid, studentName, present: isPresent, excused: !!excused, late: isPresent && !!late, updatedAt: new Date().toISOString() };
 
   if (!isConfigValid) {
     const key = `mock_attendance_${courseId}`;

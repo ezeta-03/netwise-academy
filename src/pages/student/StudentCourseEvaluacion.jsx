@@ -214,6 +214,7 @@ const MiAsistencia = ({ course, modules, attendance }) => {
   const sessions = getOrderedSessions(modules);
   const stats = attendanceStats(sessions, attendance);
   const { pct } = stats;
+  const lates = attendance.filter((a) => a.present && a.late).length;
   const grouped = modules.filter((m) => m.sessions?.length).map((m) => ({ module: m, sessions: sessions.filter((s) => s.moduleId === m.id) }));
 
   return (
@@ -223,7 +224,7 @@ const MiAsistencia = ({ course, modules, attendance }) => {
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card"><div className="admin-stat-label">Asistencia</div><div className="admin-stat-value">{pct === null ? '—' : `${pct}%`}</div><div className="admin-cell-sub">{pct === null ? 'Aún sin sesiones registradas' : pct >= APPROVAL.minAttendancePct ? `Cumples el mínimo de ${APPROVAL.minAttendancePct}%` : `Por debajo del mínimo de ${APPROVAL.minAttendancePct}%`}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Sesiones</div><div className="admin-stat-value">{stats.present}/{stats.taken}</div><div className="admin-cell-sub">Asistidas de las dictadas</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Faltas</div><div className="admin-stat-value">{stats.absent}</div><div className="admin-cell-sub">{stats.unregistered > 0 ? `${stats.unregistered} sin registro cuentan como falta` : 'Incluye las sesiones sin registro'}</div></div>
+        <div className="admin-stat-card"><div className="admin-stat-label">Faltas</div><div className="admin-stat-value">{stats.absent}</div><div className="admin-cell-sub">{lates} tardanza{lates === 1 ? '' : 's'} · {stats.unregistered > 0 ? `${stats.unregistered} sin registro cuentan como falta` : 'Incluye las sesiones sin registro'}</div></div>
       </div>
 
       <div className="admin-panel">
@@ -232,13 +233,14 @@ const MiAsistencia = ({ course, modules, attendance }) => {
           <div key={g.module.id} className="session-module-group">
             <div className="session-module-label">{g.module.title}</div>
             <div className="session-chip-row">
+              {/* Una tardanza se ve con T: cuenta como asistencia. */}
               {g.sessions.map((s) => {
                 const a = attendance.find((x) => x.sessionId === s.id);
-                const cls = !a ? (s.done ? 'absent' : 'pending') : a.excused ? 'excused' : a.present ? 'present' : 'absent';
+                const cls = !a ? (s.done ? 'absent' : 'pending') : a.excused ? 'excused' : a.present ? (a.late ? 'late' : 'present') : 'absent';
                 return (
                   <div key={s.id} className={`session-chip ${cls}`}>
                     <span className="session-chip-label">{s.label}</span>
-                    <span>{a?.excused ? 'No aplica' : (s.dateLabel || (!a ? (s.done ? 'Sin registro' : 'Por dictar') : ''))}</span>
+                    <span>{a?.excused ? 'No aplica' : a?.present && a?.late ? 'Tardanza' : (s.dateLabel || (!a ? (s.done ? 'Sin registro' : 'Por dictar') : ''))}</span>
                   </div>
                 );
               })}

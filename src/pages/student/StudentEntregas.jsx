@@ -33,6 +33,7 @@ const StudentEntregas = () => {
   const [enrollments, setEnrollments] = useState({});
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
+  const [courseFilter, setCourseFilter] = useState('all');
 
   useEffect(() => {
     if (!currentUser) return;
@@ -48,8 +49,10 @@ const StudentEntregas = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando tus entregas...</div>;
 
-  const counts = { pending: items.filter((i) => i.status === 'pending').length, submitted: items.filter((i) => i.status === 'submitted').length, reviewed: items.filter((i) => i.status === 'reviewed').length };
-  const filtered = items.filter((i) => i.status === tab);
+  const myCourses = courses.filter((c) => enrollments[c.id]);
+  const inCourse = items.filter((i) => courseFilter === 'all' || i.courseId?.toString() === courseFilter);
+  const counts = { pending: inCourse.filter((i) => i.status === 'pending').length, submitted: inCourse.filter((i) => i.status === 'submitted').length, reviewed: inCourse.filter((i) => i.status === 'reviewed').length };
+  const filtered = inCourse.filter((i) => i.status === tab);
 
   return (
     <div className="anim-fade-up d1">
@@ -59,6 +62,16 @@ const StudentEntregas = () => {
           <p className="admin-page-sub">Tus trabajos, fechas de entrega y comentarios del docente.</p>
         </div>
       </div>
+
+      {myCourses.length > 1 && (
+        <div className="admin-toolbar" style={{ alignItems: 'center', marginBottom: 12 }}>
+          <label htmlFor="entregas-curso" className="admin-cell-sub">Filtrar por curso</label>
+          <select id="entregas-curso" className="admin-select" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}>
+            <option value="all">Todos mis cursos</option>
+            {myCourses.map((c) => <option key={c.id} value={c.id.toString()}>{c.title}</option>)}
+          </select>
+        </div>
+      )}
 
       <div className="admin-toolbar" style={{ gap: 8 }}>
         {TABS.map((t) => (

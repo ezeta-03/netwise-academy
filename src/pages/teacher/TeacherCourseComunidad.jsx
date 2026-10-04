@@ -5,6 +5,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCommunityPosts, createCommunityPost, addCommunityComment } from '../../lib/db';
+import { can } from '../../lib/permissions';
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -117,7 +118,7 @@ const TeacherCourseComunidad = () => {
           <h1 className="admin-page-title">Comunidad</h1>
           <p className="admin-page-sub">{course.title}{group?.name ? ` · Grupo ${group.name}` : ''}</p>
         </div>
-        <button className="admin-btn-edit" onClick={() => setModalOpen(true)}><Plus size={15} /> Publicar anuncio</button>
+        {can(currentUser, 'announce') && <button className="admin-btn-edit" onClick={() => setModalOpen(true)}><Plus size={15} /> Publicar anuncio</button>}
       </div>
 
       {loading ? <div className="admin-empty-hint">Cargando comunidad...</div> : posts.length === 0 ? (

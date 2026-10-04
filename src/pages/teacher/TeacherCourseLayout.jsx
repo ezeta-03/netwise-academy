@@ -36,7 +36,7 @@ const SUB_NAV = [
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Seguimiento', evaluacion: 'Evaluación', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
+const PAGE_LABELS = { indicaciones: 'Indicaciones de clase', contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Seguimiento', evaluacion: 'Evaluación', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
 
 const TeacherCourseLayout = () => {
   const { courseId } = useParams();

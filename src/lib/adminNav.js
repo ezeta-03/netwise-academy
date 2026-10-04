@@ -1,4 +1,4 @@
-import { LayoutGrid, BookOpen, Tag, Calendar, Users, ShoppingCart, ShieldCheck, History, Settings, Wallet, Headphones } from 'lucide-react';
+import { LayoutGrid, BookOpen, Tag, Calendar, Users, ShoppingCart, ShieldCheck, History, Settings, Wallet, Headphones, GraduationCap } from 'lucide-react';
 
 // Menú del panel de Admin. Lo usan AdminLayout y el editor de contenido de un
 // curso cuando lo abre el admin (/admin/curso/:id), para que siga viendo SU
@@ -9,6 +9,7 @@ export const ADMIN_NAV = [
   { to: '/admin/promociones', label: 'Promociones', icon: Tag },
   { to: '/admin/grupos', label: 'Aulas y horarios', icon: Calendar },
   { to: '/admin/alumnos', label: 'Alumnos y accesos', icon: Users },
+  { to: '/admin/docentes', label: 'Docentes', icon: GraduationCap },
   { to: '/admin/ventas', label: 'Ventas e inscripciones', icon: ShoppingCart, countKey: 'ventas' },
   { to: '/admin/pagos', label: 'Métodos de pago', icon: Wallet },
   { to: '/admin/soporte', label: 'Soporte', icon: Headphones },

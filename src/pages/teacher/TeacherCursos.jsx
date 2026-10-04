@@ -1,12 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Video, ArrowRight, Clock3 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
+import { useEnterCourse } from '../../hooks/useEnterCourse';
 
 const TeacherCursos = () => {
-  const navigate = useNavigate();
+  const { enterCourse, picker } = useEnterCourse();
   const { currentUser } = useAuth();
   const { courses: allCourses } = useCourseOfferings();
   // Un admin sigue viendo todos los cursos desde /teacher; un docente solo
@@ -27,7 +27,7 @@ const TeacherCursos = () => {
       )}
       <div className="home-courses-grid">
         {courses.map((c) => (
-          <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => navigate(`/teacher/curso/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/teacher/curso/${c.id}`); } }}>
+          <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => enterCourse(c)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enterCourse(c); } }}>
             <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
             <div className="home-course-body">
               <div className="home-course-meta-row">
@@ -42,6 +42,7 @@ const TeacherCursos = () => {
           </div>
         ))}
       </div>
+      {picker}
     </div>
   );
 };

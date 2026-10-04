@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 // El editor del curso vive en /teacher/curso/:id y, para el admin, en
 // /admin/curso/:id: los enlaces internos se quedan en el panel desde el que se abrió.
 const useCourseBase = () => (useLocation().pathname.startsWith('/admin/') ? '/admin' : '/teacher');
-import { Plus, Trash2, CheckCircle2, Lock, Calendar, Check } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, Lock, Calendar, Check, BookOpen } from 'lucide-react';
 
 // Panel "Módulos" del riel lateral -- compartido entre Contenido (donde
 // clickear un módulo lo selecciona en la misma página) y otras páginas de
@@ -63,17 +63,6 @@ export const GuidePanel = ({ courseId, active }) => {
         <span className="dash-guide-badge"><Lock size={11} /> Solo docente</span>
       </div>
       <div
-        className={`dash-guide-row ${active === 'rubrica' ? 'active' : ''}`}
-        style={{ cursor: 'pointer' }}
-        onClick={() => navigate(`${base}/curso/${courseId}/rubrica`)}
-      >
-        <div className="dash-guide-row-icon"><Check size={15} /></div>
-        <div>
-          <div className="dash-guide-row-title">Rúbrica de evaluación</div>
-          <div className="dash-guide-row-sub">Criterios comunes a todo el curso</div>
-        </div>
-      </div>
-      <div
         className={`dash-guide-row ${active === 'cronograma' ? 'active' : ''}`}
         style={{ cursor: 'pointer' }}
         onClick={() => navigate(`${base}/curso/${courseId}/cronograma`)}
@@ -81,7 +70,29 @@ export const GuidePanel = ({ courseId, active }) => {
         <div className="dash-guide-row-icon"><Calendar size={15} /></div>
         <div>
           <div className="dash-guide-row-title">Cronograma de evaluación</div>
-          <div className="dash-guide-row-sub">Fechas, pesos y requisitos</div>
+          <div className="dash-guide-row-sub">Fechas, pesos y aprobación</div>
+        </div>
+      </div>
+      <div
+        className={`dash-guide-row ${active === 'indicaciones' ? 'active' : ''}`}
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate(`${base}/curso/${courseId}/indicaciones`)}
+      >
+        <div className="dash-guide-row-icon"><BookOpen size={15} /></div>
+        <div>
+          <div className="dash-guide-row-title">Indicaciones de clase</div>
+          <div className="dash-guide-row-sub">Guion de cada sesión</div>
+        </div>
+      </div>
+      <div
+        className={`dash-guide-row ${active === 'rubrica' ? 'active' : ''}`}
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate(`${base}/curso/${courseId}/rubrica`)}
+      >
+        <div className="dash-guide-row-icon"><Check size={15} /></div>
+        <div>
+          <div className="dash-guide-row-title">Rúbrica de evaluación</div>
+          <div className="dash-guide-row-sub">Criterios y niveles de logro</div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { Radio, LogIn, XCircle, Trash2, Film } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { scheduleLiveSession, fetchLiveSessions, fetchGroups, cancelLiveSession, deleteLiveSession } from '../../lib/db';
+import { can } from '../../lib/permissions';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { toPeruIso } from '../../lib/liveScheduleGenerator';
 import LiveRoom from '../../components/LiveRoom';
@@ -115,6 +116,7 @@ const TeacherCourseSala = () => {
     }
   };
 
+  const canSchedule = can(currentUser, 'scheduleClasses');
   const cancelableIds = sessions.filter((s) => { const st = getLiveSessionStatus(s); return st === 'upcoming' || st === 'live'; }).map((s) => s.id);
 
   if (activeSession) {
@@ -140,7 +142,7 @@ const TeacherCourseSala = () => {
 
       <p className="admin-panel-caption" style={{ marginTop: -8, marginBottom: 20 }}>El calendario completo del curso lo genera el Admin al crear el aula. Usa esto para una clase suelta -- recuperación, Q&A extra, etc.</p>
 
-      <div className="admin-panel" style={{ maxWidth: 520, marginBottom: 24 }}>
+      {canSchedule && <div className="admin-panel" style={{ maxWidth: 520, marginBottom: 24 }}>
         <div className="admin-panel-head"><span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Programar clase suelta</span></div>
         <div className="admin-field"><label>Título de la sesión</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Q&A: dudas del módulo 3" /></div>
         <div className="admin-field-row">
@@ -150,12 +152,12 @@ const TeacherCourseSala = () => {
         <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={handleSchedule} disabled={saving}>
           <Radio size={14} /> {saving ? 'Programando...' : 'Programar clase en vivo'}
         </button>
-      </div>
+      </div>}
 
       <div className="admin-panel">
         <div className="admin-panel-head">
           <span className="admin-panel-title">Clases de este curso</span>
-          {selected.length > 0 && (
+          {canSchedule && selected.length > 0 && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               {selected.some((id) => cancelableIds.includes(id)) && (
                 <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkCancel} disabled={bulkCancelling}>
@@ -170,7 +172,7 @@ const TeacherCourseSala = () => {
         </div>
         {sessions.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no programas clases para este curso.</p> : (
           <>
-            {sessions.length > 0 && (
+            {canSchedule && sessions.length > 0 && (
               <label className="admin-field-checkbox" style={{ marginBottom: 8, fontSize: '.78rem' }}>
                 <input
                   type="checkbox"
@@ -186,7 +188,7 @@ const TeacherCourseSala = () => {
               return (
                 <div key={s.id} className="dash-list-row">
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    <input type="checkbox" aria-label={`Seleccionar ${s.title}`} style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />
+                    {canSchedule && <input type="checkbox" aria-label={`Seleccionar ${s.title}`} style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
                     <div>
                       <div className="dash-list-row-title">{s.title}{groupNames[s.groupId] ? ` · ${groupNames[s.groupId]}` : ''}</div>
                       <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleString('es-PE')} {status === 'cancelled' && '· Cancelada'} {status === 'ended' && '· Finalizada'}</div>
@@ -199,8 +201,8 @@ const TeacherCourseSala = () => {
                         <Film size={13} /> {s.recordingUrl ? 'Grabación ✓' : 'Grabación'}
                       </button>
                     )}
-                    {canCancel && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>}
-                    <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>
+                    {canSchedule && canCancel && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>}
+                    {canSchedule && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
                   </div>
                 </div>
               );

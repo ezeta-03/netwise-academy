@@ -47,6 +47,7 @@ import TeacherCourseLayout from './pages/teacher/TeacherCourseLayout';
 import TeacherCourseContenido from './pages/teacher/TeacherCourseContenido';
 import TeacherCourseRubrica from './pages/teacher/TeacherCourseRubrica';
 import TeacherCourseCronograma from './pages/teacher/TeacherCourseCronograma';
+import TeacherCourseIndicaciones from './pages/teacher/TeacherCourseIndicaciones';
 import TeacherCourseSala from './pages/teacher/TeacherCourseSala';
 import TeacherCourseMateriales from './pages/teacher/TeacherCourseMateriales';
 import TeacherCourseProyecto from './pages/teacher/TeacherCourseProyecto';
@@ -63,6 +64,7 @@ import AdminCursos from './pages/admin/AdminCursos';
 import AdminPromociones from './pages/admin/AdminPromociones';
 import AdminGrupos from './pages/admin/AdminGrupos';
 import AdminAlumnos from './pages/admin/AdminAlumnos';
+import AdminDocentes from './pages/admin/AdminDocentes';
 import AdminVentas from './pages/admin/AdminVentas';
 import AdminPagos from './pages/admin/AdminPagos';
 import AdminSoporte from './pages/admin/AdminSoporte';
@@ -158,6 +160,7 @@ function App() {
             <Route path="promociones" element={<AdminPromociones />} />
             <Route path="grupos" element={<AdminGrupos />} />
             <Route path="alumnos" element={<AdminAlumnos />} />
+            <Route path="docentes" element={<AdminDocentes />} />
             <Route path="ventas" element={<AdminVentas />} />
             <Route path="pagos" element={<AdminPagos />} />
             <Route path="soporte" element={<AdminSoporte />} />
@@ -172,6 +175,7 @@ function App() {
             <Route path="contenido" element={<TeacherCourseContenido />} />
             <Route path="rubrica" element={<TeacherCourseRubrica />} />
             <Route path="cronograma" element={<TeacherCourseCronograma />} />
+            <Route path="indicaciones" element={<TeacherCourseIndicaciones />} />
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />
@@ -192,6 +196,7 @@ function App() {
             <Route path="contenido" element={<TeacherCourseContenido />} />
             <Route path="rubrica" element={<TeacherCourseRubrica />} />
             <Route path="cronograma" element={<TeacherCourseCronograma />} />
+            <Route path="indicaciones" element={<TeacherCourseIndicaciones />} />
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />

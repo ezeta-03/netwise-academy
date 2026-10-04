@@ -28,7 +28,7 @@ const YapeInstructionsModal = ({ cfg, amountLabel, onClose }) => {
           <p className="lead-modal-desc">Sigue estos pasos para completar tu pago y asegurar tu cupo.</p>
 
           <div className="yape-qr-highlight">
-            <img src={qrZaazmago} alt={`Código QR de Yape Empresas -- ${accountName}`} className="yape-qr-img" />
+            <img src={cfg?.qrUrl || qrZaazmago} alt={`Código QR de Yape/Plin de ${accountName}`} className="yape-qr-img" />
             <span className="yape-highlight-sub">{accountName}</span>
           </div>
 

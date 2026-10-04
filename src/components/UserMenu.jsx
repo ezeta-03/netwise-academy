@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, UserRound } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const ROLE_LABEL = { admin: 'Administrador', teacher: 'Docente', student: 'Estudiante' };
@@ -13,7 +13,7 @@ const getInitials = (name) => {
 };
 
 // Iniciales del usuario (arriba a la derecha): al tocarlas se abre el menú con
-// su perfil y "Cerrar sesión". Es el único lugar desde donde se cierra sesión,
+// sus datos y "Cerrar sesión". Es el único lugar desde donde se cierra sesión,
 // igual en escritorio y en teléfono. `avatarClassName` adapta el círculo al
 // panel (claro) o a la barra pública (oscura).
 const UserMenu = ({ avatarClassName = 'admin-avatar' }) => {
@@ -61,9 +61,6 @@ const UserMenu = ({ avatarClassName = 'admin-avatar' }) => {
             {currentUser.displayName && <div className="user-menu-email">{currentUser.email}</div>}
             <span className="user-menu-role">{ROLE_LABEL[currentUser.role] || 'Usuario'}</span>
           </div>
-          <button type="button" role="menuitem" className="user-menu-item" onClick={() => { setOpen(false); navigate('/profile'); }}>
-            <UserRound size={16} /> Mi perfil
-          </button>
           <button type="button" role="menuitem" className="user-menu-item user-menu-logout" onClick={handleLogout}>
             <LogOut size={16} /> Cerrar sesión
           </button>

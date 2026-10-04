@@ -99,6 +99,8 @@ export const AuthProvider = ({ children }) => {
         email: user.email,
         displayName: profile.displayName || user.displayName,
         role: profile.role,
+        // Funciones del panel docente que el admin le dejó (lib/permissions.js).
+        permissions: profile.permissions || null,
       });
       setLoading(false);
     });

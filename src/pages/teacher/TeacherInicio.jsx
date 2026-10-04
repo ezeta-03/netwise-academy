@@ -4,6 +4,7 @@ import { Calendar, Video, ArrowRight, BookOpen, CheckCircle2, BarChart3, Clock3 
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
+import { useEnterCourse } from '../../hooks/useEnterCourse';
 import { fetchLiveSessions, fetchAllEnrollments, fetchCourseContent, fetchSubmissions } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { allDeliverableModules } from '../../lib/weights';
@@ -32,6 +33,7 @@ const TeacherInicio = () => {
   const [enrollments, setEnrollments] = useState([]);
   const [pendingByCourse, setPendingByCourse] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { enterCourse, picker } = useEnterCourse();
 
   useEffect(() => {
     Promise.all([
@@ -132,7 +134,7 @@ const TeacherInicio = () => {
                 <div className="admin-cell-sub" style={{ color: 'var(--accent)', fontWeight: 600 }}>{course.title}</div>
                 <span className="admin-status admin-status-amber">Por revisar · {pending}</span>
               </div>
-              <button className="admin-btn-ghost" onClick={() => navigate(`/teacher/curso/${course.id}/contenido${firstModuleId ? `?modulo=${firstModuleId}` : ''}`)}>
+              <button className="admin-btn-ghost" onClick={() => enterCourse(course, `/teacher/curso/${course.id}/contenido${firstModuleId ? `?modulo=${firstModuleId}` : ''}`)}>
                 <ArrowRight size={13} /> Ver proyecto
               </button>
             </div>
@@ -146,7 +148,7 @@ const TeacherInicio = () => {
       </div>
       <div className="home-courses-grid">
         {courses.map((c) => (
-          <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => navigate(`/teacher/curso/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/teacher/curso/${c.id}`); } }}>
+          <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => enterCourse(c)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enterCourse(c); } }}>
             <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
             <div className="home-course-body">
               <div className="home-course-meta-row">
@@ -161,6 +163,7 @@ const TeacherInicio = () => {
           </div>
         ))}
       </div>
+      {picker}
     </div>
   );
 };

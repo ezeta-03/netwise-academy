@@ -4,6 +4,7 @@ import { Plus, Video, X, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchAllEnrollments, fetchWorkGroups, createWorkGroup, fetchPrivateRooms, createPrivateRoom } from '../../lib/db';
+import { aulaRoster } from '../../lib/roster';
 import LiveRoom from '../../components/LiveRoom';
 import ModalPortal from '../../components/ModalPortal';
 
@@ -104,7 +105,7 @@ const ViewGroupModal = ({ group, onClose }) => (
 );
 
 const TeacherCourseGrupos = () => {
-  const { course } = useOutletContext();
+  const { course, groups: aulas, aulaId } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast } = useUI();
   const [roster, setRoster] = useState([]);
@@ -117,12 +118,19 @@ const TeacherCourseGrupos = () => {
 
   const load = useCallback(() => {
     Promise.all([fetchAllEnrollments(course.id), fetchWorkGroups(course.id), fetchPrivateRooms(course.id)]).then(([enrollments, wg, rms]) => {
-      setRoster(enrollments.filter((e) => e.courseId?.toString() === course.id.toString()).map((e) => ({ uid: e.uid, studentName: e.studentName || e.uid })));
-      setGroups(wg);
+      // Con varias aulas, se ve el aula elegida: sus alumnos y los equipos donde participan.
+      const members = aulaRoster(enrollments, course.id, aulas, aulaId);
+      const uids = new Set(members.map((m) => m.uid));
+      setRoster(members.map((m) => ({ uid: m.uid, studentName: m.studentName })));
+      setGroups(aulaId == null ? wg : wg.filter((g) => {
+        const people = [g.leaderUid, ...(g.memberUids || []), ...(g.pendingUids || [])].filter(Boolean);
+        return people.length === 0 || people.some((u) => uids.has(u));
+      }));
       setRooms(rms);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [course.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course.id, aulaId, aulas?.length]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw, Users } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import AdminAsignarAlumnos from './AdminAsignarAlumnos';
+import AulaStudentsModal from './AulaStudentsModal';
 import { countByGroup, freeSeats, unassignedEnrollments } from '../../lib/groupAssignment';
 import { fetchOrders, fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
@@ -521,7 +522,10 @@ const AdminGrupos = () => {
   const [sessionsKey, setSessionsKey] = useState(0);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
-  const [tab, setTab] = useState('aulas');
+  // Alumnos y accesos manda aquí con la pestaña "Asignar alumnos" ya abierta.
+  const location = useLocation();
+  const [tab, setTab] = useState(location.state?.tab === 'asignar' ? 'asignar' : 'aulas');
+  const [viewingStudents, setViewingStudents] = useState(null);
   // Inscritos por aula: se cuentan de las matrículas activas reales (el campo
   // `enrolledCount` del aula nunca se actualizaba al matricular).
   const [enrollments, setEnrollments] = useState([]);
@@ -589,6 +593,7 @@ const AdminGrupos = () => {
               <td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', group: g })} title="Editar"><Pencil size={14} /></button>
+                  <button className="admin-btn-ghost" style={{ padding: '6px 10px', fontSize: '.78rem' }} onClick={() => setViewingStudents(g.id)}><Users size={13} /> Ver alumnos</button>
                   <button className="admin-icon-btn" onClick={() => toggleClosed(g)} title={g.status === 'closed' ? 'Reactivar' : 'Desactivar'} style={g.status === 'closed' ? undefined : { color: '#BE123C' }}>
                     {g.status === 'closed' ? <RotateCcw size={14} /> : <Ban size={14} />}
                   </button>
@@ -661,6 +666,14 @@ const AdminGrupos = () => {
           adminName={adminName}
           onClose={() => setModal(null)}
           onSaved={() => { load(); setSessionsKey((k) => k + 1); }}
+        />
+      )}
+      {viewingStudents && groups.some((g) => g.id === viewingStudents) && (
+        <AulaStudentsModal
+          group={groups.find((g) => g.id === viewingStudents)} groups={groups} enrollments={enrollments} orders={orders} adminName={adminName}
+          onClose={() => setViewingStudents(null)}
+          onChanged={load}
+          onEditGroup={() => { const g = groups.find((x) => x.id === viewingStudents); setViewingStudents(null); setModal({ mode: 'edit', group: g }); }}
         />
       )}
     </div>

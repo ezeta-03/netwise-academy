@@ -37,3 +37,6 @@ Thumbs.db
 
 # Datos exportados del emulador local
 .emulator-data
+
+# Capturas de Figma de referencia (no forman parte de la app)
+src/assets/figma_img/

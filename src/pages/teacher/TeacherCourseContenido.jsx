@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Uploa
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
+import { can } from '../../lib/permissions';
 import ModuleSessionCard, { GradedBadge } from '../../components/ModuleSessionCard';
 import { isPendingUrl, isSafeLink } from '../../lib/placeholders';
 import { getGradingScheme } from '../../lib/gradingScheme';
@@ -174,9 +175,13 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
 
 // Lápiz de edición en línea (título, objetivo, contenidos): lo ven el docente
 // del curso y el admin -- ambos pueden editar el contenido (canManageCourse).
-const EditPencil = ({ onClick, label }) => (
-  <button type="button" className="inline-edit-btn" onClick={onClick} title={label} aria-label={label}><Pencil size={15} /></button>
-);
+// Sin el permiso "Editar módulos y lecciones" el lápiz no se muestra.
+const CanEditContext = React.createContext(true);
+const EditPencil = ({ onClick, label }) => {
+  const canEdit = React.useContext(CanEditContext);
+  if (!canEdit) return null;
+  return <button type="button" className="inline-edit-btn" onClick={onClick} title={label} aria-label={label}><Pencil size={15} /></button>;
+};
 
 const InlineActions = ({ onSave, onCancel, disabled }) => (
   <div className="inline-edit-actions">
@@ -293,7 +298,10 @@ const TeacherCourseContenido = () => {
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [addingSessionDetail, setAddingSessionDetail] = useState(false);
   const [editingSessionDetail, setEditingSessionDetail] = useState(null);
-  const [addingMaterial, setAddingMaterial] = useState(false);
+  // `?subir=material` (botón de la página Materiales) abre el formulario de una vez.
+  const [addingMaterial, setAddingMaterial] = useState(() => searchParams.get('subir') === 'material' && can(currentUser, 'uploadMaterials'));
+  const canEdit = can(currentUser, 'editContent');
+  const canUpload = can(currentUser, 'uploadMaterials');
   // Campo en edición en línea: 'title' | 'objective' | 'practice' | null.
   const [inlineField, setInlineField] = useState(null);
 
@@ -405,9 +413,11 @@ const TeacherCourseContenido = () => {
   }
 
   return (
-    <div className="anim-fade-up d1">
+    <CanEditContext.Provider value={canEdit}>
+    <div className={`anim-fade-up d1 ${canEdit ? '' : 'content-readonly'}`}>
       <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
         <div>
+          {!canEdit && <p className="dash-notice" style={{ marginTop: 0 }}>Tu cuenta puede ver el contenido, pero no editarlo. Si necesitas cambiar algo, pídelo a un administrador.</p>}
           {editingModule ? (
             <ModuleEditForm module={selected} weightLocked={!!getGradingScheme(course.id)} onSave={saveModule} onCancel={() => setEditingModule(false)} />
           ) : (
@@ -471,7 +481,7 @@ const TeacherCourseContenido = () => {
               <div style={{ marginBottom: 22 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                   <h3 style={{ fontSize: '1rem', color: '#14141F', margin: 0 }}>Sesiones del módulo</h3>
-                  {!addingSessionDetail && <button className="admin-btn-ghost" onClick={() => setAddingSessionDetail(true)}><Plus size={13} /> Agregar sesión</button>}
+                  {canEdit && !addingSessionDetail && <button className="admin-btn-ghost" onClick={() => setAddingSessionDetail(true)}><Plus size={13} /> Agregar sesión</button>}
                 </div>
                 {selected.tools?.length > 0 && <div className="dash-session-tools">{selected.tools.join(' · ')}</div>}
                 {(selected.sessions || []).map((s, i) => (
@@ -480,8 +490,8 @@ const TeacherCourseContenido = () => {
                   ) : (
                     <ModuleSessionCard
                       key={s.id} session={s} number={sessionOffset + i + 1}
-                      onEdit={() => setEditingSessionDetail(s.id)}
-                      onDelete={deleteSessionDetail}
+                      onEdit={canEdit ? () => setEditingSessionDetail(s.id) : undefined}
+                      onDelete={canEdit ? deleteSessionDetail : undefined}
                     />
                   )
                 ))}
@@ -494,7 +504,7 @@ const TeacherCourseContenido = () => {
               <div className="admin-panel" style={{ marginBottom: 20 }}>
                 <div className="admin-panel-head">
                   <span className="admin-panel-title">Materiales de este módulo</span>
-                  {!addingMaterial && <button className="admin-btn-edit" onClick={() => setAddingMaterial(true)}><Plus size={13} /> Subir material</button>}
+                  {canUpload && !addingMaterial && <button className="admin-btn-edit" onClick={() => setAddingMaterial(true)}><Plus size={13} /> Subir material</button>}
                 </div>
                 {addingMaterial && <MaterialForm courseId={course.id} moduleId={selected.id} onSave={saveMaterial} onCancel={() => setAddingMaterial(false)} />}
                 {(selected.materials || []).length === 0 && !addingMaterial ? (
@@ -510,7 +520,7 @@ const TeacherCourseContenido = () => {
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       {isPendingUrl(mat.url) ? <span className="admin-status admin-status-gray">Pendiente de subir</span> : <a className="admin-btn-ghost" href={mat.url} target="_blank" rel="noreferrer">Descargar</a>}
-                      <button className="admin-icon-btn" onClick={() => removeMaterial(mat.id)}><Trash2 size={13} /></button>
+                      {canUpload && <button className="admin-icon-btn content-keep" onClick={() => removeMaterial(mat.id)} aria-label={`Eliminar ${mat.title}`}><Trash2 size={13} /></button>}
                     </div>
                   </div>
                 ))}
@@ -519,7 +529,7 @@ const TeacherCourseContenido = () => {
               <div className="admin-panel" style={{ marginBottom: 20 }}>
                 <div className="admin-panel-head">
                   <span className="admin-panel-title">Sesiones grabadas</span>
-                  {!addingSession && <button className="admin-btn-edit" onClick={() => setAddingSession(true)}><Plus size={13} /> Subir sesión</button>}
+                  {canEdit && !addingSession && <button className="admin-btn-edit" onClick={() => setAddingSession(true)}><Plus size={13} /> Subir sesión</button>}
                 </div>
                 <p className="admin-panel-caption" style={{ marginTop: 0 }}>Vuelve a ver las clases pasadas de este módulo a tu ritmo.</p>
                 {selected.lessons.map((les, li) => (
@@ -559,9 +569,9 @@ const TeacherCourseContenido = () => {
                 )}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button className="admin-btn-edit" onClick={() => navigate(`../evaluacion?vista=entregas&modulo=${selected.id}`)}><CheckCircle2 size={14} /> Revisar entregas</button>
-                  <button className="admin-btn-ghost" onClick={toggleDeliverableOpen}>
+                  {canEdit && <button className="admin-btn-ghost" onClick={toggleDeliverableOpen}>
                     <CheckCircle2 size={14} /> Marcar como {selected.deliverable?.open === false ? 'activo' : 'completado'}
-                  </button>
+                  </button>}
                   <button className="admin-btn-ghost" onClick={() => setEditingModule(true)}><Pencil size={14} /> Editar módulo</button>
                 </div>
               </div>
@@ -573,13 +583,14 @@ const TeacherCourseContenido = () => {
           <ModulesRailPanel
             courseId={course.id} modules={modules} activeModuleId={selectedId}
             onModuleClick={(id) => { setSelectedId(id); setEditingModule(false); setInlineField(null); setSearchParams({}); }}
-            onAddModule={addModule}
-            onDeleteModule={modules.length > 1 ? () => deleteModule(selectedId) : null}
+            onAddModule={canEdit ? addModule : null}
+            onDeleteModule={canEdit && modules.length > 1 ? () => deleteModule(selectedId) : null}
           />
           <GuidePanel courseId={course.id} />
         </div>
       </div>
     </div>
+    </CanEditContext.Provider>
   );
 };
 

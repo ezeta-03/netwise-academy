@@ -482,8 +482,9 @@ const Checkout = () => {
                         <div className="checkout-pay-placeholder">
                           {paymentMethod === 'yape' && (
                             <div className="checkout-yape-qr">
-                              <img src={qrZaazmago} alt="Código QR de Yape Empresas -- GRUPO ZAAZMAGO E.I.R.L." className="checkout-yape-qr-img" />
-                              <span className="checkout-yape-qr-label">GRUPO ZAAZMAGO E.I.R.L.</span>
+                              {/* QR que subió el admin en Métodos de pago; si no hay, el de la academia. */}
+                              <img src={paymentSettings?.yape?.qrUrl || qrZaazmago} alt={`Código QR de Yape/Plin de ${paymentSettings?.yape?.accountName?.trim() || 'GRUPO ZAAZMAGO E.I.R.L.'}`} className="checkout-yape-qr-img" />
+                              <span className="checkout-yape-qr-label">{paymentSettings?.yape?.accountName?.trim() || 'GRUPO ZAAZMAGO E.I.R.L.'}</span>
                             </div>
                           )}
                           {buildPaymentInstructions(paymentMethod, paymentSettings?.[paymentMethod], fmtMoney(finalPrice))}

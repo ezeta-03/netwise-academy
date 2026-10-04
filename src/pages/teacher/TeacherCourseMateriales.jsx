@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { can } from '../../lib/permissions';
 import { Plus, Search, Download } from 'lucide-react';
 import { fetchCourseContent } from '../../lib/db';
 import { isPendingUrl } from '../../lib/placeholders';
 
 const TeacherCourseMateriales = () => {
   const { course } = useOutletContext();
+  const navigate = useNavigate();
+  const base = useLocation().pathname.startsWith('/admin/') ? '/admin' : '/teacher';
+  const { currentUser } = useAuth();
   const [materials, setMaterials] = useState([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
@@ -32,6 +37,10 @@ const TeacherCourseMateriales = () => {
           <h1 className="admin-page-title">Nutre cada clase.</h1>
           <p className="admin-page-sub">Sube presentaciones, lecturas, videos, plantillas y material complementario.</p>
         </div>
+        {/* El material pertenece a un módulo: se sube desde Contenido, ya con el formulario abierto. */}
+        {can(currentUser, 'uploadMaterials') && (
+          <button className="admin-btn-edit" onClick={() => navigate(`${base}/curso/${course.id}/contenido?subir=material`)}><Plus size={15} /> Subir material</button>
+        )}
       </div>
 
       <div className="admin-toolbar">

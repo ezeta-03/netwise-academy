@@ -5,6 +5,8 @@ import {
   Download, Check, ExternalLink,
 } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
+import { useAuth } from '../../context/AuthContext';
+import { can } from '../../lib/permissions';
 import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore, fetchGroupProgress, setGroupSessionDone } from '../../lib/db';
 import { computeGradeSummary } from '../../lib/gradebook';
 import { getGradingModel, buildStudentRows, effectiveModuleWeights } from '../../lib/gradingScheme';
@@ -427,6 +429,7 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
     const st = attendanceStats(sessions, attendance.filter((a) => a.uid === uid));
     return { pct: st.pct, raw: st.raw, faltas: st.absent, sinRegistrar: st.unregistered };
   };
+  const latesFor = (uid) => attendance.filter((a) => a.uid === uid && a.present && a.late).length;
 
   const sessionsTaken = sessions.filter((s) => s.done || attendance.some((a) => a.sessionId === s.id)).length;
   const totalSinRegistrar = roster.reduce((sum, r) => sum + statsFor(r.uid).sinRegistrar, 0);
@@ -435,15 +438,18 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
   const bajo75 = withAtt.filter((p) => p < APPROVAL.minAttendancePct).length;
 
   const exportCsv = () => {
-    const header = ['Estudiante', ...sessions.map((s) => s.label), 'Asist.'];
-    const rows = roster.map((r) => [r.studentName, ...sessions.map((s) => { const a = attendanceFor(r.uid, s.id); return a ? (a.excused ? 'NA' : a.present ? 'P' : 'F') : ''; }), statsFor(r.uid).pct === null ? '' : `${statsFor(r.uid).pct}%`]);
+    const header = ['Estudiante', ...sessions.map((s) => s.label), 'Asist.', 'Faltas', 'Tardanzas'];
+    const rows = roster.map((r) => [r.studentName, ...sessions.map((s) => { const a = attendanceFor(r.uid, s.id); return a ? (a.excused ? 'NA' : a.present ? (a.late ? 'T' : 'P') : 'F') : ''; }), statsFor(r.uid).pct === null ? '' : `${statsFor(r.uid).pct}%`, statsFor(r.uid).faltas, latesFor(r.uid)]);
     downloadCsv(`asistencia-${fileTag}.csv`, [header, ...rows]);
   };
 
   const cycle = (row, session) => {
     const current = attendanceFor(row.uid, session.id);
-    // Presente -> Falta -> No aplica -> Sin registrar.
-    const next = current === null ? { present: true } : current.excused ? null : current.present ? { present: false } : { present: false, excused: true };
+    // Presente -> Tardanza -> Falta -> No aplica -> Sin registrar.
+    const next = current === null ? { present: true }
+      : current.excused ? null
+        : current.present ? (current.late ? { present: false } : { present: true, late: true })
+          : { present: false, excused: true };
     onToggle(row, session, next);
   };
 
@@ -466,6 +472,15 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
         </div>
       )}
 
+      {sessions.length > 0 && (
+        <div className="attendance-legend">
+          <span><i className="session-chip present">✓</i> Presente</span>
+          <span><i className="session-chip late">T</i> Tardanza</span>
+          <span><i className="session-chip absent">F</i> Falta</span>
+          <span><i className="session-chip excused">N/A</i> No aplica</span>
+        </div>
+      )}
+
       {sessions.length === 0 ? (
         <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Todavía no defines sesiones en "Contenido".</div>
       ) : (
@@ -476,6 +491,7 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
                 <th rowSpan={2}>Estudiante</th>
                 {grouped.map((g) => <th key={g.module.id} colSpan={g.sessions.length} style={{ textAlign: 'center' }}>{g.module.title}</th>)}
                 <th rowSpan={2}>Asist.</th>
+                <th rowSpan={2}>Faltas</th>
               </tr>
               <tr>
                 {sessions.map((s) => {
@@ -500,29 +516,31 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
                   {sessions.map((s) => {
                     const a = attendanceFor(row.uid, s.id);
                     const missing = a === null && s.done;
-                    const cls = a === null ? (missing ? 'missing' : 'pending') : a.excused ? 'excused' : a.present ? 'present' : 'absent';
+                    const cls = a === null ? (missing ? 'missing' : 'pending') : a.excused ? 'excused' : a.present ? (a.late ? 'late' : 'present') : 'absent';
                     return (
                       <td key={s.id} style={{ textAlign: 'center', padding: '8px 4px' }}>
                         <div className={`session-chip clickable ${cls}`} onClick={() => cycle(row, s)}>
-                          <span className="session-chip-label" title={missing ? 'Sin registrar: cuenta como falta' : a?.excused ? 'No aplica: no cuenta en su porcentaje' : undefined}>{a === null ? (missing ? '!' : '·') : a.excused ? 'N/A' : a.present ? '✓' : 'F'}</span>
+                          <span className="session-chip-label" title={missing ? 'Sin registrar: cuenta como falta' : a?.excused ? 'No aplica: no cuenta en su porcentaje' : undefined}>{a === null ? (missing ? '!' : '·') : a.excused ? 'N/A' : a.present ? (a.late ? 'T' : '✓') : 'F'}</span>
                         </div>
                       </td>
                     );
                   })}
                   <td><strong>{statsFor(row.uid).pct === null ? '—' : `${statsFor(row.uid).pct}%`}</strong></td>
+                  <td>{statsFor(row.uid).faltas}{latesFor(row.uid) > 0 && <div className="admin-cell-sub">{latesFor(row.uid)} tard.</div>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <p className="admin-panel-caption">{onToggleDone ? 'La casilla bajo cada sesión marca que ESTA aula ya la tuvo (se marca sola al tomar lista); cada aula lleva su propio avance. ' : ''}Haz clic en una celda para alternar Presente / Falta / No aplica / Sin registrar. «No aplica» (N/A) saca esa sesión del porcentaje del alumno: úsalo si se matriculó después o si la falta está justificada.</p>
+      <p className="admin-panel-caption">{onToggleDone ? 'La casilla bajo cada sesión marca que ESTA aula ya la tuvo (se marca sola al tomar lista); cada aula lleva su propio avance. ' : ''}Haz clic en una celda para alternar Presente / Tardanza / Falta / No aplica / Sin registrar. La tardanza cuenta como asistencia. «No aplica» (N/A) saca esa sesión del porcentaje del alumno: úsalo si se matriculó después o si la falta está justificada.</p>
     </div>
   );
 };
 
 const TeacherCourseEvaluacion = () => {
   const { course, group, groups, aulaId } = useOutletContext();
+  const { currentUser } = useAuth();
   const { addToast } = useUI();
   const [searchParams, setSearchParams] = useSearchParams();
   const [courseModules, setModules] = useState([]);
@@ -601,13 +619,13 @@ const TeacherCourseEvaluacion = () => {
     const previous = attendance;
     setAttendanceRows((prev) => {
       const others = prev.filter((a) => !(a.uid === row.uid && a.sessionId === session.id));
-      return next === null ? others : [...others, { uid: row.uid, sessionId: session.id, moduleId: session.moduleId, studentName: row.studentName, present: !!next.present, excused: !!next.excused }];
+      return next === null ? others : [...others, { uid: row.uid, sessionId: session.id, moduleId: session.moduleId, studentName: row.studentName, present: !!next.present, excused: !!next.excused, late: !!next.late }];
     });
     try {
       if (next === null) {
         await deleteAttendance({ courseId: course.id, sessionId: session.id, uid: row.uid });
       } else {
-        await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present: !!next.present, excused: !!next.excused });
+        await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present: !!next.present, excused: !!next.excused, late: !!next.late });
         // Tomar lista en una sesión la deja como dictada para TODA el aula: quien
         // quede sin marcar cuenta como falta, no desaparece del porcentaje.
         if (groupId && !aulaDoneIds.has(session.id) && !globalDoneIds.has(session.id)) await toggleSessionDone(session, true, true);
@@ -644,6 +662,9 @@ const TeacherCourseEvaluacion = () => {
     };
   }, [course.id, modules, roster, submissions, attendance, scores]);
 
+  if (!can(currentUser, 'grade')) {
+    return <div className="admin-panel" style={{ textAlign: 'center', color: '#6B6980' }}>Tu cuenta no tiene habilitado ver fichas ni calificar entregas. Pídele a un administrador que active esa función.</div>;
+  }
   if (loading) return <div className="admin-empty-hint">Cargando evaluación...</div>;
 
   const focused = vista === 'entregas' && reviewFocus;
