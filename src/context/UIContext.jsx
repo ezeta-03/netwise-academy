@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
-import { fetchMyPreregistrations, fetchMyEnrollments, fetchLiveSessions, fetchOrders } from '../lib/db';
-import { buildStudentNotifications, buildAdminNotifications } from '../lib/notifications';
+import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, fetchOrders, fetchCourseSubmissions } from '../lib/db';
+import { buildStudentNotifications, buildAdminNotifications, buildTeacherNotifications } from '../lib/notifications';
+import { sessionsForStudent } from '../lib/groupAssignment';
 import LoginModal from '../components/LoginModal';
 
 // Un ícono y color por tipo de toast -- 'info' es el default (comunicados),
@@ -52,8 +53,8 @@ export const UIProvider = ({ children }) => {
   // abiertas, clases en vivo próximas/activas/canceladas) -- se recalculan
   // en vez de guardarse en Firestore, igual que el estado de una clase en
   // vivo. El admin ve una versión propia (pedidos pendientes de validar,
-  // ver buildAdminNotifications); los docentes no tienen ninguna promesa
-  // de "te avisaremos" pendiente en la app hoy.
+  // ver buildAdminNotifications) y el docente las entregas que esperan su
+  // revisión (buildTeacherNotifications).
   const loadNotifications = useCallback(() => {
     const isStudent = currentUser?.role === 'student';
     const isAdmin = currentUser?.role === 'admin';
@@ -64,19 +65,33 @@ export const UIProvider = ({ children }) => {
       return;
     }
 
-    Promise.all([
-      isStudent ? fetchMyPreregistrations(uid) : Promise.resolve([]),
-      isStudent ? fetchMyEnrollments(uid) : Promise.resolve({}),
-      isStudent ? fetchLiveSessions() : Promise.resolve([]),
-    ]).then(([preregisteredIds, enrollments, liveSessions]) => {
-      if (!isStudent) { setNotifications([]); return; }
+    if (currentUser?.role === 'teacher') {
+      const mine = courses.filter((c) => c.teacherUid === uid);
+      Promise.all(mine.map((course) => fetchCourseSubmissions(course.id)
+        .then((subs) => ({ course, pending: subs.filter((s) => s.status === 'submitted').length }))
+        .catch(() => ({ course, pending: 0 }))))
+        .then((pendingByCourse) => setNotifications(buildTeacherNotifications({ pendingByCourse })));
+      return;
+    }
+
+    if (!isStudent) { Promise.resolve().then(() => setNotifications([])); return; }
+
+    Promise.all([fetchMyPreregistrations(uid), fetchMyActiveEnrollments(uid)]).then(async ([preregisteredIds, enrollments]) => {
+      // Clases y entregas se leen por curso: solo los cursos con matrícula activa.
+      const active = Object.values(enrollments);
+      const [liveSessions, submissions] = await Promise.all([
+        fetchLiveSessions(active.map((e) => e.courseId)),
+        Promise.all(active.map((e) => fetchCourseSubmissions(e.courseId, uid).catch(() => []))).then((lists) => lists.flat()),
+      ]);
       setNotifications(buildStudentNotifications({
         courses,
         preregisteredIds,
         enrolledCourseIds: Object.keys(enrollments).map(Number),
-        liveSessions,
+        liveSessions: sessionsForStudent(liveSessions, enrollments),
+        enrollments,
+        submissions,
       }));
-    });
+    }).catch(() => {});
   }, [currentUser, courses]);
 
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
@@ -84,7 +99,7 @@ export const UIProvider = ({ children }) => {
   // Sondeo mientras el admin tiene la app abierta, para que el aviso de un
   // pedido nuevo le llegue sin tener que reabrir la campanita a mano.
   useEffect(() => {
-    if (currentUser?.role !== 'admin') return;
+    if (currentUser?.role !== 'admin' && currentUser?.role !== 'teacher') return;
     const id = setInterval(loadNotifications, ADMIN_POLL_MS);
     return () => clearInterval(id);
   }, [currentUser, loadNotifications]);

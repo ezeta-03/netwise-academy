@@ -341,7 +341,7 @@ const LIVE_STATUS_BADGE = {
   cancelled: { label: '❌ Cancelada', className: 'badge badge-rose' },
 };
 
-const LiveClassesPanel = ({ courses }) => {
+const LiveClassesPanel = ({ courses, refreshKey }) => {
   const { addToast } = useUI();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
@@ -363,7 +363,8 @@ const LiveClassesPanel = ({ courses }) => {
     });
   }, [courses]);
 
-  useEffect(() => { load(); }, [load]);
+  // `refreshKey` cambia al guardar un aula: su calendario recién generado aparece sin recargar.
+  useEffect(() => { load(); }, [load, refreshKey]);
 
   const handleCancel = async (session) => {
     if (!confirm(`¿Cancelar "${session.title}"? Los estudiantes verán la clase marcada como cancelada.`)) return;
@@ -492,6 +493,7 @@ const AdminGrupos = () => {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
+  const [sessionsKey, setSessionsKey] = useState(0);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
   const [tab, setTab] = useState('aulas');
@@ -613,7 +615,7 @@ const AdminGrupos = () => {
       ) : (
         <>
           <div className="admin-toolbar">
-            <div className="admin-search"><Search size={15} /><input placeholder="Buscar cada grupo, bien organizado..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+            <div className="admin-search"><Search size={15} /><input placeholder="Buscar aula, curso o docente..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
           </div>
 
           <div className="admin-table-wrap" style={{ marginBottom: 24 }}>
@@ -622,7 +624,7 @@ const AdminGrupos = () => {
             ) : renderGroupsTable(filtered)}
           </div>
 
-          <LiveClassesPanel courses={courses} />
+          <LiveClassesPanel courses={courses} refreshKey={sessionsKey} />
         </>
       )}
 
@@ -633,7 +635,7 @@ const AdminGrupos = () => {
           courses={courses}
           adminName={adminName}
           onClose={() => setModal(null)}
-          onSaved={load}
+          onSaved={() => { load(); setSessionsKey((k) => k + 1); }}
         />
       )}
     </div>

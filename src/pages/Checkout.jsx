@@ -110,7 +110,7 @@ const Checkout = () => {
     // quien recién se registra durante el checkout; ahora se reintenta en
     // cuanto currentUser aparece.
     if (!course || !currentUser) return;
-    fetchLiveSessions().then((list) => {
+    fetchLiveSessions(course.id).then((list) => {
       const upcoming = list
         .filter((s) => s.courseId?.toString() === course.id.toString() && ['upcoming', 'live'].includes(getLiveSessionStatus(s)))
         .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
@@ -137,6 +137,20 @@ const Checkout = () => {
   }
 
   if (redirectToCourse) return null;
+
+  // Entrar por URL directa no debe saltarse el cierre de inscripciones (el
+  // botón de la ficha ya se deshabilita). Quien ya tiene un pedido en
+  // validación sí ve su confirmación.
+  if ((course.enrollmentsOpen === false || course.price == null) && !orderPending) {
+    return (
+      <div className="view active">
+        <div className="empty-state" style={{ padding: '96px 24px' }}>
+          <p>Las inscripciones de este curso no están abiertas por ahora.</p>
+          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => navigate(`/course/${course.id}`)}>Volver al curso</button>
+        </div>
+      </div>
+    );
+  }
 
   const originalPrice = course.promoPercent ? course.price / (1 - course.promoPercent / 100) : course.price;
   const promoDiscount = course.promoPercent ? originalPrice - course.price : 0;
@@ -450,7 +464,7 @@ const Checkout = () => {
                     <div className="admin-panel-head" style={{ marginBottom: 4 }}>
                       <span className="admin-panel-title">2 · Método de pago</span>
                     </div>
-                    <p className="admin-cell-sub" style={{ marginBottom: 18 }}>Todos los pagos son procesados de forma segura.</p>
+                    <p className="admin-cell-sub" style={{ marginBottom: 18 }}>Paga desde tu app y registra aquí tu N.° de operación: nuestro equipo lo valida y activa tu acceso.</p>
 
                     {availableMethods.length === 0 ? (
                       <div className="checkout-error">Todavía no hay un método de pago disponible. Escríbenos y te ayudamos a completar tu inscripción.</div>
@@ -576,7 +590,7 @@ const Checkout = () => {
                     </div>
 
                     <a className="checkout-confirm-link" onClick={() => navigate('/')}>Volver al inicio</a>
-                    <p className="checkout-confirm-footnote">Te avisamos a {currentUser?.email} en cuanto quede confirmado.</p>
+                    <p className="checkout-confirm-footnote">Cuando quede confirmado, tu curso aparecerá en tu campus al iniciar sesión con {currentUser?.email}.</p>
                   </>
                 ) : (
                   <>

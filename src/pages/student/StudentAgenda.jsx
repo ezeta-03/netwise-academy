@@ -5,6 +5,7 @@ import { isSafeLink } from '../../lib/placeholders';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchLiveSessions, fetchMyActiveEnrollments } from '../../lib/db';
+import { sessionsForStudent } from '../../lib/groupAssignment';
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -22,8 +23,13 @@ const StudentAgenda = () => {
 
   useEffect(() => {
     if (!currentUser) return;
-    fetchMyActiveEnrollments(currentUser.uid).then((map) => setEnrolledIds(Object.keys(map)));
-    fetchLiveSessions().then(setSessions);
+    // Las clases se leen por curso: solo las de los cursos donde está matriculado.
+    fetchMyActiveEnrollments(currentUser.uid).then((map) => {
+      const ids = Object.keys(map);
+      setEnrolledIds(ids);
+      // Con varias aulas por curso, solo las clases de la suya.
+      return fetchLiveSessions(ids).then((all) => setSessions(sessionsForStudent(all, map)));
+    }).catch(() => {});
   }, [currentUser]);
 
   const enrolledCourses = courses.filter((c) => enrolledIds.includes(c.id.toString()));

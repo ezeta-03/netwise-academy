@@ -64,9 +64,11 @@ const TeacherSoporte = () => {
 
   const requesterName = currentUser?.displayName || currentUser?.email || 'Docente';
 
-  const load = useCallback(() => Promise.all([fetchGroups(), fetchSupportRequests(currentUser?.uid)]).then(([g, r]) => {
+  // Las aulas se leen por curso: un docente solo las de sus cursos.
+  const myCourseKey = courses.filter((c) => currentUser?.role === 'admin' || c.teacherUid === currentUser?.uid).map((c) => c.id).join(',');
+  const load = useCallback(() => Promise.all([fetchGroups(myCourseKey ? myCourseKey.split(',') : []), fetchSupportRequests(currentUser?.uid)]).then(([g, r]) => {
     setGroups(g); setRequests(r); setLoading(false);
-  }), [currentUser?.uid]);
+  }), [currentUser?.uid, myCourseKey]);
   useEffect(() => { load(); }, [load]);
 
   const reserveTutoring = async (course, group) => {

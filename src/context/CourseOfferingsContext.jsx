@@ -61,7 +61,7 @@ export const CourseOfferingsProvider = ({ children }) => {
   });
 
   return (
-    <CourseOfferingsContext.Provider value={{ courses, loaded, refresh }}>
+    <CourseOfferingsContext.Provider value={{ courses, offerings, loaded, refresh }}>
       {children}
     </CourseOfferingsContext.Provider>
   );

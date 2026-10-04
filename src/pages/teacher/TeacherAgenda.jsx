@@ -28,7 +28,7 @@ const TeacherAgenda = () => {
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [recordingFor, setRecordingFor] = useState(null);
 
-  useEffect(() => { fetchLiveSessions().then((all) => setSessions(all.filter((s) => myCourseIds.has(s.courseId?.toString())))); }, [myCourseIds]);
+  useEffect(() => { fetchLiveSessions([...myCourseIds]).then(setSessions).catch(() => {}); }, [myCourseIds]);
 
   const filtered = sessions.filter((s) => courseFilter === 'all' || s.courseId?.toString() === courseFilter);
 

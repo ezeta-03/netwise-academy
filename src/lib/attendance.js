@@ -10,7 +10,9 @@
 export const attendanceStats = (sessions, records) => {
   const byId = new Map((records || []).map((r) => [r.sessionId, r]));
   // Una sesión sin id no se puede cruzar con ningún registro: se ignora.
-  const dictated = (sessions || []).filter((s) => s.id !== undefined && s.id !== null && (s.done || byId.has(s.id)));
+  // Una marcada "No aplica" (`excused`: el alumno se matriculó después, o la
+  // falta está justificada) no entra en su porcentaje ni cuenta como falta.
+  const dictated = (sessions || []).filter((s) => s.id !== undefined && s.id !== null && !byId.get(s.id)?.excused && (s.done || byId.has(s.id)));
   const present = dictated.filter((s) => byId.get(s.id)?.present).length;
   const unregistered = dictated.filter((s) => !byId.has(s.id)).length;
   const raw = dictated.length ? (present / dictated.length) * 100 : null;
@@ -22,4 +24,10 @@ export const attendanceStats = (sessions, records) => {
     raw,
     pct: raw === null ? null : Math.round(raw),
   };
+};
+
+// Sesiones marcadas "No aplica" para ese alumno (fuera de su porcentaje).
+export const excusedCount = (sessions, records) => {
+  const ids = new Set((sessions || []).map((s) => s.id));
+  return (records || []).filter((r) => r.excused && ids.has(r.sessionId)).length;
 };

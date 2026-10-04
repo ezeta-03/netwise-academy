@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutGrid, BookOpen, Tag, Calendar, Users, ShoppingCart,
@@ -8,12 +8,13 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import SidebarLogo from '../../components/SidebarLogo';
+import { materializeCoursePricing } from '../../lib/db';
 
 const NAV_ITEMS = [
   { to: '/admin/resumen', label: 'Resumen', icon: LayoutGrid },
   { to: '/admin/cursos', label: 'Cursos y precios', icon: BookOpen, countKey: 'courses' },
   { to: '/admin/promociones', label: 'Promociones', icon: Tag },
-  { to: '/admin/grupos', label: 'Grupos y horarios', icon: Calendar },
+  { to: '/admin/grupos', label: 'Aulas y horarios', icon: Calendar },
   { to: '/admin/alumnos', label: 'Alumnos y accesos', icon: Users },
   { to: '/admin/ventas', label: 'Ventas e inscripciones', icon: ShoppingCart, countKey: 'ventas' },
   { to: '/admin/pagos', label: 'Métodos de pago', icon: Wallet },
@@ -30,7 +31,7 @@ const PAGE_LABELS = {
   '/admin/resumen': 'Resumen',
   '/admin/cursos': 'Cursos y precios',
   '/admin/promociones': 'Promociones',
-  '/admin/grupos': 'Grupos y horarios',
+  '/admin/grupos': 'Aulas y horarios',
   '/admin/alumnos': 'Alumnos y accesos',
   '/admin/ventas': 'Ventas e inscripciones',
   '/admin/pagos': 'Métodos de pago',
@@ -54,7 +55,19 @@ const AdminLayout = () => {
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount, notifications } = useUI();
-  const { courses } = useCourseOfferings();
+  const { courses, offerings, loaded, refresh } = useCourseOfferings();
+
+  // Las reglas validan el importe de cada pedido contra el precio y la
+  // promoción guardados en la oferta del curso. Un curso cuyo precio nunca se
+  // editó solo los tiene en el código: se guardan una vez, tal como se muestran.
+  useEffect(() => {
+    if (!loaded) return;
+    const has = (id, field) => Object.prototype.hasOwnProperty.call(offerings[id] || {}, field);
+    const missing = courses.filter((c) => !has(c.id, 'price') || !has(c.id, 'promoPercent'));
+    if (missing.length === 0) return;
+    Promise.all(missing.map((c) => materializeCoursePricing(c.id, c))).then(refresh).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, offerings]);
 
   const currentLabel = PAGE_LABELS[location.pathname] || 'Resumen';
   // `notifications` para el admin es 1 aviso por pedido pendiente (ver

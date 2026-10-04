@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { Radio, LogIn, XCircle, Trash2, Film } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession } from '../../lib/db';
+import { scheduleLiveSession, fetchLiveSessions, fetchGroups, cancelLiveSession, deleteLiveSession } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { toPeruIso } from '../../lib/liveScheduleGenerator';
 import LiveRoom from '../../components/LiveRoom';
@@ -30,9 +30,12 @@ const TeacherCourseSala = () => {
   const [selected, setSelected] = useState([]);
   const [bulkCancelling, setBulkCancelling] = useState(false);
   const [recordingFor, setRecordingFor] = useState(null);
+  const [groupNames, setGroupNames] = useState({});
 
   const load = useCallback(() => {
-    fetchLiveSessions().then((all) => setSessions(all.filter((s) => s.courseId?.toString() === course.id.toString())));
+    fetchLiveSessions(course.id).then(setSessions).catch(() => {});
+    // Con varias aulas en paralelo, cada clase muestra de cuál es.
+    fetchGroups(course.id).then((list) => setGroupNames(Object.fromEntries(list.map((g) => [g.id, g.name])))).catch(() => {});
   }, [course.id]);
   useEffect(() => { load(); }, [load]);
 
@@ -159,7 +162,7 @@ const TeacherCourseSala = () => {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     {canCancel && <input type="checkbox" style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
                     <div>
-                      <div className="dash-list-row-title">{s.title}</div>
+                      <div className="dash-list-row-title">{s.title}{groupNames[s.groupId] ? ` · ${groupNames[s.groupId]}` : ''}</div>
                       <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleString('es-PE')} {status === 'cancelled' && '· Cancelada'} {status === 'ended' && '· Finalizada'}</div>
                     </div>
                   </div>

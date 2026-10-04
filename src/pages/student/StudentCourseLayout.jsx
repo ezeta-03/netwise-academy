@@ -33,7 +33,7 @@ const SUB_NAV = [
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de Reunión', materiales: 'Materiales', proyecto: 'Mi proyecto', evaluacion: 'Mis evaluaciones', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA' };
+const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Mi proyecto', evaluacion: 'Mis evaluaciones', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA' };
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -74,7 +74,7 @@ const StudentCourseLayout = () => {
     // `cancelled` evita el doble aviso cuando el efecto se ejecuta dos veces
     // (StrictMode, o un cambio rápido de curso).
     let cancelled = false;
-    Promise.all([fetchGroups(), fetchMyEnrollments(currentUser.uid)]).then(([groups, enrollments]) => {
+    Promise.all([fetchGroups(courseId), fetchMyEnrollments(currentUser.uid)]).then(([groups, enrollments]) => {
       if (cancelled) return;
       const enr = enrollments[courseId] || null;
       // Un curso puede tener varias aulas abiertas a la vez -- usar el
@@ -109,7 +109,9 @@ const StudentCourseLayout = () => {
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
 
-  if (!course || loading || !enrollment) return <div className="admin-empty-hint">Cargando curso...</div>;
+  // Al cambiar de curso por URL, la matrícula en memoria aún es la del curso
+  // anterior: no se pinta nada hasta comprobar la de este.
+  if (!course || loading || !enrollment || enrollment.courseId?.toString() !== courseId?.toString()) return <div className="admin-empty-hint">Cargando curso...</div>;
 
   return (
     <div className="admin-shell">

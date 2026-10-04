@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Video, ArrowRight, BookOpen, CheckSquare, BarChart3 } from 'lucide-react';
+import { Calendar, Video, ArrowRight, BookOpen, CheckSquare, BarChart3, Clock3 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
-import { fetchLiveSessions, fetchMyEnrollments } from '../../lib/db';
+import { fetchLiveSessions, fetchMyEnrollments, fetchMyOrders, isActiveEnrollment } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
+import { sessionsForStudent } from '../../lib/groupAssignment';
 
 const StudentInicio = () => {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ const StudentInicio = () => {
   const [enrollments, setEnrollments] = useState({});
   const [sessions, setSessions] = useState([]);
   const [pendingByCourse, setPendingByCourse] = useState([]);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [rejectedOrders, setRejectedOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const enrolledCourses = courses.filter((c) => enrollments[c.id] && (enrollments[c.id].status || 'active') === 'active');
@@ -23,16 +26,30 @@ const StudentInicio = () => {
     if (!currentUser) return;
     fetchMyEnrollments(currentUser.uid).then((map) => {
       setEnrollments(map);
-      const enrolled = courses.filter((c) => map[c.id]);
-      Promise.all([fetchLiveSessions(), fetchMyDeliverables(currentUser.uid, enrolled)]).then(([allSessions, deliverables]) => {
-        setSessions(allSessions.filter((s) => enrolled.some((c) => c.id.toString() === s.courseId?.toString())));
+      // Solo matrículas activas: una pendiente todavía no puede leer el contenido del curso.
+      const enrolled = courses.filter((c) => isActiveEnrollment(map[c.id]));
+      // Pedidos aún sin validar, para que quien ya pagó sepa en qué está su acceso.
+      fetchMyOrders(currentUser.uid)
+        .then((orders) => {
+          const open = orders.filter((o) => !isActiveEnrollment(map[o.courseId]));
+          setPendingOrders(open.filter((o) => o.status === 'pending'));
+          // Un rechazo solo se muestra si es lo último que pasó con ese curso
+          // (si ya volvió a pagar, manda el pedido nuevo).
+          const latest = new Map();
+          [...open].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+            .forEach((o) => { if (!latest.has(String(o.courseId))) latest.set(String(o.courseId), o); });
+          setRejectedOrders([...latest.values()].filter((o) => o.status === 'rejected'));
+        })
+        .catch(() => {});
+      Promise.all([fetchLiveSessions(enrolled.map((c) => c.id)), fetchMyDeliverables(currentUser.uid, enrolled)]).then(([allSessions, deliverables]) => {
+        setSessions(sessionsForStudent(allSessions, map));
         const byCourse = enrolled
           .map((c) => ({ course: c, pending: deliverables.filter((d) => d.courseId.toString() === c.id.toString() && d.status === 'pending').length }))
           .filter((b) => b.pending > 0);
         setPendingByCourse(byCourse);
         setLoading(false);
-      });
-    });
+      }).catch(() => setLoading(false));
+    }).catch(() => setLoading(false));
   }, [currentUser, courses]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
@@ -55,6 +72,32 @@ const StudentInicio = () => {
         </div>
         <button className="admin-btn-edit" onClick={() => navigate('/student/agenda')}><Calendar size={15} /> Ver mi agenda</button>
       </div>
+
+      {pendingOrders.map((o) => (
+        <div key={o.id} className="admin-panel" role="status" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Clock3 size={18} />
+          <div>
+            <div className="dash-list-row-title">Estamos validando tu pago de {o.courseTitle}</div>
+            <div className="admin-cell-sub">Pedido {o.code} · En cuanto lo confirmemos, el curso aparecerá aquí con tu aula y tu horario.</div>
+          </div>
+        </div>
+      ))}
+      {enrolledCourses.filter((c) => !enrollments[c.id].groupId).map((c) => (
+        <div key={`sin-aula-${c.id}`} className="admin-panel" role="status" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Clock3 size={18} />
+          <div>
+            <div className="dash-list-row-title">Todavía no tienes aula en {c.title}</div>
+            <div className="admin-cell-sub">Ya puedes ver el contenido del curso. Tu horario de clases aparecerá aquí cuando te asignemos un aula.</div>
+          </div>
+        </div>
+      ))}
+      {rejectedOrders.map((o) => (
+        <div key={o.id} className="admin-panel" role="alert" style={{ marginBottom: 16 }}>
+          <div className="dash-list-row-title">No pudimos validar tu pago de {o.courseTitle}</div>
+          <div className="admin-cell-sub" style={{ marginBottom: 10 }}>Pedido {o.code}{o.rejectReason ? ` · ${o.rejectReason}` : ''}. Puedes registrar el pago otra vez o escribirnos por Soporte.</div>
+          <button className="admin-btn-edit" onClick={() => navigate(`/checkout/${o.courseId}`)}>Volver a registrar mi pago</button>
+        </div>
+      ))}
 
       <div className="admin-stats-grid">
         <div className="admin-stat-card">

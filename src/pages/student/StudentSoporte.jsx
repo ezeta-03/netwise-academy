@@ -65,7 +65,8 @@ const StudentSoporte = () => {
 
   const requesterName = currentUser?.displayName || currentUser?.email || 'Estudiante';
 
-  const load = useCallback(() => Promise.all([fetchGroups(), fetchMyEnrollments(currentUser?.uid), fetchSupportRequests(currentUser?.uid)]).then(([g, enr, r]) => {
+  // Las aulas se leen por curso: solo las de los cursos del alumno.
+  const load = useCallback(() => Promise.all([fetchMyEnrollments(currentUser?.uid).then((enr) => fetchGroups(Object.keys(enr)).then((g) => [g, enr])), fetchSupportRequests(currentUser?.uid)]).then(([[g, enr], r]) => {
     setGroups(g); setEnrollments(enr); setRequests(r); setLoading(false);
   }), [currentUser?.uid]);
   useEffect(() => { load(); }, [load]);

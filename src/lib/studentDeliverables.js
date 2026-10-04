@@ -8,7 +8,7 @@ import { deliverableDueDate } from './deliveryDates.js';
 export const fetchMyDeliverables = async (uid, enrolledCourses) => {
   // El aula (horario y fecha de inicio) da la fecha límite calculada cuando el
   // docente no fijó una a mano -- así el alumno ve la misma fecha que el docente.
-  const [groups, enrollments] = await Promise.all([fetchGroups(), fetchMyEnrollments(uid)]);
+  const [groups, enrollments] = await Promise.all([fetchGroups(enrolledCourses.map((c) => c.id)), fetchMyEnrollments(uid)]);
   const perCourse = await Promise.all(enrolledCourses.map(async (course) => {
     const content = await fetchCourseContent(course.id);
     const allModules = content.modules || [];

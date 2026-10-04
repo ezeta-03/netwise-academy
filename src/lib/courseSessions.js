@@ -21,3 +21,16 @@ export const getOrderedSessions = (modules) => {
     })
   );
 };
+
+// Sesiones del curso vistas desde UN aula: además de las que el contenido marca
+// como Realizada (vale para todas las aulas), cuentan como dictadas las que esa
+// aula ya tuvo (`doneSessionIds`, ver fetchGroupProgress). Devuelve los módulos
+// con ese estado aplicado, listos para getOrderedSessions.
+export const withAulaSessions = (modules, doneSessionIds) => {
+  const done = new Set(doneSessionIds || []);
+  if (done.size === 0) return modules || [];
+  return (modules || []).map((m) => ({
+    ...m,
+    sessions: (m.sessions || []).map((s) => (done.has(s.id) ? { ...s, status: 'done' } : s)),
+  }));
+};

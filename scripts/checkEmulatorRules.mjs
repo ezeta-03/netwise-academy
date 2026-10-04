@@ -34,8 +34,11 @@ expect('Alumno se matricula solo en el curso 1 (debe fallar)',
 expect('Alumno crea pedido "paid" (debe fallar)',
   await write(idToken, `orders/qa-paid-${Date.now()}`, { uid, courseId: 1, amount: 0, status: 'paid' }), (s) => s === 403);
 const pendingId = `qa-pending-${Date.now()}`;
-expect('Alumno crea pedido "pending" (debe funcionar)',
-  await write(idToken, `orders/${pendingId}`, { uid, courseId: 1, amount: 100, status: 'pending' }), (s) => s === 200);
+// El importe debe ser el precio vigente del curso 1 (S/ 300 con la promoción de data.js).
+expect('Alumno crea pedido "pending" con el precio correcto (debe funcionar)',
+  await write(idToken, `orders/${pendingId}`, { uid, courseId: 1, amount: 300, status: 'pending' }), (s) => s === 200);
+expect('Alumno crea pedido "pending" por un monto menor (debe fallar)',
+  await write(idToken, `orders/qa-cheap-${Date.now()}`, { uid, courseId: 1, amount: 1, status: 'pending' }), (s) => s === 403);
 // Limpieza: el pedido de prueba no debe quedar en Ventas.
 await fetch(`${FS}/orders/${pendingId}`, { method: 'DELETE', headers: { Authorization: 'Bearer owner' } });
 expect('Alumno se cambia el estado de su matrícula (debe fallar)',

@@ -32,10 +32,12 @@ const LiveClassRoom = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Sin matrícula en el curso las reglas rechazan la lectura: se muestra
+    // el mismo "no se encontró" en vez de quedarse cargando.
     fetchLiveSessionById(sessionId).then((data) => {
       setSession(data);
       setLoading(false);
-    });
+    }).catch(() => { setSession(null); setLoading(false); });
   }, [sessionId]);
 
   if (loading) {

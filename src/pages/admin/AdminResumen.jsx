@@ -28,7 +28,8 @@ const AdminResumen = () => {
   const visibleCount = courses.filter((c) => c.visible !== false).length;
   const openCount = courses.filter((c) => c.enrollmentsOpen !== false).length;
   const activeAccessCount = enrollments.filter((e) => e.status !== 'pending').length;
-  const salesTotal = orders.reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
+  // Solo lo cobrado: un pedido pendiente o rechazado todavía no es una venta.
+  const salesTotal = orders.filter((o) => o.status === 'paid').reduce((sum, o) => sum + (Number(o.amount) || 0), 0);
 
   const pendingOrders = orders.filter((o) => o.status === 'pending').length;
   const groupsToOpen = groups.filter((g) => g.status === 'to-open').length;
@@ -76,7 +77,7 @@ const AdminResumen = () => {
           <div className="admin-stat-value">{activeAccessCount}</div>
         </div>
         <div className="admin-stat-card">
-          <div className="admin-stat-label">Ventas de ejemplo <ShoppingCart size={16} /></div>
+          <div className="admin-stat-label">Ventas confirmadas <ShoppingCart size={16} /></div>
           <div className="admin-stat-value">S/ {salesTotal.toFixed(2)}</div>
         </div>
       </div>
@@ -105,7 +106,6 @@ const AdminResumen = () => {
               </div>
             ))
           )}
-          <p className="admin-panel-caption">Información de ejemplo para explorar el panel.</p>
         </div>
       </div>
     </div>

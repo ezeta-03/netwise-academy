@@ -4,6 +4,7 @@ import { Plus, Users, Video, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseClassmates, fetchLiveSessions, fetchPrivateRooms, createPrivateRoom } from '../../lib/db';
+import { sessionsForStudent } from '../../lib/groupAssignment';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import LiveRoom from '../../components/LiveRoom';
 import ModalPortal from '../../components/ModalPortal';
@@ -116,7 +117,7 @@ const RoomCard = ({ room, onEnter }) => {
 };
 
 const StudentCourseSala = () => {
-  const { course, group } = useOutletContext();
+  const { course, group, enrollment } = useOutletContext();
   const { currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState([]);
@@ -127,8 +128,8 @@ const StudentCourseSala = () => {
   const [activeRoom, setActiveRoom] = useState(null);
 
   const load = useCallback(() => {
-    Promise.all([fetchLiveSessions(), fetchPrivateRooms(course.id), fetchCourseClassmates(course.id)]).then(([allSessions, allRooms, enrollments]) => {
-      setSessions(allSessions.filter((s) => s.courseId?.toString() === course.id.toString()));
+    Promise.all([fetchLiveSessions(course.id), fetchPrivateRooms(course.id), fetchCourseClassmates(course.id)]).then(([allSessions, allRooms, enrollments]) => {
+      setSessions(sessionsForStudent(allSessions, { [course.id]: enrollment }));
       setRooms(allRooms);
       setClassmates(
         enrollments
@@ -137,7 +138,7 @@ const StudentCourseSala = () => {
       );
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [course.id, currentUser?.uid]);
+  }, [course.id, currentUser?.uid, enrollment]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -22,7 +22,8 @@ export const courseWeeksFromModules = (modules) => {
 // fijó a mano (`deliverable.dueDate`) o, si no, la última clase de la semana
 // de cierre del módulo según el horario del aula. null si no se puede calcular.
 export const deliverableDueDate = (module, moduleIndex, group) => {
-  if (module?.deliverable?.dueDate) return module.deliverable.dueDate;
+  // Una fecha manual mal escrita se ignora (si no, la UI mostraba "Invalid Date").
+  if (/^\d{4}-\d{2}-\d{2}$/.test(module?.deliverable?.dueDate || '')) return module.deliverable.dueDate;
   const days = groupScheduleDays(group);
   return lastClassDate(group?.startDate, days, endWeekOf(module?.weeksLabel, moduleIndex + 1));
 };

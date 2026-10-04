@@ -1,5 +1,5 @@
 import { db, storage } from './firebase';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 import { pickGroup } from './groupAssignment';
@@ -62,11 +62,38 @@ export const fetchCategories = async () => {
 
 // --- Clases en vivo (colección Firestore `liveSessions`) ---
 
-export const fetchLiveSessions = async () => {
+// Docs de una colección que guardan `courseId`, para uno o varios cursos. Las
+// reglas solo dejan leer clases, aulas y salas de los cursos donde uno está
+// matriculado o que gestiona, así que quien no es admin SIEMPRE consulta por
+// curso (una lectura de toda la colección se rechaza). `courseId` se guardó a
+// veces como número y a veces como texto: se consultan ambas formas. Un curso
+// sin permiso simplemente no aporta resultados.
+const sameCourseId = (a, b) => a != null && b != null && a.toString() === b.toString();
+const asCourseList = (courseIds) => [...new Set((Array.isArray(courseIds) ? courseIds : [courseIds])
+  .filter((c) => c !== null && c !== undefined && c !== '').map(String))];
+
+const fetchByCourses = async (collectionName, courseIds) => {
+  const variants = asCourseList(courseIds).flatMap((c) => (Number.isFinite(Number(c)) ? [Number(c), c] : [c]));
+  const snaps = await Promise.all(variants.map((c) => getDocs(query(collection(db, collectionName), where('courseId', '==', c))).catch(() => null)));
+  const found = new Map();
+  snaps.forEach((snap) => snap?.docs.forEach((d) => found.set(d.id, { id: d.id, ...d.data() })));
+  return [...found.values()];
+};
+
+// `courseIds` (un id o una lista): solo las clases de esos cursos. Sin
+// argumento trae todas -- solo el Admin puede (reglas de Firestore).
+export const fetchLiveSessions = async (courseIds) => {
+  const scoped = courseIds !== undefined && courseIds !== null;
   if (!isConfigValid) {
+    const wanted = scoped ? asCourseList(courseIds) : null;
     return new Promise((resolve) => {
-      setTimeout(() => resolve(LIVE_SESSIONS), 300);
+      setTimeout(() => resolve(wanted ? LIVE_SESSIONS.filter((s) => wanted.some((c) => sameCourseId(c, s.courseId))) : LIVE_SESSIONS), 300);
     });
+  }
+
+  if (scoped) {
+    const list = await fetchByCourses('liveSessions', courseIds);
+    return list.sort((a, b) => String(a.startsAt || '').localeCompare(String(b.startsAt || '')));
   }
 
   const q = query(collection(db, 'liveSessions'), orderBy('startsAt', 'asc'));
@@ -291,6 +318,15 @@ export const updateCourseTeacher = (courseId, teacherUid) => patchCourseOffering
 // horario de data.js.
 export const updateCourseSchedule = (courseId, slots) => patchCourseOffering(courseId, {
   schedule: slots?.length ? slots.map(({ day, start, end }) => ({ day, start, end })) : null,
+});
+
+// Deja guardados en la oferta el precio y la promoción que el curso ya muestra
+// (los de data.js cuando el admin nunca los tocó). Las reglas de Firestore
+// validan el importe de cada pedido contra estos dos campos, así que tienen
+// que existir en la base y no solo en el código.
+export const materializeCoursePricing = (courseId, { price, promoPercent }) => patchCourseOffering(courseId, {
+  price: price ?? null,
+  promoPercent: promoPercent ?? null,
 });
 
 const patchCourseOffering = async (courseId, patch) => {
@@ -656,11 +692,17 @@ export const updateCoupon = async (couponId, patch) => {
 // Una "aula" es una edición concreta de un curso: fechas, horario, docente y
 // cupo. Un mismo curso puede tener varias aulas abiertas a la vez.
 
-export const fetchGroups = async () => {
+// `courseIds` (un id o una lista): solo las aulas de esos cursos. Sin
+// argumento trae todas -- solo el Admin puede (reglas de Firestore).
+export const fetchGroups = async (courseIds) => {
+  const scoped = courseIds !== undefined && courseIds !== null;
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_groups');
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    const wanted = scoped ? asCourseList(courseIds) : null;
+    return wanted ? list.filter((g) => wanted.some((c) => sameCourseId(c, g.courseId))) : list;
   }
+  if (scoped) return fetchByCourses('groups', courseIds);
   const snapshot = await getDocs(collection(db, 'groups'));
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
@@ -864,6 +906,34 @@ export const approveOrder = async (order, group = null) => {
   });
   await updateOrderStatus(order.id, 'paid');
   return enrollment;
+};
+
+// Rechazo de un pedido pendiente (el pago no aparece en la cuenta, monto
+// incorrecto, pedido duplicado...). No matricula a nadie; el alumno puede
+// volver a pagar desde el checkout. Si el pedido había usado un cupón, se le
+// devuelve ese uso (se canjeó al crear el pedido, ver handlePay).
+export const rejectOrder = async (order, reason) => {
+  const patch = { status: 'rejected', rejectReason: reason || '', rejectedAt: new Date().toISOString() };
+
+  if (!isConfigValid) {
+    const list = JSON.parse(localStorage.getItem('mock_orders') || '[]');
+    localStorage.setItem('mock_orders', JSON.stringify(list.map((o) => (o.id === order.id ? { ...o, ...patch } : o))));
+    if (order.couponId) {
+      const coupons = JSON.parse(localStorage.getItem('mock_coupons') || '[]');
+      localStorage.setItem('mock_coupons', JSON.stringify(coupons.map((c) => (c.id === order.couponId ? { ...c, usedCount: Math.max(0, (c.usedCount || 0) - 1) } : c))));
+    }
+    return patch;
+  }
+
+  await updateDoc(doc(db, 'orders', order.id), patch);
+  if (order.couponId) {
+    const ref = doc(db, 'coupons', order.couponId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists()) tx.update(ref, { usedCount: Math.max(0, (snap.data().usedCount || 0) - 1) });
+    }).catch(() => {}); // el rechazo ya quedó guardado; el contador se puede corregir en Promociones
+  }
+  return patch;
 };
 
 // --- Equipo de la academia (colección Firestore `teamMembers`) ---
@@ -1383,9 +1453,11 @@ export const fetchCourseAttendance = async (courseId, uid) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studentName, present }) => {
+// `excused`: la sesión no aplica para ese alumno (se matriculó después o tiene
+// la falta justificada) y no entra en su porcentaje -- ver lib/attendance.js.
+export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studentName, present, excused = false }) => {
   const docId = `${uid}_${courseId}_${sessionId}`;
-  const payload = { courseId, sessionId, moduleId, uid, studentName, present, updatedAt: new Date().toISOString() };
+  const payload = { courseId, sessionId, moduleId, uid, studentName, present: !!present && !excused, excused: !!excused, updatedAt: new Date().toISOString() };
 
   if (!isConfigValid) {
     const key = `mock_attendance_${courseId}`;
@@ -1398,6 +1470,33 @@ export const setAttendance = async ({ courseId, sessionId, moduleId, uid, studen
 
   await setDoc(doc(db, 'attendance', docId), payload, { merge: true });
   return payload;
+};
+
+// --- Sesiones dictadas por aula (colección Firestore `groupProgress`) ---
+// Un doc por aula con `doneSessionIds`: las sesiones del curso que ESA aula ya
+// tuvo. Con varias aulas en paralelo cada una avanza a su ritmo, así que
+// "Realizada" no puede vivir solo en el contenido del curso (que es común a
+// todas). Lo marca el docente desde Asistencia; el alumno lo lee para saber
+// qué sesiones de su aula cuentan en su porcentaje.
+export const fetchGroupProgress = async (groupId) => {
+  if (!groupId) return [];
+  if (!isConfigValid) {
+    return JSON.parse(localStorage.getItem(`mock_group_progress_${groupId}`) || '[]');
+  }
+  const snap = await getDoc(doc(db, 'groupProgress', groupId));
+  return snap.exists() ? (snap.data().doneSessionIds || []) : [];
+};
+
+export const setGroupSessionDone = async ({ groupId, courseId, sessionId, done }) => {
+  if (!isConfigValid) {
+    const key = `mock_group_progress_${groupId}`;
+    const current = JSON.parse(localStorage.getItem(key) || '[]').filter((id) => id !== sessionId);
+    localStorage.setItem(key, JSON.stringify(done ? [...current, sessionId] : current));
+    return;
+  }
+  await setDoc(doc(db, 'groupProgress', groupId), {
+    groupId, courseId, doneSessionIds: done ? arrayUnion(sessionId) : arrayRemove(sessionId), updatedAt: new Date().toISOString(),
+  }, { merge: true });
 };
 
 // --- Notas de componentes manuales (colección Firestore `courseGrades`) ---

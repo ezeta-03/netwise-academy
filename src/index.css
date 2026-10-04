@@ -2227,6 +2227,7 @@ body::before {
 .session-chip.present { background: #E3F9EE; color: #15803D; border-color: transparent; }
 .session-chip.absent { background: #FDE8EC; color: #BE123C; border-color: transparent; }
 .session-chip.pending { background: #F6F5FA; color: #B4B2C4; border-color: transparent; }
+.session-chip.excused { background: #EFEEF5; color: #6B6980; border-color: transparent; }
 .session-chip.clickable { cursor: pointer; }
 .session-chip.clickable:hover { filter: brightness(0.96); }
 .session-chip-label { font-weight: 700; }

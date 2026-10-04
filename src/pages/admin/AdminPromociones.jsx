@@ -191,7 +191,7 @@ const AdminPromociones = () => {
                     <td>{scopeLabel(c.scope)}</td>
                     <td>{c.discountPercent}%</td>
                     <td className="admin-cell-sub">{vigenciaLabel(c)}</td>
-                    <td>{c.usedCount || 0} / {c.maxUses}</td>
+                    <td>{c.usedCount || 0} / {c.maxUses ? c.maxUses : 'sin tope'}</td>
                     <td><span className={`admin-status ${status.cls}`}>{status.label}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>

@@ -32,6 +32,54 @@ service cloud.firestore {
       return isAdmin() || isCourseTeacher(courseIdStr);
     }
 
+    // Alumno con matrícula ACTIVA en el curso (doc `${uid}_${courseId}`, el id
+    // que usa adminCreateEnrollment para toda cuenta real). Una matrícula
+    // 'pending' o suspendida no da acceso.
+    function isEnrolledIn(courseIdStr) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseIdStr))
+        && get(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseIdStr)).data.get('status', 'active') == 'active';
+    }
+
+    // Importe que debe traer un pedido: el precio vigente del curso
+    // (courseOfferings.price, que ya incluye la promoción) con el cupón aplicado
+    // igual que en el checkout -- acumulable: sobre el precio promocional; no
+    // acumulable: sobre el precio regular (precio / (1 - promo%)).
+    function expectedOrderAmount(offer, couponId) {
+      let price = float(offer.price);
+      let promo = offer.promoPercent == null ? 0.0 : float(offer.promoPercent);
+      let off = couponId == null ? 0.0
+        : float(get(/databases/$(database)/documents/coupons/$(couponId)).data.discountPercent) / 100.0;
+      let stackable = couponId != null
+        && get(/databases/$(database)/documents/coupons/$(couponId)).data.get('stackable', false) == true;
+      return couponId == null ? price
+        : (stackable ? price * (1.0 - off) : (price / (1.0 - promo / 100.0)) * (1.0 - off));
+    }
+
+    // Un cupón solo vale si existe, sigue activo y aplica a ese curso.
+    function couponApplies(couponId, courseIdStr) {
+      let coupon = get(/databases/$(database)/documents/coupons/$(couponId)).data;
+      return exists(/databases/$(database)/documents/coupons/$(couponId))
+        && coupon.get('active', true) == true
+        && (coupon.get('scope', 'all') == 'all' || string(coupon.scope) == courseIdStr);
+    }
+
+    // El importe lo manda el navegador del alumno: acá se comprueba contra el
+    // precio guardado, así nadie puede registrar un pedido por menos alterando
+    // la petición. Requiere que la oferta del curso tenga `price` y
+    // `promoPercent` guardados (el panel de Admin los escribe solo al abrirse,
+    // ver materializeCoursePricing); sin ellos todavía no se puede comprobar.
+    function orderAmountOk(data) {
+      let path = /databases/$(database)/documents/courseOfferings/$(string(data.courseId));
+      let offer = get(path).data;
+      let couponId = data.get('couponId', null);
+      return !exists(path) || !offer.keys().hasAll(['price', 'promoPercent'])
+        || (offer.price != null
+            && offer.get('enrollmentsOpen', true) != false
+            && (couponId == null || couponApplies(couponId, string(data.courseId)))
+            && math.abs(float(data.amount) - expectedOrderAmount(offer, couponId)) < 0.011);
+    }
+
     // Catálogo público: cualquiera puede leer, solo un admin escribe
     // (la app hoy no tiene un flujo de escritura desde el cliente para
     // estas colecciones; se editan vía consola o el script scripts/seed.mjs).
@@ -57,7 +105,9 @@ service cloud.firestore {
     // materiales). Solo usuarios logueados lo leen (se consume desde el
     // reproductor, que ya requiere sesión); solo docentes/admin lo editan.
     match /courseContent/{courseId} {
-      allow read: if isSignedIn();
+      // Trae los links de las clases grabadas y materiales: solo quien pagó
+      // (matrícula activa) o gestiona el curso. Antes bastaba con tener cuenta.
+      allow read: if canManageCourse(courseId) || isEnrolledIn(courseId);
       allow write: if canManageCourse(courseId);
     }
 
@@ -89,7 +139,9 @@ service cloud.firestore {
     // usuario logueado, incluyendo estudiantes, podía modificar o borrar la
     // clase de otro, que sí seguimos evitando.
     match /liveSessions/{sessionId} {
-      allow read: if isSignedIn();
+      // Trae el nombre de la sala de videollamada: solo gente del curso. La app
+      // consulta siempre por curso (where courseId == ...), ver fetchLiveSessions.
+      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
       // Admin programa clases (incluido el calendario que genera al crear un
       // aula, a nombre del docente del aula); un docente solo las de SU curso
       // y a su nombre.
@@ -144,7 +196,15 @@ service cloud.firestore {
       // (followUp); estado/aula/acceso de la matrícula son del Admin.
       allow update: if isSignedIn() && (
                       (resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'courseId', 'completedLessonIds', 'progress', 'updatedAt'])) ||
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'courseId', 'completedLessonIds', 'progress', 'updatedAt'])
+                        // El avance sube de a una lección por vez (markLessonComplete):
+                        // no se puede saltar a 100% sin lecciones marcadas.
+                        && request.resource.data.courseId == resource.data.courseId
+                        && request.resource.data.progress is number
+                        && request.resource.data.progress >= 0 && request.resource.data.progress <= 100
+                        && request.resource.data.completedLessonIds is list
+                        && request.resource.data.completedLessonIds.size() <= resource.data.get('completedLessonIds', []).size() + 1
+                        && (request.resource.data.completedLessonIds.size() > 0 || request.resource.data.progress == 0)) ||
                       isAdmin() ||
                       (isCourseTeacher(string(resource.data.courseId)) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followUp']))
                     );
@@ -208,7 +268,8 @@ service cloud.firestore {
     // Cualquier usuario logueado las lee (docentes/alumnos ven su aula);
     // solo el admin las crea/edita.
     match /groups/{groupId} {
-      allow read: if isSignedIn();
+      // Incluye el enlace de clase: solo gente del curso (ver fetchGroups).
+      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
       allow write: if isAdmin();
     }
 
@@ -221,7 +282,11 @@ service cloud.firestore {
       allow create: if isAdmin() || (isSignedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'pending'
-        && request.resource.data.amount is number && request.resource.data.amount >= 0);
+        && request.resource.data.amount is number && request.resource.data.amount >= 0
+        // El importe debe ser el precio vigente del curso (ver orderAmountOk).
+        && request.resource.data.amount <= 100000
+        && orderAmountOk(request.resource.data)
+        && request.resource.data.keys().hasOnly(['uid', 'studentName', 'studentEmail', 'courseId', 'courseTitle', 'amount', 'paymentMethod', 'couponId', 'couponCode', 'proofCode', 'proofUrl', 'status', 'createdAt', 'code']));
       // Un pago manual (Yape/Transferencia) entra como 'pending' y solo el
       // admin puede pasarlo a 'paid' al validar el comprobante -- ver
       // approveOrder en lib/db.js.
@@ -248,7 +313,7 @@ service cloud.firestore {
     match /submissions/{submissionId} {
       allow read: if isSignedIn() && (canManageCourse(string(resource.data.courseId)) || resource.data.uid == request.auth.uid);
       allow create: if canManageCourse(string(request.resource.data.courseId)) || (
-        isSignedIn()
+        isEnrolledIn(string(request.resource.data.courseId))
         && request.resource.data.uid == request.auth.uid
         && submissionId.matches(request.auth.uid + '_.*')
         && request.resource.data.status == 'submitted'
@@ -259,6 +324,7 @@ service cloud.firestore {
         isSignedIn()
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid
+        && request.resource.data.courseId == resource.data.courseId
         && request.resource.data.status == 'submitted'
         && request.resource.data.get('grade', null) == resource.data.get('grade', null)
         && request.resource.data.get('feedback', null) == resource.data.get('feedback', null)
@@ -287,13 +353,31 @@ service cloud.firestore {
       allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
+    // Sesiones ya dictadas en cada aula (doc id = id del aula, ver
+    // fetchGroupProgress). Las marca el docente del curso o el admin; las lee la
+    // gente del curso. `resource == null`: el aula aún no tiene nada marcado.
+    match /groupProgress/{groupId} {
+      allow read: if isSignedIn() && (resource == null
+        || canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId)));
+      allow create: if canManageCourse(string(request.resource.data.courseId))
+        && request.resource.data.groupId == groupId;
+      allow update: if canManageCourse(string(resource.data.courseId))
+        && request.resource.data.courseId == resource.data.courseId
+        && request.resource.data.groupId == groupId;
+      allow delete: if canManageCourse(string(resource.data.courseId));
+    }
+
     // Grupos de trabajo del proyecto (equipos que arman los alumnos, o que
     // crea el docente). Cualquier usuario logueado del curso puede crear el
     // suyo y actualizar integrantes/invitaciones (aceptar, unirse, invitar);
     // mismo nivel de confianza que communityPosts. Solo docente/admin borra.
     match /workGroups/{groupId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
+      // Solo gente del curso: quien lo gestiona o un alumno con matrícula activa
+      // (antes cualquier cuenta podía renombrar o vaciar el equipo de otros).
+      allow create: if canManageCourse(string(request.resource.data.courseId)) || isEnrolledIn(string(request.resource.data.courseId));
+      allow update: if request.resource.data.courseId == resource.data.courseId
+        && (canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId)));
       allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
@@ -301,14 +385,15 @@ service cloud.firestore {
     // solo el docente/admin publica anuncios; los comentarios (append al
     // array `comments` vía update) los agrega cualquier usuario logueado.
     match /communityPosts/{postId} {
-      allow read: if isSignedIn();
+      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
       // Anuncios: solo el admin o el docente asignado a ese curso.
       allow create: if canManageCourse(string(request.resource.data.courseId));
       // Un usuario común solo agrega comentarios; editar el post o marcarlo
       // como anuncio es del admin o del docente asignado.
       allow update: if isSignedIn() && (
         canManageCourse(string(resource.data.courseId)) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments'])
+        (isEnrolledIn(string(resource.data.courseId))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments']))
       );
       allow delete: if false;
     }
@@ -344,7 +429,14 @@ service cloud.firestore {
 
     match /programLeads/{leadId} {
       allow read: if isAdmin();
-      allow create: if true;
+      // Sin sesión, pero con forma y tamaños acotados (ver captureProgramLead).
+      allow create: if request.resource.data.keys().hasOnly(['courseId', 'courseTitle', 'name', 'email', 'phone', 'source', 'marketingConsent', 'createdAt', 'termsAcceptedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 160
+        && request.resource.data.email is string && request.resource.data.email.size() <= 160
+        && (request.resource.data.get('phone', null) == null || (request.resource.data.phone is string && request.resource.data.phone.size() <= 40))
+        && (request.resource.data.get('courseTitle', null) == null || (request.resource.data.courseTitle is string && request.resource.data.courseTitle.size() <= 200))
+        && request.resource.data.source is string && request.resource.data.source.size() <= 100
+        && request.resource.data.marketingConsent is bool;
       allow update, delete: if false;
     }
 
@@ -372,8 +464,9 @@ service cloud.firestore {
     // Salas privadas de estudio armadas por un alumno. Cualquier usuario
     // logueado las ve (para unirse); solo quien la crea puede registrarla.
     match /privateRooms/{roomId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.createdByUid == request.auth.uid;
+      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
+      allow create: if request.resource.data.createdByUid == request.auth.uid
+        && (canManageCourse(string(request.resource.data.courseId)) || isEnrolledIn(string(request.resource.data.courseId)));
       allow update, delete: if false;
     }
 

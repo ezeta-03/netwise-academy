@@ -44,8 +44,12 @@ export const PAYMENT_METHODS = [
 // checkout-yape-qr en Checkout.jsx); si el admin todavía no configuró nada,
 // cae a un mensaje genérico en vez de mostrar "al ...".
 // Métodos que el checkout puede ofrecer hoy según la configuración del admin.
+// Una transferencia sin número de cuenta configurado no se puede pagar: no se
+// ofrece. Yape sí, porque el checkout siempre muestra su código QR.
+const hasWhereToPay = (m, cfg) => m.id === 'yape' || cfg?.noNumber || !!cfg?.number?.trim();
+
 export const checkoutMethods = (settings) =>
-  PAYMENT_METHODS.filter((m) => !m.requiresGateway && settings?.[m.id]?.enabled);
+  PAYMENT_METHODS.filter((m) => !m.requiresGateway && settings?.[m.id]?.enabled && hasWhereToPay(m, settings[m.id]));
 
 export const buildPaymentInstructions = (methodId, cfg, amountLabel) => {
   const meta = PAYMENT_METHODS.find((m) => m.id === methodId);
@@ -54,9 +58,10 @@ export const buildPaymentInstructions = (methodId, cfg, amountLabel) => {
   const who = cfg?.accountName?.trim() ? ` (${cfg.accountName.trim()})` : '';
   const note = cfg?.note?.trim() ? ` ${cfg.note.trim()}` : '';
 
-  if (cfg?.noNumber) {
-    return `${meta.verb} ${amountLabel} escaneando el código QR${who} y envía tu comprobante para confirmar tu cupo.${note}`;
+  // Yape sin número cargado: el QR del checkout alcanza para pagar.
+  if (cfg?.noNumber || (methodId === 'yape' && !cfg?.number?.trim())) {
+    return `${meta.verb} ${amountLabel} escaneando el código QR${who} y escribe abajo tu N.° de operación para confirmar tu cupo.${note}`;
   }
   if (!cfg?.number?.trim()) return 'Nuestro equipo te contactará para completar tu pago.';
-  return `${meta.verb} ${amountLabel} al ${cfg.number.trim()}${who} y envía tu comprobante para confirmar tu cupo.${note}`;
+  return `${meta.verb} ${amountLabel} al ${cfg.number.trim()}${who} y escribe abajo tu N.° de operación para confirmar tu cupo.${note}`;
 };

@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { ClipboardCheck, BarChart3, UsersRound, Send, ExternalLink, Clock3, CheckCircle2, XCircle, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { fetchCourseContent, fetchCourseSubmissions, fetchCourseAttendance, fetchCourseGrades } from '../../lib/db';
+import { fetchCourseContent, fetchCourseSubmissions, fetchCourseAttendance, fetchCourseGrades, fetchGroupProgress } from '../../lib/db';
 import { computeGradeSummary } from '../../lib/gradebook';
 import { getGradingModel, buildStudentRows } from '../../lib/gradingScheme';
-import { getOrderedSessions } from '../../lib/courseSessions';
+import { getOrderedSessions, withAulaSessions } from '../../lib/courseSessions';
 import { attendanceStats } from '../../lib/attendance';
 import { APPROVAL, MIN_PERFORMANCE_GRADE, evaluateApproval } from '../../lib/approval';
 import { deliverableDueDate } from '../../lib/deliveryDates';
@@ -51,7 +51,7 @@ const EvalSidePanel = ({ vista, setVista, summary }) => (
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia</span><strong>{summary.asistenciaPct === null ? '—' : `${summary.asistenciaPct}%`}</strong></div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estado</span><span className={`admin-status ${summary.overall === 'regular' ? 'admin-status-green' : summary.overall === 'substitute' ? 'admin-status-amber' : 'admin-status-violet'}`}>{summary.overall === 'regular' ? 'Aprobado' : summary.overall === 'substitute' ? 'Sustitutoria' : 'En curso'}</span></div>
         {summary.asistenciaPct !== null && summary.asistenciaPct < APPROVAL.minAttendancePct && (
-          <span className="admin-cell-sub" style={{ color: 'var(--danger, #BE123C)' }}>Asistencia bajo el {APPROVAL.minAttendancePct}%: la nota no alcanza para la constancia de asistencia.</span>
+          <span className="admin-cell-sub" style={{ color: 'var(--danger, #BE123C)' }}>Tu asistencia está bajo el {APPROVAL.minAttendancePct}% que pide la constancia de participación.</span>
         )}
       </div>
     </div>
@@ -234,11 +234,11 @@ const MiAsistencia = ({ course, modules, attendance }) => {
             <div className="session-chip-row">
               {g.sessions.map((s) => {
                 const a = attendance.find((x) => x.sessionId === s.id);
-                const cls = !a ? (s.done ? 'absent' : 'pending') : a.present ? 'present' : 'absent';
+                const cls = !a ? (s.done ? 'absent' : 'pending') : a.excused ? 'excused' : a.present ? 'present' : 'absent';
                 return (
                   <div key={s.id} className={`session-chip ${cls}`}>
                     <span className="session-chip-label">{s.label}</span>
-                    <span>{s.dateLabel || (!a ? (s.done ? 'Sin registro' : 'Por dictar') : '')}</span>
+                    <span>{a?.excused ? 'No aplica' : (s.dateLabel || (!a ? (s.done ? 'Sin registro' : 'Por dictar') : ''))}</span>
                   </div>
                 );
               })}
@@ -251,7 +251,8 @@ const MiAsistencia = ({ course, modules, attendance }) => {
 };
 
 const StudentCourseEvaluacion = () => {
-  const { course, group } = useOutletContext();
+  const { course, group, enrollment } = useOutletContext();
+  const aulaId = enrollment?.groupId || null;
   const { currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modules, setModules] = useState([]);
@@ -266,14 +267,15 @@ const StudentCourseEvaluacion = () => {
   const load = useCallback(() => {
     if (!currentUser) return;
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id, currentUser.uid), fetchCourseAttendance(course.id, currentUser.uid), fetchCourseGrades(course.id, currentUser.uid)]).then(([content, subs, att, grades]) => {
-      setModules(content.modules || []);
+    // Las sesiones dictadas son las de SU aula (cada aula avanza por separado).
+    Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id, currentUser.uid), fetchCourseAttendance(course.id, currentUser.uid), fetchCourseGrades(course.id, currentUser.uid), fetchGroupProgress(aulaId).catch(() => [])]).then(([content, subs, att, grades, aulaDone]) => {
+      setModules(withAulaSessions(content.modules || [], aulaDone));
       setSubmissions(subs.filter((s) => s.uid === currentUser.uid));
       setAttendance(att.filter((a) => a.uid === currentUser.uid));
       setScores(grades.filter((g) => g.uid === currentUser.uid));
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [course.id, currentUser]);
+  }, [course.id, currentUser, aulaId]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial, mismo patrón que el resto del panel (ver StudentCourseProyecto)
   useEffect(() => { load(); }, [load]);

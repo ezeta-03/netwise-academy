@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import ModalPortal from '../../components/ModalPortal';
 import { fetchAllEnrollments, fetchCourseContent, updateEnrollmentFollowUp } from '../../lib/db';
-import { courseRoster } from '../../lib/roster';
+import { aulaRoster } from '../../lib/roster';
 
 const FOLLOW_UP = {
   ok: { label: 'Al día', cls: 'admin-status-green' },
@@ -61,7 +61,7 @@ const StudentDetailModal = ({ row, onClose, onSaved }) => {
 };
 
 const TeacherCourseProyecto = () => {
-  const { course, group } = useOutletContext();
+  const { course, group, groups, aulaId } = useOutletContext();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewing, setViewing] = useState(null);
@@ -70,7 +70,7 @@ const TeacherCourseProyecto = () => {
   const load = useCallback(() => {
     Promise.all([fetchAllEnrollments(course.id), fetchCourseContent(course.id)]).then(([enrollments, content]) => {
       const totalSessions = (content.modules || []).reduce((sum, m) => sum + (m.lessons?.length || 0), 0) || 1;
-      const courseEnrollments = courseRoster(enrollments, course.id).map((r) => enrollments.find((e) => e.uid === r.uid && e.courseId?.toString() === course.id.toString()));
+      const courseEnrollments = aulaRoster(enrollments, course.id, groups, aulaId).map((r) => enrollments.find((e) => e.uid === r.uid && e.courseId?.toString() === course.id.toString()));
       setRows(courseEnrollments.map((e) => ({
         id: e.id, uid: e.uid, studentName: e.studentName || e.uid, studentEmail: e.studentEmail,
         progress: e.progress || 0, attended: (e.completedLessonIds || []).length, totalSessions,
@@ -81,8 +81,9 @@ const TeacherCourseProyecto = () => {
       addToast('No se pudo cargar el seguimiento de alumnos.', 'error');
       setLoading(false);
     });
+    // Se recarga al cambiar de aula (o cuando llegan las aulas del curso).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course.id]);
+  }, [course.id, aulaId, groups?.length]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -93,7 +94,7 @@ const TeacherCourseProyecto = () => {
       <div className="admin-page-head">
         <div>
           <h1 className="admin-page-title">Nadie se queda sin un siguiente paso.</h1>
-          <p className="admin-page-sub">{group?.name ? `Grupo ${group.name}` : course.title} · {group?.capacity ? `${group.capacity} matriculados` : `${rows.length} matriculados`} · Muestra de {rows.length} estudiantes</p>
+          <p className="admin-page-sub">{group?.name ? `Aula ${group.name}` : course.title} · {rows.length} matriculado{rows.length === 1 ? '' : 's'}{group?.capacity ? ` de ${group.capacity} cupos` : ''}</p>
         </div>
       </div>
 

@@ -35,7 +35,7 @@ const TeacherInicio = () => {
 
   useEffect(() => {
     Promise.all([
-      fetchLiveSessions(),
+      fetchLiveSessions(courses.map((c) => c.id)),
       // Un docente solo puede leer las matrículas de SUS cursos (reglas de Firestore).
       fetchAllEnrollments(currentUser?.role === 'admin' ? undefined : courses.map((c) => c.id)),
       Promise.all(courses.map(async (c) => {
@@ -72,7 +72,7 @@ const TeacherInicio = () => {
       <div className="admin-page-head">
         <div>
           <h1 className="admin-page-title">Hola, {currentUser?.displayName?.split(' ')[0] || 'Docente'}.</h1>
-          <p className="admin-page-sub">Tu semana de aprendizaje.</p>
+          <p className="admin-page-sub">Tu semana de clases.</p>
         </div>
         <button className="admin-btn-edit" onClick={() => navigate('/teacher/agenda')}><Calendar size={15} /> Ver mi agenda</button>
       </div>

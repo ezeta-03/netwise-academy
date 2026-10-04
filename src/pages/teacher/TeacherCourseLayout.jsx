@@ -7,6 +7,7 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { fetchGroups, fetchAllEnrollments } from '../../lib/db';
 import SidebarLogo from '../../components/SidebarLogo';
+import { NO_AULA, aulaRoster } from '../../lib/roster';
 
 // Mismos 4 enlaces que TeacherLayout.jsx -- este sidebar de curso reemplaza
 // por completo al de TeacherLayout mientras el docente está dentro de un
@@ -24,7 +25,7 @@ const SUB_NAV = [
   { to: 'contenido', label: 'Contenido', icon: BookOpen },
   { to: 'sala', label: 'Sala de reuniones', icon: Video },
   { to: 'materiales', label: 'Materiales', icon: FolderOpen },
-  { to: 'proyecto', label: 'Mi proyecto', icon: Target },
+  { to: 'proyecto', label: 'Seguimiento', icon: Target },
   { to: 'evaluacion', label: 'Evaluación', icon: ClipboardCheck },
   { to: 'rubrica', label: 'Rúbrica', icon: ListChecks },
   { to: 'cronograma', label: 'Cronograma', icon: CalendarClock },
@@ -33,7 +34,7 @@ const SUB_NAV = [
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Mi proyecto', evaluacion: 'Evaluación', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
+const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Seguimiento', evaluacion: 'Evaluación', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -51,8 +52,19 @@ const TeacherCourseLayout = () => {
   const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount, addToast } = useUI();
   const { courses, loaded: coursesLoaded } = useCourseOfferings();
-  const [group, setGroup] = useState(null);
-  const [avgProgress, setAvgProgress] = useState(0);
+  // Un curso puede tener varias aulas: el docente elige con cuál trabaja y
+  // todas las pestañas (asistencia, notas, entregas, cronograma, seguimiento)
+  // se muestran solo para esa aula.
+  const [groups, setGroups] = useState([]);
+  const [courseEnrollments, setCourseEnrollments] = useState([]);
+  const aulaStorageKey = `nw_aula_${courseId}`;
+  const [aulaChoice, setAulaChoice] = useState(() => {
+    try { return sessionStorage.getItem(aulaStorageKey) || ''; } catch { return ''; }
+  });
+  const pickAula = (id) => {
+    setAulaChoice(id);
+    try { sessionStorage.setItem(aulaStorageKey, id); } catch { /* sin almacenamiento: vale solo en esta vista */ }
+  };
 
   // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
   const handleCollapseClick = () => {
@@ -86,12 +98,23 @@ const TeacherCourseLayout = () => {
   const numericCourseId = course?.id;
   useEffect(() => {
     if (!canLoad) return;
-    Promise.all([fetchGroups(), fetchAllEnrollments(numericCourseId)]).then(([groups, enrollments]) => {
-      setGroup(groups.find((g) => g.courseId?.toString() === courseId?.toString()) || null);
-      const courseEnrollments = enrollments.filter((e) => e.courseId?.toString() === courseId?.toString());
-      setAvgProgress(courseEnrollments.length ? Math.round(courseEnrollments.reduce((s, e) => s + (e.progress || 0), 0) / courseEnrollments.length) : 0);
+    Promise.all([fetchGroups(numericCourseId), fetchAllEnrollments(numericCourseId)]).then(([list, enrollments]) => {
+      setGroups(list.filter((g) => g.courseId?.toString() === courseId?.toString())
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es')));
+      setCourseEnrollments(enrollments.filter((e) => e.courseId?.toString() === courseId?.toString()));
     }).catch(() => {});
   }, [canLoad, numericCourseId, courseId]);
+
+  // Aula activa: la elegida si sigue siendo válida; si no, la primera.
+  const unassignedCount = groups.length ? aulaRoster(courseEnrollments, courseId, groups, NO_AULA).length : 0;
+  const aulaId = groups.length === 0 ? null
+    : (aulaChoice === NO_AULA && unassignedCount > 0 ? NO_AULA
+      : (groups.some((g) => g.id === aulaChoice) ? aulaChoice : groups[0].id));
+  const group = groups.find((g) => g.id === aulaId) || null;
+  const aulaUids = new Set(aulaRoster(courseEnrollments, courseId, groups, aulaId).map((r) => r.uid));
+  const aulaEnrollments = courseEnrollments.filter((e) => aulaUids.has(e.uid));
+  const avgProgress = aulaEnrollments.length ? Math.round(aulaEnrollments.reduce((s, e) => s + (e.progress || 0), 0) / aulaEnrollments.length) : 0;
+  const showAulaPicker = groups.length > 1 || unassignedCount > 0;
 
   const activeSub = location.pathname.split('/').pop();
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
@@ -130,12 +153,12 @@ const TeacherCourseLayout = () => {
           <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} />
           <div className="admin-nav-label">
             <div className="dash-course-context-title">{course.title}</div>
-            <div className="dash-course-context-sub">{group?.name ? `Grupo ${group.name}` : 'Sin grupo'} · Docente</div>
+            <div className="dash-course-context-sub">{group?.name ? `Aula ${group.name}` : (aulaId === NO_AULA ? 'Alumnos sin aula' : 'Sin aula')} · Docente</div>
           </div>
         </div>
         <div className="admin-nav-label">
           <div className="dash-mini-progress">
-            <div className="dash-mini-progress-label"><span>Avance del grupo</span><span>{avgProgress}%</span></div>
+            <div className="dash-mini-progress-label"><span>Avance del aula</span><span>{avgProgress}%</span></div>
             <div className="dash-mini-progress-track"><div className="dash-mini-progress-fill" style={{ width: `${avgProgress}%` }}></div></div>
           </div>
         </div>
@@ -177,7 +200,20 @@ const TeacherCourseLayout = () => {
         </div>
 
         <div className="admin-content">
-          <Outlet context={{ course, group }} />
+          {showAulaPicker && (
+            <div className="admin-toolbar" style={{ marginBottom: 16, alignItems: 'center' }}>
+              <label htmlFor="aula-select" style={{ fontWeight: 700, fontSize: '.86rem' }}>Aula</label>
+              <select id="aula-select" className="admin-select" value={aulaId} onChange={(e) => pickAula(e.target.value)}>
+                {groups.map((g) => {
+                  const n = aulaRoster(courseEnrollments, courseId, groups, g.id).length;
+                  return <option key={g.id} value={g.id}>{g.name} · {n} alumno{n === 1 ? '' : 's'}</option>;
+                })}
+                {unassignedCount > 0 && <option value={NO_AULA}>Sin aula · {unassignedCount} alumno{unassignedCount === 1 ? '' : 's'}</option>}
+              </select>
+              <span className="admin-cell-sub">Asistencia, notas, entregas, cronograma y seguimiento se muestran solo para esta aula.</span>
+            </div>
+          )}
+          <Outlet context={{ course, group, groups, aulaId }} />
         </div>
       </div>
     </div>

@@ -5,15 +5,15 @@ import {
   Download, Save, ExternalLink,
 } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore } from '../../lib/db';
+import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore, fetchGroupProgress, setGroupSessionDone } from '../../lib/db';
 import { computeGradeSummary } from '../../lib/gradebook';
 import { getGradingModel, buildStudentRows, effectiveModuleWeights } from '../../lib/gradingScheme';
 import { allDeliverableModules } from '../../lib/weights';
 import { downloadCsv as downloadCsvFile } from '../../lib/csv';
 import { APPROVAL } from '../../lib/approval';
-import { getOrderedSessions } from '../../lib/courseSessions';
+import { getOrderedSessions, withAulaSessions } from '../../lib/courseSessions';
 import { attendanceStats } from '../../lib/attendance';
-import { courseRoster } from '../../lib/roster';
+import { aulaRoster, NO_AULA } from '../../lib/roster';
 import { SubmissionContent } from '../../components/SubmitDeliverableModal';
 
 const getInitials = (name) => {
@@ -70,7 +70,7 @@ const EvalSidePanel = ({ vista, setVista, pendingCount, summary }) => (
 
 // --- Subvista: Entregas y revisión ---
 
-const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmissions }) => {
+const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onReloadSubmissions }) => {
   const { addToast } = useUI();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState('all');
@@ -196,7 +196,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
 
   return (
     <div className="anim-fade-up d1">
-      <div className="admin-page-head"><div><h1 className="admin-page-title">Entregas y revisión</h1><p className="admin-page-sub">{course.title} · Revisa el archivo completo, califica y deja retroalimentación.</p></div></div>
+      <div className="admin-page-head"><div><h1 className="admin-page-title">Entregas y revisión</h1><p className="admin-page-sub">{course.title}{aulaLabel ? ` · ${aulaLabel}` : ''} · Revisa el archivo completo, califica y deja retroalimentación.</p></div></div>
 
       <div className="admin-toolbar" style={{ gap: 8, marginBottom: 16 }}>
         {withDeliverable.map((m, i) => (
@@ -251,7 +251,7 @@ const EntregasRevision = ({ course, modules, roster, submissions, onReloadSubmis
 
 // --- Subvista: Registro de notas ---
 
-const RegistroNotas = ({ course, modules, roster, submissions, attendance, scores, onGradeSaved }) => {
+const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submissions, attendance, scores, onGradeSaved }) => {
   const { addToast } = useUI();
   const model = getGradingModel(course.id, modules);
   const sessions = getOrderedSessions(modules);
@@ -299,7 +299,7 @@ const RegistroNotas = ({ course, modules, roster, submissions, attendance, score
   const exportCsv = () => {
     const header = ['Estudiante', ...model.components.map((c) => (c.kind === 'module' ? `${c.label} (${c.blockLabel})` : c.label)), 'Promedio', 'Asistencia'];
     const rows = rowsByStudent.map((r) => [r.studentName, ...r.gradeRows.map((g) => g.grade ?? ''), r.summary.promedioParcial ?? '', r.att.pct === null ? '' : `${r.att.pct}%`]);
-    downloadCsv(`registro-notas-${course.id}.csv`, [header, ...rows]);
+    downloadCsv(`registro-notas-${fileTag}.csv`, [header, ...rows]);
   };
 
   // Un bloque sin componentes (ej. curso sin entregables) no se dibuja.
@@ -310,7 +310,7 @@ const RegistroNotas = ({ course, modules, roster, submissions, attendance, score
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Registro de notas</h1><p className="admin-page-sub">{course.title} · {model.subtitle}</p></div>
+        <div><h1 className="admin-page-title">Registro de notas</h1><p className="admin-page-sub">{course.title}{aulaLabel ? ` · ${aulaLabel}` : ''} · {model.subtitle}</p></div>
       </div>
 
       <div className="admin-panel">
@@ -373,7 +373,9 @@ const RegistroNotas = ({ course, modules, roster, submissions, attendance, score
 
 // --- Subvista: Asistencia ---
 
-const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
+// `doneIds`: sesiones que ESTA aula ya tuvo; `onToggleDone` las marca (null si
+// no hay un aula concreta elegida). `globalDone`: Realizadas desde Contenido.
+const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, onToggle, doneIds, globalDoneIds, onToggleDone }) => {
   const sessions = getOrderedSessions(modules);
   const grouped = modules.filter((m) => m.sessions?.length).map((m) => ({ module: m, sessions: sessions.filter((s) => s.moduleId === m.id) }));
 
@@ -393,20 +395,21 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
 
   const exportCsv = () => {
     const header = ['Estudiante', ...sessions.map((s) => s.label), 'Asist.'];
-    const rows = roster.map((r) => [r.studentName, ...sessions.map((s) => { const a = attendanceFor(r.uid, s.id); return a ? (a.present ? 'P' : 'F') : ''; }), statsFor(r.uid).pct === null ? '' : `${statsFor(r.uid).pct}%`]);
-    downloadCsv(`asistencia-${course.id}.csv`, [header, ...rows]);
+    const rows = roster.map((r) => [r.studentName, ...sessions.map((s) => { const a = attendanceFor(r.uid, s.id); return a ? (a.excused ? 'NA' : a.present ? 'P' : 'F') : ''; }), statsFor(r.uid).pct === null ? '' : `${statsFor(r.uid).pct}%`]);
+    downloadCsv(`asistencia-${fileTag}.csv`, [header, ...rows]);
   };
 
   const cycle = (row, session) => {
     const current = attendanceFor(row.uid, session.id);
-    const nextPresent = current === null ? true : current.present ? false : null;
-    onToggle(row, session, nextPresent);
+    // Presente -> Falta -> No aplica -> Sin registrar.
+    const next = current === null ? { present: true } : current.excused ? null : current.present ? { present: false } : { present: false, excused: true };
+    onToggle(row, session, next);
   };
 
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Asistencia</h1><p className="admin-page-sub">{course.title} · Registra y consulta la asistencia de todas las sesiones en una sola tabla.</p></div>
+        <div><h1 className="admin-page-title">Asistencia</h1><p className="admin-page-sub">{course.title}{aulaLabel ? ` · ${aulaLabel}` : ''} · Lista de asistencia propia de esta aula.</p></div>
         <button className="admin-btn-ghost" onClick={exportCsv}><Download size={14} /> Exportar CSV</button>
       </div>
 
@@ -434,7 +437,19 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
                 <th rowSpan={2}>Asist.</th>
               </tr>
               <tr>
-                {sessions.map((s) => <th key={s.id} style={{ textAlign: 'center', fontSize: '.7rem' }}>{s.label}<br />{s.dateLabel}</th>)}
+                {sessions.map((s) => {
+                  const fromContent = globalDoneIds.has(s.id);
+                  return (
+                    <th key={s.id} style={{ textAlign: 'center', fontSize: '.7rem' }}>
+                      {s.label}<br />{s.dateLabel}
+                      {onToggleDone && (
+                        <label style={{ display: 'block', marginTop: 4, cursor: fromContent ? 'default' : 'pointer' }} title={fromContent ? 'Marcada como Realizada en Contenido: vale para todas las aulas' : 'Esta aula ya tuvo la sesión'}>
+                          <input type="checkbox" aria-label={`${s.label} realizada en esta aula`} checked={fromContent || doneIds.has(s.id)} disabled={fromContent} onChange={(e) => onToggleDone(s, e.target.checked)} />
+                        </label>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -444,11 +459,11 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
                   {sessions.map((s) => {
                     const a = attendanceFor(row.uid, s.id);
                     const missing = a === null && s.done;
-                    const cls = a === null ? (missing ? 'missing' : 'pending') : a.present ? 'present' : 'absent';
+                    const cls = a === null ? (missing ? 'missing' : 'pending') : a.excused ? 'excused' : a.present ? 'present' : 'absent';
                     return (
                       <td key={s.id} style={{ textAlign: 'center', padding: '8px 4px' }}>
                         <div className={`session-chip clickable ${cls}`} onClick={() => cycle(row, s)}>
-                          <span className="session-chip-label" title={missing ? 'Sin registrar: cuenta como falta' : undefined}>{a === null ? (missing ? '!' : '·') : a.present ? '✓' : 'F'}</span>
+                          <span className="session-chip-label" title={missing ? 'Sin registrar: cuenta como falta' : a?.excused ? 'No aplica: no cuenta en su porcentaje' : undefined}>{a === null ? (missing ? '!' : '·') : a.excused ? 'N/A' : a.present ? '✓' : 'F'}</span>
                         </div>
                       </td>
                     );
@@ -460,17 +475,19 @@ const Asistencia = ({ course, modules, roster, attendance, onToggle }) => {
           </table>
         </div>
       )}
-      <p className="admin-panel-caption">Haz clic en una celda para alternar Presente / Falta / Sin registrar.</p>
+      <p className="admin-panel-caption">{onToggleDone ? 'La casilla bajo cada sesión marca que ESTA aula ya la tuvo (se marca sola al tomar lista); cada aula lleva su propio avance. ' : ''}Haz clic en una celda para alternar Presente / Falta / No aplica / Sin registrar. «No aplica» (N/A) saca esa sesión del porcentaje del alumno: úsalo si se matriculó después o si la falta está justificada.</p>
     </div>
   );
 };
 
 const TeacherCourseEvaluacion = () => {
-  const { course } = useOutletContext();
+  const { course, group, groups, aulaId } = useOutletContext();
   const { addToast } = useUI();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [modules, setModules] = useState([]);
-  const [roster, setRoster] = useState([]);
+  const [courseModules, setModules] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
+  // Sesiones que ya tuvo el aula elegida (cada aula avanza por separado).
+  const [doneIds, setDoneIds] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [attendance, setAttendanceRows] = useState([]);
   const [scores, setScores] = useState([]);
@@ -483,7 +500,7 @@ const TeacherCourseEvaluacion = () => {
     setLoading(true);
     Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id), fetchCourseGrades(course.id)]).then(([content, enrollments, subs, att, grades]) => {
       setModules(content.modules || []);
-      setRoster(courseRoster(enrollments, course.id));
+      setEnrollments(enrollments);
       setSubmissions(subs);
       setAttendanceRows(att);
       setScores(grades);
@@ -493,6 +510,37 @@ const TeacherCourseEvaluacion = () => {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial, mismo patrón que el resto del panel (ver TeacherCourseContenido)
   useEffect(() => { load(); }, [load]);
+
+  const groupId = group?.id || null;
+  useEffect(() => {
+    let cancelled = false;
+    fetchGroupProgress(groupId).then((ids) => { if (!cancelled) setDoneIds(ids); }).catch(() => { if (!cancelled) setDoneIds([]); });
+    return () => { cancelled = true; };
+  }, [groupId]);
+
+  // Todo lo que se muestra es del aula elegida: su lista de alumnos y, de
+  // ellos, sus entregas, notas y asistencia; las sesiones con el avance de esa aula.
+  const roster = useMemo(() => aulaRoster(enrollments, course.id, groups, aulaId), [enrollments, course.id, groups, aulaId]);
+  const rosterUids = useMemo(() => new Set(roster.map((r) => r.uid)), [roster]);
+  const modules = useMemo(() => withAulaSessions(courseModules, doneIds), [courseModules, doneIds]);
+  const globalDoneIds = useMemo(() => new Set(getOrderedSessions(courseModules).filter((s) => s.done).map((s) => s.id)), [courseModules]);
+  const aulaDoneIds = useMemo(() => new Set(doneIds), [doneIds]);
+  const aulaLabel = group ? `Aula ${group.name}` : (aulaId === NO_AULA ? 'Alumnos sin aula' : '');
+  const fileTag = `${course.id}${group ? `-${group.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}` : (aulaId === NO_AULA ? '-sin-aula' : '')}`;
+
+  // `silent`: marca automática al tomar lista -- si falla, la asistencia ya quedó
+  // guardada y no se molesta al docente con un aviso.
+  const toggleSessionDone = async (session, done, silent = false) => {
+    if (!groupId) return;
+    const previous = doneIds;
+    setDoneIds((ids) => (done ? [...new Set([...ids, session.id])] : ids.filter((id) => id !== session.id)));
+    try {
+      await setGroupSessionDone({ groupId, courseId: course.id, sessionId: session.id, done });
+    } catch {
+      setDoneIds(previous);
+      if (!silent) addToast('No se pudo actualizar la sesión de esta aula. Intenta de nuevo.', 'error');
+    }
+  };
 
   const reloadSubmissions = useCallback(async () => {
     const subs = await fetchCourseSubmissions(course.id);
@@ -506,17 +554,21 @@ const TeacherCourseEvaluacion = () => {
     setScores(grades);
   }, [course.id]);
 
-  const toggleAttendance = async (row, session, present) => {
+  // `next`: { present, excused } o null para borrar el registro.
+  const toggleAttendance = async (row, session, next) => {
     const previous = attendance;
     setAttendanceRows((prev) => {
       const others = prev.filter((a) => !(a.uid === row.uid && a.sessionId === session.id));
-      return present === null ? others : [...others, { uid: row.uid, sessionId: session.id, moduleId: session.moduleId, studentName: row.studentName, present }];
+      return next === null ? others : [...others, { uid: row.uid, sessionId: session.id, moduleId: session.moduleId, studentName: row.studentName, present: !!next.present, excused: !!next.excused }];
     });
     try {
-      if (present === null) {
+      if (next === null) {
         await deleteAttendance({ courseId: course.id, sessionId: session.id, uid: row.uid });
       } else {
-        await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present });
+        await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present: !!next.present, excused: !!next.excused });
+        // Tomar lista en una sesión la deja como dictada para TODA el aula: quien
+        // quede sin marcar cuenta como falta, no desaparece del porcentaje.
+        if (groupId && !aulaDoneIds.has(session.id) && !globalDoneIds.has(session.id)) await toggleSessionDone(session, true, true);
         addToast(`Asistencia de ${row.studentName} actualizada.`, 'success');
       }
     } catch {
@@ -526,7 +578,7 @@ const TeacherCourseEvaluacion = () => {
   };
 
   const deliverableIds = new Set(allDeliverableModules(modules).map((m) => m.id));
-  const pendingCount = submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId)).length;
+  const pendingCount = submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId) && rosterUids.has(s.uid)).length;
 
   const classSummary = useMemo(() => {
     const model = getGradingModel(course.id, modules);
@@ -555,9 +607,9 @@ const TeacherCourseEvaluacion = () => {
   return (
     <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
       <div>
-        {vista === 'entregas' && <EntregasRevision course={course} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} />}
-        {vista === 'notas' && <RegistroNotas course={course} modules={modules} roster={roster} submissions={submissions} attendance={attendance} scores={scores} onGradeSaved={reloadGrades} />}
-        {vista === 'asistencia' && <Asistencia course={course} modules={modules} roster={roster} attendance={attendance} onToggle={toggleAttendance} />}
+        {vista === 'entregas' && <EntregasRevision course={course} aulaLabel={aulaLabel} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} />}
+        {vista === 'notas' && <RegistroNotas course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} roster={roster} submissions={submissions} attendance={attendance} scores={scores} onGradeSaved={reloadGrades} />}
+        {vista === 'asistencia' && <Asistencia course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} roster={roster} attendance={attendance} onToggle={toggleAttendance} doneIds={aulaDoneIds} globalDoneIds={globalDoneIds} onToggleDone={groupId ? (session, done) => toggleSessionDone(session, done) : null} />}
       </div>
       <div>
         <EvalSidePanel vista={vista} setVista={setVista} pendingCount={pendingCount} summary={classSummary} />

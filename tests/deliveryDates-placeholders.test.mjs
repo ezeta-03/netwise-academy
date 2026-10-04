@@ -118,10 +118,7 @@ describe('deliverableDueDate(module, index, group)', () => {
   test('cambio de año y mes', () => {
     assert.equal(deliverableDueDate(mod('Semana 2'), 0, { startDate: '2026-12-29', scheduleTime: 'Martes y Jueves' }), '2027-01-07');
   });
-  test('la fecha manual no se valida (cualquier texto pasa tal cual)', () => {
-    assert.equal(deliverableDueDate(mod('Semana 1', { dueDate: 'mañana' }), 0, group), 'mañana');
-  });
-  test('una fecha manual con formato inválido debería ignorarse y caer al cálculo', { todo: 'BAJO deliveryDates.js:153 - deliverable.dueDate se devuelve sin validar YYYY-MM-DD; fmtDate del Cronograma mostraría "Invalid Date"' }, () => {
+  test('una fecha manual con formato inválido debería ignorarse y caer al cálculo', () => {
     assert.equal(deliverableDueDate(mod('Semana 1', { dueDate: 'mañana' }), 0, group), '2026-08-13');
   });
 });

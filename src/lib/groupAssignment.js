@@ -83,3 +83,14 @@ export const distributeEnrollments = (toAssign, groups, enrollments, today = tod
   }
   return result;
 };
+
+// Clases que le tocan a un alumno. Un curso puede tener varias aulas en
+// paralelo, cada una con su calendario (`groupId` en la clase): el alumno ve
+// solo las de su aula, más las clases sueltas del curso (sin `groupId`, las
+// que programa el docente). Sin aula asignada todavía no ve calendario.
+// `enrollments`: { [courseId]: matrícula } del alumno.
+export const sessionsForStudent = (sessions, enrollments) => (sessions || []).filter((s) => {
+  if (!s.groupId) return true;
+  const enrollment = enrollments?.[s.courseId];
+  return !!enrollment && enrollment.groupId === s.groupId;
+});
