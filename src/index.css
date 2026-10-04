@@ -2479,3 +2479,21 @@ body {
   .admin-topbar-right { gap: 8px; }
   .user-menu-panel { position: fixed; top: calc(60px + env(safe-area-inset-top)); right: 12px; left: auto; width: min(280px, calc(100vw - 24px)); }
 }
+
+/* Crear o recuperar contraseña desde el correo (pages/AuthAction.jsx) */
+.auth-action .checkout-body { display: flex; flex-direction: column; align-items: center; }
+.auth-action-card { background: #fff; border-radius: var(--r-xl); padding: 40px 44px; width: 100%; max-width: 460px; box-shadow: 0 12px 34px rgba(20, 18, 35, .06); }
+.auth-action-card .admin-field { margin-bottom: 16px; }
+.auth-action-card .checkout-submit-btn { width: 100%; justify-content: center; margin-top: 6px; }
+.auth-action-center { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.auth-action-icon { width: 52px; height: 52px; border-radius: 16px; background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+.auth-action-center .auth-action-icon { margin-left: auto; margin-right: auto; }
+.auth-action-icon-ok { background: #E3F9EE; color: #15803D; }
+.auth-action-icon-warn { background: #FEF3DC; color: #B45309; }
+.auth-action-title { font-family: var(--ff-body); font-weight: 800; font-size: 1.4rem; line-height: 1.25; color: #14141F; margin: 0 0 8px; }
+.auth-action-desc { color: #6B6980; font-size: .9rem; line-height: 1.6; margin: 0 0 22px; overflow-wrap: anywhere; }
+.auth-action-desc strong { color: #14141F; }
+.auth-action-toggle { color: #8B8A9B; }
+.auth-action-link { display: block; width: 100%; margin-top: 14px; background: none; border: 0; cursor: pointer; font-family: inherit; font-size: .86rem; font-weight: 600; color: var(--accent); }
+.auth-action-foot { margin-top: 20px; font-size: .78rem; color: #9795A8; text-align: center; }
+@media (max-width: 640px) { .auth-action-card { padding: 30px 22px; } .auth-action-title { font-size: 1.25rem; } }

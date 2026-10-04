@@ -14,6 +14,7 @@ import Masterclass from './pages/Masterclass';
 import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
+import AuthAction from './pages/AuthAction';
 import Player from './pages/Player';
 import BackGuard from './components/BackGuard';
 import LiveClassRoom from './pages/LiveClassRoom';
@@ -140,6 +141,8 @@ function App() {
           <Route path="/masterclass" element={<Masterclass />} />
           <Route path="/course/:id" element={<CourseDetail />} />
           <Route path="/checkout/:courseId" element={<Checkout />} />
+          {/* Enlaces de los correos de Firebase (crear o recuperar contraseña). */}
+          <Route path="/auth/accion" element={<AuthAction />} />
 
           {/* Protected Routes */}
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />

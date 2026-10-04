@@ -17,7 +17,8 @@ const WhatsAppButton = () => {
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/teacher') ||
     location.pathname.startsWith('/student') ||
-    location.pathname.startsWith('/checkout')
+    location.pathname.startsWith('/checkout') ||
+    location.pathname.startsWith('/auth/')
   ) {
     return null;
   }
