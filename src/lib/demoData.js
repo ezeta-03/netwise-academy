@@ -10,7 +10,7 @@ import { getOrderedSessions } from './courseSessions.js';
 import { allDeliverableModules } from './weights.js';
 
 export const DEMO_SIZES = [
-  { value: 20, label: 'Pequeña · 20 alumnos (como el Figma)' },
+  { value: 20, label: 'Pequeña · 20 alumnos' },
   { value: 100, label: 'Mediana · 100 alumnos' },
   { value: 300, label: 'Grande · 300 alumnos' },
 ];
