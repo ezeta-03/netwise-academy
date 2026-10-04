@@ -8,6 +8,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 initializeApp();
 const db = getFirestore();
@@ -79,5 +80,40 @@ export const askAssistant = onCall(
     const reply = data?.choices?.[0]?.message?.content?.trim();
     if (!reply) throw new HttpsError('unavailable', 'Respuesta vacía del modelo.');
     return { text: reply };
+  },
+);
+
+// createAccessLink: enlace de un solo uso para que una persona cree (o cambie)
+// su contraseña en la página propia de la academia (/auth/accion). Lo pide el
+// admin desde Equipo y permisos y se lo pasa al docente por WhatsApp: así el
+// alta no depende de las plantillas de correo de Firebase, que este proyecto
+// no puede editar. Solo un admin puede generarlo.
+const ACCESS_LINK_ORIGINS = ['https://netwiseacademy.pe', 'https://www.netwiseacademy.pe', 'https://netwise-academy-2ea16.web.app'];
+const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+export const createAccessLink = onCall(
+  { region: 'us-central1', maxInstances: 5, timeoutSeconds: 30 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+    const caller = await db.collection('users').doc(request.auth.uid).get();
+    if (caller.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Solo un administrador puede generar enlaces de acceso.');
+
+    const email = str(request.data?.email).trim().toLowerCase();
+    if (!email) throw new HttpsError('invalid-argument', 'Falta el correo.');
+    const requested = str(request.data?.origin);
+    const origin = ACCESS_LINK_ORIGINS.includes(requested) || LOCAL_ORIGIN.test(requested) ? requested : ACCESS_LINK_ORIGINS[0];
+
+    let firebaseLink;
+    try {
+      firebaseLink = await getAuth().generatePasswordResetLink(email);
+    } catch (err) {
+      if (err?.code === 'auth/user-not-found' || err?.code === 'auth/email-not-found') throw new HttpsError('not-found', 'No existe una cuenta con ese correo.');
+      console.error('generatePasswordResetLink', err?.code, err?.message);
+      throw new HttpsError('internal', 'No se pudo generar el enlace.');
+    }
+    // Del enlace de Firebase solo se usa el código: el destino es nuestra página.
+    const oobCode = new URL(firebaseLink).searchParams.get('oobCode');
+    if (!oobCode) throw new HttpsError('internal', 'No se pudo generar el enlace.');
+    return { link: `${origin}/auth/accion?mode=resetPassword&oobCode=${encodeURIComponent(oobCode)}` };
   },
 );

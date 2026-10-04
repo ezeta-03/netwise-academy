@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound } from 'lucide-react';
+import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound, Copy, Check, Loader2, MessageCircle, Mail } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserProfile, logChange, createTeacherAccount, updateCourseTeacher, sendAccessEmail } from '../../lib/db';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserProfile, logChange, createTeacherAccount, updateCourseTeacher, sendAccessEmail, createAccessLink, saveUserPhone } from '../../lib/db';
+import { toWhatsAppNumber, whatsAppLink } from '../../lib/phone';
 
 const ROLE_LABEL = { student: 'Estudiante', teacher: 'Docente', admin: 'Administrador' };
 
@@ -92,13 +93,123 @@ const MemberModal = ({ member, adminName, onClose, onSaved }) => {
   );
 };
 
-// Alta de un docente: crea su cuenta, le asigna cursos y le envía el correo para
-// que defina su contraseña. Si el correo ya tiene cuenta (p. ej. se registró
+// Enlace de acceso de una persona: lleva a la página de la academia donde crea
+// su propia contraseña. El admin lo copia o lo manda por WhatsApp. `intro`
+// cambia el encabezado cuando se abre justo después de crear un docente.
+const AccessLinkModal = ({ user, intro, onClose, onPhoneSaved }) => {
+  const { addToast } = useUI();
+  const [link, setLink] = useState('');
+  // Celular del destinatario: el botón de WhatsApp abre directo su chat.
+  const [phone, setPhone] = useState(user.phone || '');
+  const validPhone = !!toWhatsAppNumber(phone);
+  const [state, setState] = useState('loading'); // 'loading' | 'ready' | 'error'
+  const [copied, setCopied] = useState(false);
+  const [sendingMail, setSendingMail] = useState(false);
+
+  const generate = () => {
+    createAccessLink(user.email)
+      .then((url) => { setLink(url); setState('ready'); })
+      .catch(() => setState('error'));
+  };
+  useEffect(() => {
+    generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const retry = () => { setState('loading'); setCopied(false); generate(); };
+
+  const firstName = (user.name || '').split(' ')[0] || '';
+  const message = `Hola ${firstName}, te damos la bienvenida a Netwise Academy. Crea tu contraseña con este enlace (vence en aproximadamente una hora):\n${link}\n\nDespués entra en https://netwiseacademy.pe con tu correo ${user.email}.`;
+
+  // Si el admin escribió o corrigió el celular acá, queda guardado en el perfil.
+  const rememberPhone = () => {
+    if (!user.uid || !validPhone || phone.trim() === (user.phone || '').trim()) return;
+    saveUserPhone(user.uid, phone.trim()).then(() => onPhoneSaved?.(user.uid, phone.trim())).catch(() => {});
+  };
+
+  const copy = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      addToast(`${label} copiado.`, 'success');
+    } catch {
+      addToast('No se pudo copiar. Selecciona el enlace y cópialo a mano.', 'error');
+    }
+  };
+  const sendMail = async () => {
+    setSendingMail(true);
+    try {
+      await sendAccessEmail(user.email);
+      addToast(`Correo enviado a ${user.email}. Puede llegar a spam.`, 'success');
+    } catch {
+      addToast('No se pudo enviar el correo. Intenta de nuevo.', 'error');
+    } finally {
+      setSendingMail(false);
+    }
+  };
+
+  return (
+    <ModalPortal>
+      <div className="admin-modal-overlay">
+        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal-head">
+            <div>
+              <div className="admin-modal-title">{intro || 'Enlace de acceso'}</div>
+              <div className="admin-modal-sub">{user.name} · {user.email}</div>
+            </div>
+            <button className="admin-modal-close" onClick={onClose} aria-label="Cerrar"><X size={18} /></button>
+          </div>
+
+          {state === 'loading' && <p className="admin-panel-caption" style={{ marginTop: 0 }}><Loader2 size={14} className="spin" style={{ verticalAlign: -2 }} /> Generando el enlace...</p>}
+
+          {state === 'ready' && (
+            <>
+              <p className="admin-cell-sub" style={{ marginBottom: 12 }}>Envíale este enlace. Al abrirlo, crea su propia contraseña en la página de Netwise Academy: tú no la ves ni tienes que inventarla.</p>
+              <div className="admin-field">
+                <label htmlFor="access-phone">Celular (WhatsApp)</label>
+                <input id="access-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} onBlur={rememberPhone} placeholder="Ej. 987 654 321" autoComplete="off" />
+                {phone.trim() && !validPhone && <span className="admin-cell-sub" style={{ color: '#B45309' }}>Revisa el número: faltan dígitos. Con otro país, incluye el código (ej. +34 612 345 678).</span>}
+                {!phone.trim() && <span className="admin-cell-sub">Sin número, WhatsApp te dejará elegir el contacto.</span>}
+              </div>
+              <div className="admin-field">
+                <label htmlFor="access-link">Enlace para crear su contraseña</label>
+                <input id="access-link" readOnly value={link} onFocus={(e) => e.target.select()} />
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <a className="admin-btn-edit" href={whatsAppLink(phone, message)} target="_blank" rel="noreferrer" onClick={rememberPhone}><MessageCircle size={14} /> {validPhone ? `Enviar por WhatsApp a ${firstName || 'su número'}` : 'Enviar por WhatsApp'}</a>
+                <button className="admin-btn-ghost" onClick={() => copy(link, 'Enlace')}>{copied ? <Check size={14} /> : <Copy size={14} />} Copiar enlace</button>
+                <button className="admin-btn-ghost" onClick={() => copy(message, 'Mensaje')}><Copy size={14} /> Copiar mensaje</button>
+              </div>
+              <p className="dash-notice" style={{ marginTop: 0 }}>El enlace sirve una sola vez y vence en aproximadamente una hora. Si vence, vuelve a abrir esta ventana desde el icono de llave para generar otro.</p>
+            </>
+          )}
+
+          {state === 'error' && (
+            <>
+              <div className="checkout-error" role="alert">No se pudo generar el enlace. Puedes reintentar o enviarle el correo de acceso.</div>
+              <button className="admin-btn-ghost" onClick={retry}>Reintentar</button>
+            </>
+          )}
+
+          <div className="admin-modal-actions">
+            <button className="admin-btn-ghost" onClick={sendMail} disabled={sendingMail} title="Correo estándar de Firebase: puede caer en spam">
+              <Mail size={14} /> {sendingMail ? 'Enviando...' : 'Enviar también por correo'}
+            </button>
+            <button className="admin-btn-edit" onClick={onClose}>Listo</button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+};
+
+// Alta de un docente: crea su cuenta y le asigna cursos; al terminar se abre su
+// enlace de acceso para que defina su contraseña. Si el correo ya tiene cuenta (p. ej. se registró
 // como alumno), se le cambia el rol a docente en vez de crear otra.
-const TeacherModal = ({ users, courses, adminName, onClose, onSaved }) => {
+const TeacherModal = ({ users, courses, adminName, onClose, onSaved, onCreated }) => {
   const { addToast } = useUI();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [courseIds, setCourseIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -113,24 +224,29 @@ const TeacherModal = ({ users, courses, adminName, onClose, onSaved }) => {
     if (!existing && !name.trim()) { setError('Escribe el nombre del docente.'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanEmail)) { setError('Escribe un correo válido.'); return; }
     if (existing?.role === 'admin') { setError('Ese correo es de un administrador: ya puede gestionar todos los cursos.'); return; }
+    if (!existing && !toWhatsAppNumber(phone)) { setError('Escribe su celular con WhatsApp (ej. 987 654 321): por ahí le enviarás su enlace de acceso.'); return; }
+    if (existing && phone.trim() && !toWhatsAppNumber(phone)) { setError('Revisa el celular: faltan dígitos.'); return; }
     setSaving(true);
+    let created = null;
     try {
       const titles = courses.filter((c) => courseIds.includes(c.id)).map((c) => c.title);
       const suffix = titles.length ? ` y le asignó: ${titles.join(', ')}` : '';
       if (existing) {
         await updateUserRole(existing.uid, 'teacher');
+        if (phone.trim()) await saveUserPhone(existing.uid, phone.trim());
         for (const id of courseIds) await updateCourseTeacher(id, existing.uid);
         await logChange(adminName, `Convirtió a ${existing.name} en docente${suffix}.`);
         addToast(`${existing.name} ahora es docente.`, 'success');
       } else {
-        const { emailSent } = await createTeacherAccount({ name, email: cleanEmail, courseIds });
+        const { uid } = await createTeacherAccount({ name, email: cleanEmail, phone, courseIds });
+        created = { uid, name: name.trim(), email: cleanEmail, phone: phone.trim() };
         await logChange(adminName, `Creó la cuenta de docente de ${name.trim()} (${cleanEmail})${suffix}.`);
-        addToast(emailSent
-          ? `Docente creado. Le enviamos a ${cleanEmail} el correo para definir su contraseña.`
-          : 'Docente creado, pero no se pudo enviar el correo de acceso: usa "Enviar correo de acceso" en la tabla.', emailSent ? 'success' : 'warning');
+        addToast('Docente creado.', 'success');
       }
       await onSaved();
       onClose();
+      // Cuenta nueva: falta que defina su contraseña, así que se abre su enlace.
+      if (created) onCreated(created);
     } catch (err) {
       setError(err?.code === 'auth/email-already-in-use'
         ? 'Ya existe una cuenta con ese correo que aún no aparece en la lista. Pídele que inicie sesión una vez y luego cámbiale el rol a Docente.'
@@ -148,7 +264,7 @@ const TeacherModal = ({ users, courses, adminName, onClose, onSaved }) => {
           <div className="admin-modal-head">
             <div>
               <div className="admin-modal-title">Crear docente</div>
-              <div className="admin-modal-sub">Recibirá un correo para definir su contraseña.</div>
+              <div className="admin-modal-sub">Al crearlo te daremos un enlace para que defina su contraseña.</div>
             </div>
             <button className="admin-modal-close" onClick={onClose} disabled={saving} aria-label="Cerrar"><X size={18} /></button>
           </div>
@@ -161,6 +277,11 @@ const TeacherModal = ({ users, courses, adminName, onClose, onSaved }) => {
           ) : (
             <div className="admin-field"><label htmlFor="teacher-name">Nombre completo</label><input id="teacher-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Lucía Rivera" autoComplete="off" /></div>
           )}
+          <div className="admin-field">
+            <label htmlFor="teacher-phone">Celular (WhatsApp){existing ? ' · opcional' : ''}</label>
+            <input id="teacher-phone" type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={existing?.phone || 'Ej. 987 654 321'} autoComplete="off" />
+            <span className="admin-cell-sub">Por WhatsApp le enviarás el enlace para crear su contraseña. El correo será su usuario para entrar.</span>
+          </div>
           <div className="admin-field">
             <label>Cursos a su cargo (opcional)</label>
             {courses.map((c) => {
@@ -192,6 +313,7 @@ const AdminEquipo = () => {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
   const [teacherModal, setTeacherModal] = useState(false);
+  const [accessFor, setAccessFor] = useState(null);
   const { courses, refresh: refreshCourses } = useCourseOfferings();
 
   const [users, setUsers] = useState(MOCK_USER_ROWS);
@@ -207,20 +329,11 @@ const AdminEquipo = () => {
     if (!realUsers) return;
     setUsers(realUsers.map((u) => ({
       id: u.uid, uid: u.uid, name: u.displayName || u.email, email: u.email,
-      role: u.role || 'student', joined: formatJoined(u.createdAt), disabled: !!u.disabled,
+      role: u.role || 'student', joined: formatJoined(u.createdAt), disabled: !!u.disabled, phone: u.phone || '',
     })));
   });
   useEffect(() => { loadUsers(); }, []);
 
-  const handleSendAccess = async (targetUser) => {
-    if (!(await confirmDialog({ title: 'Enviar correo de acceso', message: `Se enviará a ${targetUser.email} un correo con un enlace para definir una contraseña nueva. Su contraseña actual sigue valiendo hasta que la cambie.`, confirmLabel: 'Enviar correo' }))) return;
-    try {
-      await sendAccessEmail(targetUser.email);
-      addToast(`Correo de acceso enviado a ${targetUser.email}.`, 'success');
-    } catch {
-      addToast('No se pudo enviar el correo. Intenta de nuevo.', 'error');
-    }
-  };
 
   const handleRoleChange = async (targetUser, newRole) => {
     if (targetUser.uid === currentUser?.uid) return;
@@ -330,14 +443,14 @@ const AdminEquipo = () => {
       </div>
       <div className="admin-table-wrap">
         <table className="admin-table">
-          <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Registro</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Correo y celular</th><th>Rol</th><th>Registro</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
             {filteredUsers.length > 0 ? filteredUsers.map((u) => {
               const isSelf = u.uid === currentUser?.uid;
               return (
                 <tr key={u.id}>
                   <td className="admin-cell-name">{u.name}</td>
-                  <td className="admin-cell-sub">{u.email}</td>
+                  <td className="admin-cell-sub">{u.email}{u.phone ? <div>{u.phone}</div> : null}</td>
                   <td>
                     <select
                       className="admin-select"
@@ -356,7 +469,7 @@ const AdminEquipo = () => {
                   <td><span className={`admin-status ${u.disabled ? 'admin-status-gray' : 'admin-status-green'}`}>{u.disabled ? 'Desactivado' : 'Activo'}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="admin-icon-btn" onClick={() => handleSendAccess(u)} title="Enviar correo de acceso (definir o recuperar contraseña)" aria-label={`Enviar correo de acceso a ${u.name}`}>
+                      <button className="admin-icon-btn" onClick={() => setAccessFor({ user: u })} title="Enlace de acceso (crear o recuperar contraseña)" aria-label={`Enlace de acceso de ${u.name}`}>
                         <KeyRound size={14} />
                       </button>
                       <button
@@ -399,6 +512,13 @@ const AdminEquipo = () => {
           users={users} courses={courses} adminName={adminName}
           onClose={() => setTeacherModal(false)}
           onSaved={async () => { await loadUsers(); await refreshCourses(); }}
+          onCreated={(user) => setAccessFor({ user, intro: 'Docente creado: envíale su enlace' })}
+        />
+      )}
+      {accessFor && (
+        <AccessLinkModal
+          user={accessFor.user} intro={accessFor.intro} onClose={() => setAccessFor(null)}
+          onPhoneSaved={(uid, phone) => setUsers((list) => list.map((u) => (u.uid === uid ? { ...u, phone } : u)))}
         />
       )}
     </div>

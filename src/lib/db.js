@@ -1,7 +1,8 @@
-import { db, storage, auth, createAccountKeepingSession } from './firebase';
+import { db, storage, auth, functions, createAccountKeepingSession } from './firebase';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendPasswordResetEmail } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 import { pickGroup } from './groupAssignment';
 
@@ -192,21 +193,31 @@ export const updateUserRole = async (uid, role) => {
 
 // Alta de un docente desde Admin > Equipo y permisos. Crea su cuenta de acceso
 // con una contraseña aleatoria que nadie ve, su perfil con rol docente, le
-// asigna los cursos elegidos y le envía el correo de Firebase para que defina
-// su propia contraseña. Devuelve { uid, emailSent }.
+// asigna los cursos elegidos. Su contraseña la define él mismo con el enlace
+// de acceso que el admin le pasa (ver createAccessLink). Devuelve { uid }.
 const randomPassword = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(24));
   return `Nw!${Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('')}`;
 };
 
-export const createTeacherAccount = async ({ name, email, courseIds = [] }) => {
+export const createTeacherAccount = async ({ name, email, phone = '', courseIds = [] }) => {
   if (!isConfigValid) throw new Error('app/needs-firebase');
   const cleanEmail = email.trim().toLowerCase();
   const uid = await createAccountKeepingSession(cleanEmail, randomPassword(), name.trim());
-  await setDoc(doc(db, 'users', uid), { email: cleanEmail, displayName: name.trim(), role: 'teacher', createdAt: new Date().toISOString() });
+  await setDoc(doc(db, 'users', uid), { email: cleanEmail, displayName: name.trim(), phone: phone.trim(), role: 'teacher', createdAt: new Date().toISOString() });
   for (const courseId of courseIds) await updateCourseTeacher(courseId, uid);
-  const emailSent = await sendPasswordResetEmail(auth, cleanEmail).then(() => true).catch(() => false);
-  return { uid, emailSent };
+  return { uid };
+};
+
+// Enlace de un solo uso a la página propia de la academia para crear o cambiar
+// la contraseña (/auth/accion). Lo genera la Cloud Function createAccessLink
+// (solo admin) y el admin lo comparte, p. ej., por WhatsApp.
+export const createAccessLink = async (email) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const call = httpsCallable(functions, 'createAccessLink', { timeout: 30000 });
+  const { data } = await call({ email, origin: window.location.origin });
+  if (!data?.link) throw new Error('app/no-link');
+  return data.link;
 };
 
 // Correo de Firebase para que la persona defina (o recupere) su contraseña.
