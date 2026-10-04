@@ -203,8 +203,18 @@ const randomPassword = () => {
 export const createTeacherAccount = async ({ name, email, phone = '', courseIds = [] }) => {
   if (!isConfigValid) throw new Error('app/needs-firebase');
   const cleanEmail = email.trim().toLowerCase();
-  const uid = await createAccountKeepingSession(cleanEmail, randomPassword(), name.trim());
-  await setDoc(doc(db, 'users', uid), { email: cleanEmail, displayName: name.trim(), phone: phone.trim(), role: 'teacher', createdAt: new Date().toISOString() });
+  let uid;
+  try {
+    uid = await createAccountKeepingSession(cleanEmail, randomPassword(), name.trim());
+  } catch (err) {
+    if (err?.code !== 'auth/email-already-in-use') throw err;
+    // El correo ya tiene cuenta de acceso pero no perfil (se eliminó el perfil
+    // y quedó la cuenta): se reutiliza esa cuenta en vez de fallar.
+    const { data } = await httpsCallable(functions, 'findAccountByEmail', { timeout: 30000 })({ email: cleanEmail });
+    if (!data?.uid) throw err;
+    uid = data.uid;
+  }
+  await setDoc(doc(db, 'users', uid), { email: cleanEmail, displayName: name.trim(), phone: phone.trim(), role: 'teacher', createdAt: new Date().toISOString() }, { merge: true });
   for (const courseId of courseIds) await updateCourseTeacher(courseId, uid);
   return { uid };
 };
@@ -255,6 +265,15 @@ export const markTourSeen = async (uid, key) => {
 export const updateUserStatus = async (uid, disabled) => {
   if (!isConfigValid) return;
   await setDoc(doc(db, 'users', uid), { disabled }, { merge: true });
+};
+
+// Elimina de verdad a un usuario: su cuenta de acceso y su perfil, vía la
+// Cloud Function deleteUserAccount (el navegador no puede borrar la cuenta de
+// acceso de otra persona). Devuelve { coursesUnassigned }.
+export const deleteUserAccount = async (uid) => {
+  if (!isConfigValid) return { coursesUnassigned: 0 };
+  const { data } = await httpsCallable(functions, 'deleteUserAccount', { timeout: 30000 })({ uid });
+  return data || {};
 };
 
 // Borra el perfil/rol de Firestore (Admin > Equipo y permisos, limpiar

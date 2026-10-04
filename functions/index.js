@@ -91,12 +91,18 @@ export const askAssistant = onCall(
 const ACCESS_LINK_ORIGINS = ['https://netwiseacademy.pe', 'https://www.netwiseacademy.pe', 'https://netwise-academy-2ea16.web.app'];
 const LOCAL_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
+// Las funciones de administración de cuentas solo las llama un admin.
+const assertAdmin = async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const caller = await db.collection('users').doc(request.auth.uid).get();
+  if (caller.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Solo un administrador puede hacer esto.');
+};
+const ADMIN_CALL = { region: 'us-central1', maxInstances: 5, timeoutSeconds: 30 };
+
 export const createAccessLink = onCall(
-  { region: 'us-central1', maxInstances: 5, timeoutSeconds: 30 },
+  ADMIN_CALL,
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
-    const caller = await db.collection('users').doc(request.auth.uid).get();
-    if (caller.data()?.role !== 'admin') throw new HttpsError('permission-denied', 'Solo un administrador puede generar enlaces de acceso.');
+    await assertAdmin(request);
 
     const email = str(request.data?.email).trim().toLowerCase();
     if (!email) throw new HttpsError('invalid-argument', 'Falta el correo.');
@@ -117,3 +123,46 @@ export const createAccessLink = onCall(
     return { link: `${origin}/auth/accion?mode=resetPassword&oobCode=${encodeURIComponent(oobCode)}` };
   },
 );
+
+// findAccountByEmail: uid de la cuenta de acceso de un correo, o null. Sirve
+// para recuperar una cuenta que quedó sin perfil (se borró el perfil pero no el
+// acceso): el alta de docente la reutiliza en vez de fallar por correo repetido.
+export const findAccountByEmail = onCall(ADMIN_CALL, async (request) => {
+  await assertAdmin(request);
+  const email = str(request.data?.email).trim().toLowerCase();
+  if (!email) throw new HttpsError('invalid-argument', 'Falta el correo.');
+  try {
+    const user = await getAuth().getUserByEmail(email);
+    return { uid: user.uid, displayName: user.displayName || null };
+  } catch (err) {
+    if (err?.code === 'auth/user-not-found') return { uid: null };
+    console.error('getUserByEmail', err?.code, err?.message);
+    throw new HttpsError('internal', 'No se pudo consultar la cuenta.');
+  }
+});
+
+// deleteUserAccount: borra de verdad a un usuario -- su cuenta de acceso y su
+// perfil -- y lo quita como docente de los cursos que tuviera. No toca sus
+// matrículas, pedidos ni entregas (historial de la academia). Nadie puede
+// borrarse a sí mismo ni borrar a otro admin desde acá.
+export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
+  await assertAdmin(request);
+  const uid = str(request.data?.uid).trim();
+  if (!uid) throw new HttpsError('invalid-argument', 'Falta el usuario.');
+  if (uid === request.auth.uid) throw new HttpsError('failed-precondition', 'No puedes eliminar tu propia cuenta.');
+  const profile = await db.collection('users').doc(uid).get();
+  if (profile.data()?.role === 'admin') throw new HttpsError('failed-precondition', 'Primero cámbiale el rol: no se elimina a un administrador.');
+
+  try {
+    await getAuth().deleteUser(uid);
+  } catch (err) {
+    if (err?.code !== 'auth/user-not-found') {
+      console.error('deleteUser', err?.code, err?.message);
+      throw new HttpsError('internal', 'No se pudo eliminar la cuenta de acceso.');
+    }
+  }
+  await db.collection('users').doc(uid).delete();
+  const taught = await db.collection('courseOfferings').where('teacherUid', '==', uid).get();
+  await Promise.all(taught.docs.map((d) => d.ref.update({ teacherUid: null })));
+  return { deleted: true, coursesUnassigned: taught.size };
+});

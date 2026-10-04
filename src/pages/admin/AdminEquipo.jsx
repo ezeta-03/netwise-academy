@@ -4,7 +4,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserProfile, logChange, createTeacherAccount, updateCourseTeacher, sendAccessEmail, createAccessLink, saveUserPhone } from '../../lib/db';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserAccount, logChange, createTeacherAccount, updateCourseTeacher, sendAccessEmail, createAccessLink, saveUserPhone } from '../../lib/db';
 import { toWhatsAppNumber, whatsAppLink } from '../../lib/phone';
 
 const ROLE_LABEL = { student: 'Estudiante', teacher: 'Docente', admin: 'Administrador' };
@@ -249,7 +249,7 @@ const TeacherModal = ({ users, courses, adminName, onClose, onSaved, onCreated }
       if (created) onCreated(created);
     } catch (err) {
       setError(err?.code === 'auth/email-already-in-use'
-        ? 'Ya existe una cuenta con ese correo que aún no aparece en la lista. Pídele que inicie sesión una vez y luego cámbiale el rol a Docente.'
+        ? 'Ese correo ya tiene una cuenta y no pudimos recuperarla. Intenta de nuevo en un momento.'
         : err?.message === 'app/needs-firebase' ? 'Esta función necesita la base de datos real conectada.'
           : 'No se pudo crear el docente. Revisa tu conexión e intenta de nuevo.');
     } finally {
@@ -364,14 +364,16 @@ const AdminEquipo = () => {
 
   const handleDeleteUser = async (targetUser) => {
     if (targetUser.uid === currentUser?.uid) return;
-    if (!(await confirmDialog({ title: 'Eliminar perfil', message: `¿Eliminar el perfil de ${targetUser.name} (${targetUser.email})?\n\nEsto quita su rol y acceso, pero no borra la cuenta de inicio de sesión: si vuelve a entrar, se le crea un perfil nuevo como estudiante. Para bloquearla de verdad, usa "Desactivar".`, confirmLabel: 'Eliminar perfil', danger: true }))) return;
+    if (targetUser.role === 'admin') { addToast('Primero cámbiale el rol: no se elimina a un administrador.', 'warning'); return; }
+    if (!(await confirmDialog({ title: 'Eliminar cuenta', message: `¿Eliminar la cuenta de ${targetUser.name} (${targetUser.email})?\n\nSe borran su acceso y su perfil: ya no podrá iniciar sesión y el correo queda libre para crear una cuenta nueva. Si era docente, sus cursos quedan sin docente asignado. Sus matrículas, pedidos y entregas no se borran.\n\nPara suspenderla sin perder nada, usa "Desactivar".`, confirmLabel: 'Eliminar cuenta', danger: true }))) return;
     try {
-      await deleteUserProfile(targetUser.uid);
-      await logChange(adminName, `Eliminó el perfil de ${targetUser.name}.`);
-      addToast('Perfil eliminado.', 'success');
+      const { coursesUnassigned } = await deleteUserAccount(targetUser.uid);
+      await logChange(adminName, `Eliminó la cuenta de ${targetUser.name} (${targetUser.email}).`);
+      addToast(coursesUnassigned ? `Cuenta eliminada. ${coursesUnassigned} curso(s) quedaron sin docente: asígnalos en Cursos y precios.` : 'Cuenta eliminada.', coursesUnassigned ? 'warning' : 'success');
       setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
+      if (coursesUnassigned) refreshCourses();
     } catch {
-      addToast('No se pudo eliminar el perfil.', 'error');
+      addToast('No se pudo eliminar la cuenta. Intenta de nuevo.', 'error');
     }
   };
 
@@ -481,7 +483,7 @@ const AdminEquipo = () => {
                       </button>
                       <button
                         className="admin-icon-btn" disabled={isSelf} onClick={() => handleDeleteUser(u)}
-                        title={isSelf ? 'No puedes eliminar tu propia cuenta.' : 'Eliminar perfil'}
+                        title={isSelf ? 'No puedes eliminar tu propia cuenta.' : 'Eliminar cuenta'}
                         style={isSelf ? undefined : { color: '#BE123C' }}
                       >
                         <Trash2 size={14} />
