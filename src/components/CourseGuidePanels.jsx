@@ -1,5 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+// El editor del curso vive en /teacher/curso/:id y, para el admin, en
+// /admin/curso/:id: los enlaces internos se quedan en el panel desde el que se abrió.
+const useCourseBase = () => (useLocation().pathname.startsWith('/admin/') ? '/admin' : '/teacher');
 import { Plus, Trash2, CheckCircle2, Lock, Calendar, Check } from 'lucide-react';
 
 // Panel "Módulos" del riel lateral -- compartido entre Contenido (donde
@@ -9,7 +13,8 @@ import { Plus, Trash2, CheckCircle2, Lock, Calendar, Check } from 'lucide-react'
 // navega a Contenido con ese módulo seleccionado.
 export const ModulesRailPanel = ({ courseId, modules, activeModuleId, onModuleClick, onAddModule, onDeleteModule }) => {
   const navigate = useNavigate();
-  const handleClick = onModuleClick || ((moduleId) => navigate(`/teacher/curso/${courseId}/contenido?modulo=${moduleId}`));
+  const base = useCourseBase();
+  const handleClick = onModuleClick || ((moduleId) => navigate(`${base}/curso/${courseId}/contenido?modulo=${moduleId}`));
 
   return (
     <div className="admin-panel" style={{ marginBottom: 20 }}>
@@ -50,6 +55,7 @@ export const ModulesRailPanel = ({ courseId, modules, activeModuleId, onModuleCl
 // Cronograma: TeacherCourseCronograma).
 export const GuidePanel = ({ courseId, active }) => {
   const navigate = useNavigate();
+  const base = useCourseBase();
   return (
     <div className="dash-guide-panel">
       <div className="dash-guide-head">
@@ -59,7 +65,7 @@ export const GuidePanel = ({ courseId, active }) => {
       <div
         className={`dash-guide-row ${active === 'rubrica' ? 'active' : ''}`}
         style={{ cursor: 'pointer' }}
-        onClick={() => navigate(`/teacher/curso/${courseId}/rubrica`)}
+        onClick={() => navigate(`${base}/curso/${courseId}/rubrica`)}
       >
         <div className="dash-guide-row-icon"><Check size={15} /></div>
         <div>
@@ -70,7 +76,7 @@ export const GuidePanel = ({ courseId, active }) => {
       <div
         className={`dash-guide-row ${active === 'cronograma' ? 'active' : ''}`}
         style={{ cursor: 'pointer' }}
-        onClick={() => navigate(`/teacher/curso/${courseId}/cronograma`)}
+        onClick={() => navigate(`${base}/curso/${courseId}/cronograma`)}
       >
         <div className="dash-guide-row-icon"><Calendar size={15} /></div>
         <div>

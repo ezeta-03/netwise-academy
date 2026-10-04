@@ -1,6 +1,7 @@
-import { db, storage } from './firebase';
+import { db, storage, auth, createAccountKeepingSession } from './firebase';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
 import { pickGroup } from './groupAssignment';
 
@@ -187,6 +188,31 @@ export const fetchAllUsers = async () => {
 export const updateUserRole = async (uid, role) => {
   if (!isConfigValid) return; // no-op en modo demo/mock
   await setDoc(doc(db, 'users', uid), { role }, { merge: true });
+};
+
+// Alta de un docente desde Admin > Equipo y permisos. Crea su cuenta de acceso
+// con una contraseña aleatoria que nadie ve, su perfil con rol docente, le
+// asigna los cursos elegidos y le envía el correo de Firebase para que defina
+// su propia contraseña. Devuelve { uid, emailSent }.
+const randomPassword = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return `Nw!${Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('')}`;
+};
+
+export const createTeacherAccount = async ({ name, email, courseIds = [] }) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const cleanEmail = email.trim().toLowerCase();
+  const uid = await createAccountKeepingSession(cleanEmail, randomPassword(), name.trim());
+  await setDoc(doc(db, 'users', uid), { email: cleanEmail, displayName: name.trim(), role: 'teacher', createdAt: new Date().toISOString() });
+  for (const courseId of courseIds) await updateCourseTeacher(courseId, uid);
+  const emailSent = await sendPasswordResetEmail(auth, cleanEmail).then(() => true).catch(() => false);
+  return { uid, emailSent };
+};
+
+// Correo de Firebase para que la persona defina (o recupere) su contraseña.
+export const sendAccessEmail = async (email) => {
+  if (!isConfigValid) return;
+  await sendPasswordResetEmail(auth, email);
 };
 
 // Tutoriales ya vistos por el usuario (`users/{uid}.toursSeen.<clave>` =

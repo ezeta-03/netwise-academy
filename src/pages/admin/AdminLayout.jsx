@@ -1,31 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import {
-  LayoutGrid, BookOpen, Tag, Calendar, Users, ShoppingCart,
-  ShieldCheck, History, Settings, ChevronLeft, Bell, LogOut, Wallet, Headphones, Menu,
-} from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { ChevronLeft, Bell, Menu } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import SidebarLogo from '../../components/SidebarLogo';
+import UserMenu from '../../components/UserMenu';
 import { materializeCoursePricing } from '../../lib/db';
+import { ADMIN_NAV, ADMIN_NAV_SECONDARY } from '../../lib/adminNav';
 
-const NAV_ITEMS = [
-  { to: '/admin/resumen', label: 'Resumen', icon: LayoutGrid },
-  { to: '/admin/cursos', label: 'Cursos y precios', icon: BookOpen, countKey: 'courses' },
-  { to: '/admin/promociones', label: 'Promociones', icon: Tag },
-  { to: '/admin/grupos', label: 'Aulas y horarios', icon: Calendar },
-  { to: '/admin/alumnos', label: 'Alumnos y accesos', icon: Users },
-  { to: '/admin/ventas', label: 'Ventas e inscripciones', icon: ShoppingCart, countKey: 'ventas' },
-  { to: '/admin/pagos', label: 'Métodos de pago', icon: Wallet },
-  { to: '/admin/soporte', label: 'Soporte', icon: Headphones },
-];
-
-const NAV_ITEMS_ADMIN = [
-  { to: '/admin/equipo', label: 'Equipo y permisos', icon: ShieldCheck },
-  { to: '/admin/historial', label: 'Historial de cambios', icon: History },
-  { to: '/admin/configuracion', label: 'Configuración', icon: Settings },
-];
 
 const PAGE_LABELS = {
   '/admin/resumen': 'Resumen',
@@ -41,19 +23,11 @@ const PAGE_LABELS = {
   '/admin/configuracion': 'Configuración',
 };
 
-const getInitials = (name) => {
-  if (!name) return '??';
-  const parts = name.split(' ');
-  if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0].substring(0, 2).toUpperCase();
-};
-
 const AdminLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount, notifications } = useUI();
   const { courses, offerings, loaded, refresh } = useCourseOfferings();
 
@@ -81,11 +55,6 @@ const AdminLayout = () => {
     else setCollapsed((c) => !c);
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/', { replace: true });
-  };
-
   const renderLink = (item) => {
     const Icon = item.icon;
     return (
@@ -111,17 +80,10 @@ const AdminLayout = () => {
         </div>
 
         <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
-          {NAV_ITEMS.map(renderLink)}
+          {ADMIN_NAV.map(renderLink)}
           <div className="admin-nav-section-label">Administración</div>
-          {NAV_ITEMS_ADMIN.map(renderLink)}
+          {ADMIN_NAV_SECONDARY.map(renderLink)}
         </nav>
-
-        <div className="admin-sidebar-footer">
-          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
-            <LogOut size={17} />
-            <span className="admin-nav-label">Cerrar sesión</span>
-          </button>
-        </div>
       </aside>
 
       <div className="admin-main">
@@ -133,10 +95,7 @@ const AdminLayout = () => {
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
-            <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>
-              {getInitials(currentUser?.displayName || currentUser?.email)}
-            </div>
-            <button className="admin-topbar-bell admin-topbar-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}><LogOut size={18} /></button>
+            <UserMenu />
           </div>
         </div>
 

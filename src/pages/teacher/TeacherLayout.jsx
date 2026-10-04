@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Calendar, BookOpen, Headphones, ChevronLeft, Bell, LogOut, Menu } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { Home, Calendar, BookOpen, Headphones, ChevronLeft, Bell, Menu } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import SidebarLogo from '../../components/SidebarLogo';
+import UserMenu from '../../components/UserMenu';
 
 const NAV_ITEMS = [
   { to: '/teacher/inicio', label: 'Inicio', icon: Home },
@@ -19,19 +19,11 @@ const PAGE_LABELS = {
   '/teacher/soporte': 'Soporte',
 };
 
-const getInitials = (name) => {
-  if (!name) return '??';
-  const parts = name.split(' ');
-  if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0].substring(0, 2).toUpperCase();
-};
-
 const TeacherLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
 
   const currentLabel = PAGE_LABELS[location.pathname] || 'Mi campus';
@@ -40,11 +32,6 @@ const TeacherLayout = () => {
   const handleCollapseClick = () => {
     if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(false);
     else setCollapsed((c) => !c);
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/', { replace: true });
   };
 
   return (
@@ -69,13 +56,6 @@ const TeacherLayout = () => {
             );
           })}
         </nav>
-
-        <div className="admin-sidebar-footer">
-          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
-            <LogOut size={17} />
-            <span className="admin-nav-label">Cerrar sesión</span>
-          </button>
-        </div>
       </aside>
 
       <div className="admin-main">
@@ -87,10 +67,7 @@ const TeacherLayout = () => {
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
-            <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>
-              {getInitials(currentUser?.displayName || currentUser?.email)}
-            </div>
-            <button className="admin-topbar-bell admin-topbar-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}><LogOut size={18} /></button>
+            <UserMenu />
           </div>
         </div>
 

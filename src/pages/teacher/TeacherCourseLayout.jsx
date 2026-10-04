@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu, ListChecks, CalendarClock } from 'lucide-react';
+import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, Menu, ListChecks, CalendarClock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { fetchGroups, fetchAllEnrollments } from '../../lib/db';
 import SidebarLogo from '../../components/SidebarLogo';
+import UserMenu from '../../components/UserMenu';
 import { NO_AULA, aulaRoster } from '../../lib/roster';
+import { ADMIN_NAV } from '../../lib/adminNav';
 
 // Mismos 4 enlaces que TeacherLayout.jsx -- este sidebar de curso reemplaza
 // por completo al de TeacherLayout mientras el docente está dentro de un
@@ -36,20 +38,13 @@ const SUB_NAV = [
 
 const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Seguimiento', evaluacion: 'Evaluación', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
 
-const getInitials = (name) => {
-  if (!name) return '??';
-  const parts = name.split(' ');
-  if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0].substring(0, 2).toUpperCase();
-};
-
 const TeacherCourseLayout = () => {
   const { courseId } = useParams();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { toggleSidebar, unreadCount, addToast } = useUI();
   const { courses, loaded: coursesLoaded } = useCourseOfferings();
   // Un curso puede tener varias aulas: el docente elige con cuál trabaja y
@@ -72,10 +67,12 @@ const TeacherCourseLayout = () => {
     else setCollapsed((c) => !c);
   };
 
-  const handleLogout = async () => {
-    await logout();
-    navigate('/', { replace: true });
-  };
+  // El admin abre este mismo editor desde Cursos y precios, pero dentro de SU
+  // panel (/admin/curso/:id): mismo contenido, con el menú y las rutas del admin.
+  const adminMode = location.pathname.startsWith('/admin/');
+  const base = adminMode ? '/admin' : '/teacher';
+  const listPath = adminMode ? '/admin/cursos' : '/teacher/cursos';
+  const mainNav = adminMode ? ADMIN_NAV : MAIN_NAV;
 
   const course = courses.find((c) => c.id.toString() === courseId?.toString());
   // Un docente solo entra al curso que el admin le asignó (courseOfferings
@@ -87,9 +84,9 @@ const TeacherCourseLayout = () => {
   useEffect(() => {
     if (coursesLoaded && course && !isAssigned) {
       addToast('Ya no tienes asignado este curso.', 'warning');
-      navigate('/teacher/cursos', { replace: true });
+      navigate(listPath, { replace: true });
     }
-  }, [coursesLoaded, course, isAssigned, navigate, addToast]);
+  }, [coursesLoaded, course, isAssigned, navigate, addToast, listPath]);
 
   // Se consulta con el id numérico del curso (el que guardan las matrículas) y
   // solo cuando el curso está asignado: las reglas rechazan la consulta a un
@@ -131,9 +128,9 @@ const TeacherCourseLayout = () => {
         </div>
 
         <nav className="admin-nav" onClick={() => setMobileOpen(false)}>
-          {MAIN_NAV.map((item) => {
+          {mainNav.map((item) => {
             const Icon = item.icon;
-            const isCursos = item.to === '/teacher/cursos';
+            const isCursos = item.to === listPath;
             return (
               <NavLink key={item.to} to={item.to} className={() => `admin-nav-link ${isCursos ? 'active' : ''}`}>
                 <Icon size={17} />
@@ -145,15 +142,15 @@ const TeacherCourseLayout = () => {
 
         <div className="dash-sidebar-divider"></div>
 
-        <button className="dash-back-link" onClick={() => navigate('/teacher/cursos')}>
-          <ArrowLeft size={14} /> <span className="admin-nav-label">Todos mis cursos</span>
+        <button className="dash-back-link" onClick={() => navigate(listPath)}>
+          <ArrowLeft size={14} /> <span className="admin-nav-label">{adminMode ? 'Todos los cursos' : 'Todos mis cursos'}</span>
         </button>
 
         <div className="dash-course-context">
           <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} />
           <div className="admin-nav-label">
             <div className="dash-course-context-title">{course.title}</div>
-            <div className="dash-course-context-sub">{group?.name ? `Aula ${group.name}` : (aulaId === NO_AULA ? 'Alumnos sin aula' : 'Sin aula')} · Docente</div>
+            <div className="dash-course-context-sub">{group?.name ? `Aula ${group.name}` : (aulaId === NO_AULA ? 'Alumnos sin aula' : 'Sin aula')} · {adminMode ? 'Administrador' : 'Docente'}</div>
           </div>
         </div>
         <div className="admin-nav-label">
@@ -174,28 +171,20 @@ const TeacherCourseLayout = () => {
             );
           })}
         </nav>
-
-        <div className="admin-sidebar-footer">
-          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
-            <LogOut size={17} />
-            <span className="admin-nav-label">Cerrar sesión</span>
-          </button>
-        </div>
       </aside>
 
       <div className="admin-main">
         <div className="admin-topbar">
           <button className="admin-sidebar-mobile-toggle" title="Menú" onClick={() => setMobileOpen(true)}><Menu size={18} /></button>
           <div className="admin-breadcrumb">
-            <span className="admin-breadcrumb-link" onClick={() => navigate('/teacher/cursos')}>Mis cursos</span> / <span className="admin-breadcrumb-link" onClick={() => navigate(`/teacher/curso/${course.id}`)}>{course.title}</span> / <strong>{currentLabel}</strong>
+            {adminMode && <><span className="admin-breadcrumb-link" onClick={() => navigate('/admin/resumen')}>Mi academia</span> / </>}<span className="admin-breadcrumb-link" onClick={() => navigate(listPath)}>{adminMode ? 'Cursos y precios' : 'Mis cursos'}</span> / <span className="admin-breadcrumb-link" onClick={() => navigate(`${base}/curso/${course.id}`)}>{course.title}</span> / <strong>{currentLabel}</strong>
           </div>
           <div className="admin-topbar-right">
             <button className="admin-topbar-bell" title="Notificaciones" onClick={toggleSidebar}>
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
-            <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>{getInitials(currentUser?.displayName || currentUser?.email)}</div>
-            <button className="admin-topbar-bell admin-topbar-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}><LogOut size={18} /></button>
+            <UserMenu />
           </div>
         </div>
 

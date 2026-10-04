@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2 } from 'lucide-react';
+import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserProfile, logChange } from '../../lib/db';
+import { useCourseOfferings } from '../../context/CourseOfferingsContext';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserProfile, logChange, createTeacherAccount, updateCourseTeacher, sendAccessEmail } from '../../lib/db';
+
+const ROLE_LABEL = { student: 'Estudiante', teacher: 'Docente', admin: 'Administrador' };
 
 const ROLE_BADGE = {
   Administrador: 'admin-status-green',
@@ -89,13 +92,107 @@ const MemberModal = ({ member, adminName, onClose, onSaved }) => {
   );
 };
 
+// Alta de un docente: crea su cuenta, le asigna cursos y le envía el correo para
+// que defina su contraseña. Si el correo ya tiene cuenta (p. ej. se registró
+// como alumno), se le cambia el rol a docente en vez de crear otra.
+const TeacherModal = ({ users, courses, adminName, onClose, onSaved }) => {
+  const { addToast } = useUI();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [courseIds, setCourseIds] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const cleanEmail = email.trim().toLowerCase();
+  const existing = users.find((u) => (u.email || '').toLowerCase() === cleanEmail && cleanEmail);
+  const teacherName = (uid) => users.find((u) => u.uid === uid)?.name;
+  const toggleCourse = (id) => setCourseIds((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+
+  const handleSave = async () => {
+    setError('');
+    if (!existing && !name.trim()) { setError('Escribe el nombre del docente.'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cleanEmail)) { setError('Escribe un correo válido.'); return; }
+    if (existing?.role === 'admin') { setError('Ese correo es de un administrador: ya puede gestionar todos los cursos.'); return; }
+    setSaving(true);
+    try {
+      const titles = courses.filter((c) => courseIds.includes(c.id)).map((c) => c.title);
+      const suffix = titles.length ? ` y le asignó: ${titles.join(', ')}` : '';
+      if (existing) {
+        await updateUserRole(existing.uid, 'teacher');
+        for (const id of courseIds) await updateCourseTeacher(id, existing.uid);
+        await logChange(adminName, `Convirtió a ${existing.name} en docente${suffix}.`);
+        addToast(`${existing.name} ahora es docente.`, 'success');
+      } else {
+        const { emailSent } = await createTeacherAccount({ name, email: cleanEmail, courseIds });
+        await logChange(adminName, `Creó la cuenta de docente de ${name.trim()} (${cleanEmail})${suffix}.`);
+        addToast(emailSent
+          ? `Docente creado. Le enviamos a ${cleanEmail} el correo para definir su contraseña.`
+          : 'Docente creado, pero no se pudo enviar el correo de acceso: usa "Enviar correo de acceso" en la tabla.', emailSent ? 'success' : 'warning');
+      }
+      await onSaved();
+      onClose();
+    } catch (err) {
+      setError(err?.code === 'auth/email-already-in-use'
+        ? 'Ya existe una cuenta con ese correo que aún no aparece en la lista. Pídele que inicie sesión una vez y luego cámbiale el rol a Docente.'
+        : err?.message === 'app/needs-firebase' ? 'Esta función necesita la base de datos real conectada.'
+          : 'No se pudo crear el docente. Revisa tu conexión e intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalPortal>
+      <div className="admin-modal-overlay">
+        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal-head">
+            <div>
+              <div className="admin-modal-title">Crear docente</div>
+              <div className="admin-modal-sub">Recibirá un correo para definir su contraseña.</div>
+            </div>
+            <button className="admin-modal-close" onClick={onClose} disabled={saving} aria-label="Cerrar"><X size={18} /></button>
+          </div>
+          {error && <div className="checkout-error" role="alert" style={{ marginBottom: 12 }}>{error}</div>}
+          <div className="admin-field"><label htmlFor="teacher-email">Correo electrónico</label><input id="teacher-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="docente@correo.com" autoComplete="off" /></div>
+          {existing ? (
+            <p className="dash-notice" style={{ marginTop: 0 }}>
+              {existing.name} ya tiene una cuenta ({ROLE_LABEL[existing.role] || existing.role}). No se crea otra: se le cambiará el rol a Docente y conservará su contraseña.
+            </p>
+          ) : (
+            <div className="admin-field"><label htmlFor="teacher-name">Nombre completo</label><input id="teacher-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Lucía Rivera" autoComplete="off" /></div>
+          )}
+          <div className="admin-field">
+            <label>Cursos a su cargo (opcional)</label>
+            {courses.map((c) => {
+              const current = c.teacherUid && c.teacherUid !== existing?.uid ? teacherName(c.teacherUid) : null;
+              return (
+                <label key={c.id} className="admin-field-checkbox" style={{ marginBottom: 6 }}>
+                  <input type="checkbox" checked={courseIds.includes(c.id)} onChange={() => toggleCourse(c.id)} />
+                  <span>{c.title}{current ? <span className="admin-cell-sub"> · hoy a cargo de {current} (se reemplaza)</span> : null}</span>
+                </label>
+              );
+            })}
+            <span className="admin-cell-sub">Un curso tiene un solo docente a cargo. El docente de cada aula se elige aparte, en Aulas y horarios.</span>
+          </div>
+          <div className="admin-modal-actions">
+            <button className="admin-btn-ghost" onClick={onClose} disabled={saving}>Cancelar</button>
+            <button className="admin-btn-edit" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : existing ? 'Convertir en docente' : 'Crear docente'}</button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+};
+
 const AdminEquipo = () => {
   const { currentUser } = useAuth();
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const [members, setMembers] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
+  const [teacherModal, setTeacherModal] = useState(false);
+  const { courses, refresh: refreshCourses } = useCourseOfferings();
 
   const [users, setUsers] = useState(MOCK_USER_ROWS);
   const [userSearch, setUserSearch] = useState('');
@@ -106,15 +203,24 @@ const AdminEquipo = () => {
   const load = () => fetchTeamMembers().then((list) => { setMembers(list); setLoading(false); });
   useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    fetchAllUsers().then((realUsers) => {
-      if (!realUsers) return;
-      setUsers(realUsers.map((u) => ({
-        id: u.uid, uid: u.uid, name: u.displayName || u.email, email: u.email,
-        role: u.role || 'student', joined: formatJoined(u.createdAt), disabled: !!u.disabled,
-      })));
-    });
-  }, []);
+  const loadUsers = () => fetchAllUsers().then((realUsers) => {
+    if (!realUsers) return;
+    setUsers(realUsers.map((u) => ({
+      id: u.uid, uid: u.uid, name: u.displayName || u.email, email: u.email,
+      role: u.role || 'student', joined: formatJoined(u.createdAt), disabled: !!u.disabled,
+    })));
+  });
+  useEffect(() => { loadUsers(); }, []);
+
+  const handleSendAccess = async (targetUser) => {
+    if (!(await confirmDialog({ title: 'Enviar correo de acceso', message: `Se enviará a ${targetUser.email} un correo con un enlace para definir una contraseña nueva. Su contraseña actual sigue valiendo hasta que la cambie.`, confirmLabel: 'Enviar correo' }))) return;
+    try {
+      await sendAccessEmail(targetUser.email);
+      addToast(`Correo de acceso enviado a ${targetUser.email}.`, 'success');
+    } catch {
+      addToast('No se pudo enviar el correo. Intenta de nuevo.', 'error');
+    }
+  };
 
   const handleRoleChange = async (targetUser, newRole) => {
     if (targetUser.uid === currentUser?.uid) return;
@@ -123,7 +229,7 @@ const AdminEquipo = () => {
     try {
       await updateUserRole(targetUser.uid, newRole);
       await logChange(adminName, `Cambió el rol de ${targetUser.name} a "${newRole}".`);
-      addToast(`Rol de ${targetUser.name} actualizado a "${newRole}".`, 'success');
+      addToast(`${targetUser.name} ahora es ${ROLE_LABEL[newRole] || newRole}.`, 'success');
     } catch {
       setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, role: previousRole } : u)));
       addToast(`No se pudo actualizar el rol de ${targetUser.name}. Intenta de nuevo.`, 'error');
@@ -145,7 +251,7 @@ const AdminEquipo = () => {
 
   const handleDeleteUser = async (targetUser) => {
     if (targetUser.uid === currentUser?.uid) return;
-    if (!confirm(`¿Eliminar el perfil de ${targetUser.name} (${targetUser.email})? Esto quita su rol y acceso, pero no borra la cuenta de inicio de sesión -- si vuelve a entrar, se le crea un perfil nuevo como estudiante. Para bloquearla de verdad, usa "Desactivar".`)) return;
+    if (!(await confirmDialog({ title: 'Eliminar perfil', message: `¿Eliminar el perfil de ${targetUser.name} (${targetUser.email})?\n\nEsto quita su rol y acceso, pero no borra la cuenta de inicio de sesión: si vuelve a entrar, se le crea un perfil nuevo como estudiante. Para bloquearla de verdad, usa "Desactivar".`, confirmLabel: 'Eliminar perfil', danger: true }))) return;
     try {
       await deleteUserProfile(targetUser.uid);
       await logChange(adminName, `Eliminó el perfil de ${targetUser.name}.`);
@@ -209,15 +315,16 @@ const AdminEquipo = () => {
       <div className="admin-page-head">
         <div>
           <h2 className="admin-page-title" style={{ fontSize: '1.15rem' }}>Cuentas y roles de la plataforma</h2>
-          <p className="admin-page-sub">El rol real de cada cuenta -- de esto depende a qué puede entrar cada quién.</p>
+          <p className="admin-page-sub">El rol real de cada cuenta: de esto depende a qué puede entrar cada quién.</p>
         </div>
+        <button className="admin-btn-edit" onClick={() => setTeacherModal(true)}><GraduationCap size={15} /> Crear docente</button>
       </div>
       <div className="admin-toolbar">
         <div className="admin-search"><Search size={15} /><input placeholder="Buscar por nombre o correo..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} /></div>
         <select className="admin-select" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
           <option value="all">Todos los roles</option>
           <option value="student">Estudiantes</option>
-          <option value="teacher">Profesores</option>
+          <option value="teacher">Docentes</option>
           <option value="admin">Administradores</option>
         </select>
       </div>
@@ -240,15 +347,18 @@ const AdminEquipo = () => {
                       title={isSelf ? 'No puedes cambiar tu propio rol de administrador.' : undefined}
                       onChange={(e) => handleRoleChange(u, e.target.value)}
                     >
-                      <option value="student">student</option>
-                      <option value="teacher">teacher</option>
-                      <option value="admin">admin</option>
+                      <option value="student">Estudiante</option>
+                      <option value="teacher">Docente</option>
+                      <option value="admin">Administrador</option>
                     </select>
                   </td>
                   <td className="admin-cell-sub">{u.joined}</td>
                   <td><span className={`admin-status ${u.disabled ? 'admin-status-gray' : 'admin-status-green'}`}>{u.disabled ? 'Desactivado' : 'Activo'}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="admin-icon-btn" onClick={() => handleSendAccess(u)} title="Enviar correo de acceso (definir o recuperar contraseña)" aria-label={`Enviar correo de acceso a ${u.name}`}>
+                        <KeyRound size={14} />
+                      </button>
                       <button
                         className="admin-icon-btn" disabled={isSelf} onClick={() => toggleUserDisabled(u)}
                         title={isSelf ? 'No puedes desactivar tu propia cuenta.' : (u.disabled ? 'Reactivar' : 'Desactivar')}
@@ -282,6 +392,13 @@ const AdminEquipo = () => {
           adminName={adminName}
           onClose={() => setModal(null)}
           onSaved={load}
+        />
+      )}
+      {teacherModal && (
+        <TeacherModal
+          users={users} courses={courses} adminName={adminName}
+          onClose={() => setTeacherModal(false)}
+          onSaved={async () => { await loadUsers(); await refreshCourses(); }}
         />
       )}
     </div>

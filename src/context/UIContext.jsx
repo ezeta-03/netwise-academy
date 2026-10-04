@@ -7,6 +7,7 @@ import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, f
 import { buildStudentNotifications, buildAdminNotifications, buildTeacherNotifications } from '../lib/notifications';
 import { sessionsForStudent } from '../lib/groupAssignment';
 import LoginModal from '../components/LoginModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 // Un ícono y color por tipo de toast -- 'info' es el default (comunicados),
 // el resto son semánticos (éxito/error/advertencia). Ver .toast-* en index.css.
@@ -135,12 +136,22 @@ export const UIProvider = ({ children }) => {
   const notificationsWithRead = notifications.map((n) => ({ ...n, read: readIds.has(n.id) }));
   const unreadCount = notificationsWithRead.filter((n) => !n.read).length;
 
+  // Confirmación propia de la app (reemplaza confirm()/prompt() del navegador).
+  // `await confirmDialog({ title, message, confirmLabel, danger })` -> true/false;
+  // con `input: { label, defaultValue }` -> el texto escrito, o null si cancela.
+  const [dialog, setDialog] = useState(null);
+  const confirmDialog = useCallback((options) => new Promise((resolve) => {
+    setDialog({ id: Date.now(), options: typeof options === 'string' ? { message: options } : options, resolve });
+  }), []);
+  const resolveDialog = (value) => { dialog?.resolve(value); setDialog(null); };
+
   const openLoginModal = useCallback(() => setLoginModalOpen(true), []);
   const closeLoginModal = useCallback(() => setLoginModalOpen(false), []);
 
   return (
     <UIContext.Provider value={{
       addToast,
+      confirmDialog,
       isSidebarOpen,
       toggleSidebar,
       closeSidebar,
@@ -153,6 +164,8 @@ export const UIProvider = ({ children }) => {
       closeLoginModal,
     }}>
       {children}
+
+      {dialog && <ConfirmDialog key={dialog.id} options={dialog.options} onResolve={resolveDialog} />}
 
       {/* Toast Container */}
       <div className="toast-container">

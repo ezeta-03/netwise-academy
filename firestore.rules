@@ -221,8 +221,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      allow create: if isSignedIn() && request.auth.uid == userId
-                    && request.resource.data.role == 'student';
+      // El admin también crea perfiles: da de alta a un docente con su rol ya
+      // puesto (Admin > Equipo y permisos, ver createTeacherAccount).
+      allow create: if (isSignedIn() && request.auth.uid == userId
+                    && request.resource.data.role == 'student') || isAdmin();
       allow update: if (isAdmin() &&
                           !(request.auth.uid == userId
                             && resource.data.role == 'admin'

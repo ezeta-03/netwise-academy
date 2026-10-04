@@ -27,7 +27,7 @@ const exportOrdersCsv = (rows) => downloadCsv(
 
 const AdminVentas = () => {
   const { currentUser } = useAuth();
-  const { addToast, refreshNotifications } = useUI();
+  const { addToast, confirmDialog, refreshNotifications } = useUI();
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
 
   const [orders, setOrders] = useState([]);
@@ -82,10 +82,10 @@ const AdminVentas = () => {
   const handleApprove = async (order, groupId = '') => {
     const chosen = groups.find((g) => g.id === groupId) || null;
     const expected = amountMismatch(order);
-    const question = `¿Validar el pago de ${order.studentName}?\n\n${order.courseTitle}\nImporte: S/ ${Number(order.amount).toFixed(2)}\nN.° de operación: ${order.proofCode || 'no informado'}`
+    const message = `${order.studentName} · ${order.courseTitle}\nImporte: S/ ${Number(order.amount).toFixed(2)}\nN.° de operación: ${order.proofCode || 'no informado'}`
       + (expected !== null ? `\n\nATENCIÓN: el importe no coincide con el precio vigente (S/ ${expected.toFixed(2)}).` : '')
-      + '\n\nAl aceptar, el alumno queda matriculado.';
-    if (!window.confirm(question)) return;
+      + '\n\nAl confirmar, el alumno queda matriculado.';
+    if (!(await confirmDialog({ title: 'Validar pago y matricular', message, confirmLabel: 'Validar pago', danger: expected !== null }))) return;
     setApprovingId(order.id);
     try {
       const enrollment = await approveOrder(order, chosen);
@@ -103,7 +103,11 @@ const AdminVentas = () => {
   };
 
   const handleReject = async (order) => {
-    const reason = window.prompt(`Rechazar el pedido ${order.code} de ${order.studentName}.\nMotivo (el alumno lo verá):`, 'No encontramos el pago con ese N.° de operación');
+    const reason = await confirmDialog({
+      title: `Rechazar el pedido ${order.code}`, message: `${order.studentName} · ${order.courseTitle}. El alumno podrá volver a registrar su pago.`,
+      input: { label: 'Motivo (el alumno lo verá)', defaultValue: 'No encontramos el pago con ese N.° de operación' },
+      confirmLabel: 'Rechazar pedido', danger: true,
+    });
     if (reason === null) return;
     setApprovingId(order.id);
     try {

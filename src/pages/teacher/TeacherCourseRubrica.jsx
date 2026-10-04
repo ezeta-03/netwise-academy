@@ -70,7 +70,7 @@ const TeacherCourseRubrica = () => {
   const { course, group } = useOutletContext();
   const { currentUser } = useAuth();
   const teacherUid = currentUser?.uid;
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const [modules, setModules] = useState([]);
   const [rubric, setRubric] = useState({ criteria: [], status: 'pending' });
   const [loading, setLoading] = useState(true);
@@ -119,8 +119,8 @@ const TeacherCourseRubrica = () => {
     setEditingId(null);
   };
 
-  const deleteCriterion = (id) => {
-    if (!confirm('¿Eliminar este criterio de la rúbrica?')) return;
+  const deleteCriterion = async (id) => {
+    if (!(await confirmDialog({ title: 'Eliminar criterio', message: '¿Eliminar este criterio de la rúbrica?', confirmLabel: 'Eliminar', danger: true }))) return;
     persist({ ...rubric, criteria: rubric.criteria.filter((c) => c.id !== id) });
   };
 

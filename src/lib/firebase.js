@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, GithubAuthProvider, connectAuthEmulator } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider, GithubAuthProvider, connectAuthEmulator, createUserWithEmailAndPassword, updateProfile, signOut } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
@@ -21,6 +21,8 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase services
 export const auth = getAuth(app);
+// Los correos que envía Firebase (definir o recuperar contraseña) salen en español.
+auth.languageCode = "es";
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 // Misma región que las Cloud Functions (functions/index.js).
@@ -34,6 +36,24 @@ if (import.meta.env.VITE_USE_EMULATORS === "true") {
   connectStorageEmulator(storage, "127.0.0.1", 9199);
   connectFunctionsEmulator(functions, "127.0.0.1", 5001);
 }
+
+// Crea una cuenta de acceso SIN cerrar la sesión de quien la crea (el admin
+// dando de alta a un docente). createUserWithEmailAndPassword inicia sesión
+// con la cuenta nueva, así que se hace en una segunda instancia de la app que
+// se descarta al terminar. Devuelve el uid de la cuenta creada.
+export const createAccountKeepingSession = async (email, password, displayName) => {
+  const secondary = initializeApp(firebaseConfig, `alta-${Date.now()}`);
+  try {
+    const secondaryAuth = getAuth(secondary);
+    if (import.meta.env.VITE_USE_EMULATORS === "true") connectAuthEmulator(secondaryAuth, "http://127.0.0.1:9099", { disableWarnings: true });
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    if (displayName) await updateProfile(credential.user, { displayName });
+    await signOut(secondaryAuth);
+    return credential.user.uid;
+  } finally {
+    await deleteApp(secondary).catch(() => {});
+  }
+};
 
 // Auth Providers
 export const googleProvider = new GoogleAuthProvider();

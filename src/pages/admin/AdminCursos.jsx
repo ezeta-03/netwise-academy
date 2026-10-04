@@ -213,7 +213,7 @@ const AdminCursos = () => {
                       <button className="admin-btn-edit" onClick={() => setEditing(c)}>Editar curso</button>
                       {/* Módulos, objetivos, contenidos, sesiones, materiales y entregables:
                           el admin usa el mismo editor del docente (TeacherCourseContenido). */}
-                      <button className="admin-btn-ghost" onClick={() => navigate(`/teacher/curso/${c.id}/contenido`)}><BookOpen size={14} /> Editar contenido</button>
+                      <button className="admin-btn-ghost" onClick={() => navigate(`/admin/curso/${c.id}/contenido`)}><BookOpen size={14} /> Editar contenido</button>
                     </div>
                   </td>
                 </tr>

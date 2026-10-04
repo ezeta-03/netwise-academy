@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, LogOut, Menu, HelpCircle } from 'lucide-react';
+import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, Menu, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -9,6 +9,7 @@ import { fetchGroups, fetchMyEnrollments } from '../../lib/db';
 import { useStudentTour } from '../../context/StudentTourContext';
 import { COURSE_TOUR_START } from '../../lib/studentTourSteps';
 import SidebarLogo from '../../components/SidebarLogo';
+import UserMenu from '../../components/UserMenu';
 
 // Mismos enlaces que StudentLayout.jsx -- este sidebar de curso lo reemplaza
 // por completo mientras el alumno está dentro de un curso, así que sin esto
@@ -35,20 +36,13 @@ const SUB_NAV = [
 
 const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Mi proyecto', evaluacion: 'Mis evaluaciones', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA' };
 
-const getInitials = (name) => {
-  if (!name) return '??';
-  const parts = name.split(' ');
-  if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0].substring(0, 2).toUpperCase();
-};
-
 const StudentCourseLayout = () => {
   const { courseId } = useParams();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { toggleSidebar, unreadCount, addToast } = useUI();
   const { courses } = useCourseOfferings();
   const [group, setGroup] = useState(null);
@@ -60,11 +54,6 @@ const StudentCourseLayout = () => {
   const handleCollapseClick = () => {
     if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(false);
     else setCollapsed((c) => !c);
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/', { replace: true });
   };
 
   const course = courses.find((c) => c.id.toString() === courseId?.toString());
@@ -168,13 +157,6 @@ const StudentCourseLayout = () => {
             );
           })}
         </nav>
-
-        <div className="admin-sidebar-footer">
-          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
-            <LogOut size={17} />
-            <span className="admin-nav-label">Cerrar sesión</span>
-          </button>
-        </div>
       </aside>
 
       <div className="admin-main">
@@ -191,8 +173,7 @@ const StudentCourseLayout = () => {
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
-            <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>{getInitials(currentUser?.displayName || currentUser?.email)}</div>
-            <button className="admin-topbar-bell admin-topbar-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}><LogOut size={18} /></button>
+            <UserMenu />
           </div>
         </div>
 

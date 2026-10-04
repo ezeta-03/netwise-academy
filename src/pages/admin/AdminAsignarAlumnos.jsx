@@ -13,7 +13,7 @@ const fmtShort = (iso) => (iso ? new Date(iso.length === 10 ? `${iso}T00:00:00` 
 // aula) o con "Repartir automáticamente" (mismo criterio que la asignación al
 // matricular, ver lib/groupAssignment.js).
 const AdminAsignarAlumnos = ({ courses, groups, enrollments, orders, adminName, onChanged, onCreateGroup, renderGroupsTable }) => {
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const unassigned = useMemo(() => unassignedEnrollments(enrollments, groups), [enrollments, groups]);
   const countFor = (courseId) => unassigned.filter((e) => sameCourse(e.courseId, courseId)).length;
   // Por defecto, el primer curso con alumnos pendientes de aula.
@@ -72,22 +72,22 @@ const AdminAsignarAlumnos = ({ courses, groups, enrollments, orders, adminName, 
     }
   };
 
-  const assignSelected = () => {
+  const assignSelected = async () => {
     const group = groups.find((g) => g.id === targetId);
     if (!group) { addToast('Elige un aula.', 'error'); return; }
     const chosen = rows.filter((r) => selected.includes(r.key)).map((r) => r.e);
     const free = freeSeats(group, counts);
-    if (chosen.length > free && !confirm(`El aula "${group.name}" solo tiene ${free} cupo(s) libre(s) y vas a asignar ${chosen.length}. ¿Asignar igual?`)) return;
+    if (chosen.length > free && !(await confirmDialog({ title: 'El aula no tiene cupos suficientes', message: `El aula "${group.name}" solo tiene ${free} cupo(s) libre(s) y vas a asignar ${chosen.length}. ¿Asignar igual?`, confirmLabel: 'Asignar igual' }))) return;
     apply(chosen.map((enrollment) => ({ enrollment, group })));
   };
 
-  const autoDistribute = () => {
+  const autoDistribute = async () => {
     const plan = distributeEnrollments(rows.map((r) => r.e), groups, enrollments);
     if (plan.length === 0) { addToast('No hay aulas abiertas con cupos para este curso. Crea una o amplía los cupos.', 'warning'); return; }
     const byGroup = plan.reduce((acc, p) => ({ ...acc, [p.group.name]: (acc[p.group.name] || 0) + 1 }), {});
     const lines = Object.entries(byGroup).map(([name, n]) => `• ${name}: ${n}`).join('\n');
     const left = rows.length - plan.length;
-    if (!confirm(`Repartir ${plan.length} alumno(s) de "${course?.title}":\n${lines}${left > 0 ? `\n\n${left} quedarán sin aula por falta de cupos.` : ''}\n\n¿Continuar?`)) return;
+    if (!(await confirmDialog({ title: 'Repartir alumnos automáticamente', message: `Repartir ${plan.length} alumno(s) de "${course?.title}":\n${lines}${left > 0 ? `\n\n${left} quedarán sin aula por falta de cupos.` : ''}`, confirmLabel: 'Repartir' }))) return;
     apply(plan);
   };
 

@@ -342,7 +342,7 @@ const LIVE_STATUS_BADGE = {
 };
 
 const LiveClassesPanel = ({ courses, refreshKey }) => {
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const navigate = useNavigate();
   const [sessions, setSessions] = useState([]);
   const [contentCounts, setContentCounts] = useState({});
@@ -367,7 +367,7 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
   useEffect(() => { load(); }, [load, refreshKey]);
 
   const handleCancel = async (session) => {
-    if (!confirm(`¿Cancelar "${session.title}"? Los estudiantes verán la clase marcada como cancelada.`)) return;
+    if (!(await confirmDialog({ title: 'Cancelar clase', message: `¿Cancelar "${session.title}"? Los estudiantes verán la clase marcada como cancelada.`, confirmLabel: 'Sí, cancelar', cancelLabel: 'Volver', danger: true }))) return;
     try {
       await cancelLiveSession(session.id);
       addToast('Clase cancelada.', 'success');
@@ -377,7 +377,7 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
     }
   };
   const handleDelete = async (session) => {
-    if (!confirm(`¿Eliminar "${session.title}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    if (!(await confirmDialog({ title: 'Eliminar clase', message: `¿Eliminar "${session.title}" definitivamente? Desaparece de la agenda de docentes y alumnos. Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
     try {
       await deleteLiveSession(session.id);
       addToast('Clase eliminada.', 'success');
@@ -389,16 +389,35 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
 
   const toggleSelect = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
+  const classCount = (n) => `${n} clase${n === 1 ? '' : 's'}`;
+
+  // De lo seleccionado solo se cancela lo que aún no terminó.
   const handleBulkCancel = async () => {
-    if (!confirm(`¿Cancelar ${selected.length} clase${selected.length === 1 ? '' : 's'} seleccionada${selected.length === 1 ? '' : 's'}?`)) return;
+    const ids = selected.filter((id) => cancelableIds.includes(id));
+    if (!(await confirmDialog({ title: 'Cancelar clases', message: `¿Cancelar ${classCount(ids.length)}? Los estudiantes las verán marcadas como canceladas.`, confirmLabel: 'Sí, cancelar', cancelLabel: 'Volver', danger: true }))) return;
     setBulkCancelling(true);
     try {
-      await Promise.all(selected.map((id) => cancelLiveSession(id)));
-      addToast(`${selected.length} clase${selected.length === 1 ? '' : 's'} cancelada${selected.length === 1 ? '' : 's'}.`, 'success');
+      await Promise.all(ids.map((id) => cancelLiveSession(id)));
+      addToast(`${classCount(ids.length)} cancelada${ids.length === 1 ? '' : 's'}.`, 'success');
       setSelected([]);
       load();
     } catch {
       addToast('No se pudieron cancelar todas las clases seleccionadas.', 'error');
+    } finally {
+      setBulkCancelling(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!(await confirmDialog({ title: 'Eliminar clases', message: `¿Eliminar ${classCount(selected.length)} definitivamente? Desaparecen de la agenda de docentes y alumnos. Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
+    setBulkCancelling(true);
+    try {
+      await Promise.all(selected.map((id) => deleteLiveSession(id)));
+      addToast(`${classCount(selected.length)} eliminada${selected.length === 1 ? '' : 's'}.`, 'success');
+      setSelected([]);
+      load();
+    } catch {
+      addToast('No se pudieron eliminar todas las clases seleccionadas.', 'error');
     } finally {
       setBulkCancelling(false);
     }
@@ -437,9 +456,16 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
         <div className="admin-panel-head">
           <span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Clases en vivo</span>
           {selected.length > 0 && (
-            <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkCancel} disabled={bulkCancelling}>
-              <XCircle size={13} /> {bulkCancelling ? 'Cancelando...' : `Cancelar ${selected.length} seleccionada${selected.length === 1 ? '' : 's'}`}
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {selected.some((id) => cancelableIds.includes(id)) && (
+                <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkCancel} disabled={bulkCancelling}>
+                  <XCircle size={13} /> Cancelar {selected.filter((id) => cancelableIds.includes(id)).length}
+                </button>
+              )}
+              <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkDelete} disabled={bulkCancelling}>
+                <Trash2 size={13} /> {bulkCancelling ? 'Procesando...' : `Eliminar ${selected.length}`}
+              </button>
+            </div>
           )}
         </div>
         {sortedSessions.length === 0 ? (
@@ -449,9 +475,9 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
             <label className="admin-field-checkbox" style={{ marginBottom: 8, fontSize: '.78rem' }}>
               <input
                 type="checkbox"
-                checked={cancelableIds.length > 0 && selected.length === cancelableIds.length}
-                onChange={(e) => setSelected(e.target.checked ? cancelableIds : [])}
-              /> Seleccionar todas las cancelables
+                checked={selected.length === sortedSessions.length}
+                onChange={(e) => setSelected(e.target.checked ? sortedSessions.map((s) => s.id) : [])}
+              /> Seleccionar todas
             </label>
             {sortedSessions.map((s) => {
               const liveStatus = getLiveSessionStatus(s);
@@ -461,7 +487,7 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
               return (
                 <div key={s.id} style={{ padding: '12px 14px', background: '#F6F5FA', borderRadius: 10, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    {canCancel && <input type="checkbox" style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
+                    <input type="checkbox" aria-label={`Seleccionar ${s.title}`} style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />
                     <div>
                       <span className={status.className} style={{ marginBottom: 6, display: 'inline-block' }}>{status.label}</span>
                       <div style={{ fontWeight: 600, fontSize: '.9rem', color: '#14141F' }}>{s.title}</div>
@@ -471,9 +497,8 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {joinable && <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><LogIn size={13} /> Ver sala</button>}
-                    {canCancel
-                      ? <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>
-                      : <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
+                    {canCancel && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>}
+                    <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>
                   </div>
                 </div>
               );
@@ -487,7 +512,7 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
 
 const AdminGrupos = () => {
   const { currentUser } = useAuth();
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const { courses } = useCourseOfferings();
   const [groups, setGroups] = useState([]);
   const [search, setSearch] = useState('');
@@ -529,7 +554,7 @@ const AdminGrupos = () => {
   };
 
   const handleDeleteGroup = async (g) => {
-    if (!confirm(`¿Eliminar el aula "${g.name}" definitivamente? Esta acción no se puede deshacer.`)) return;
+    if (!(await confirmDialog({ title: 'Eliminar aula', message: `¿Eliminar el aula "${g.name}" definitivamente? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
     try {
       await deleteGroup(g.id);
       await logChange(adminName, `Eliminó el aula "${g.name}".`);

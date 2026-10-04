@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   ClipboardCheck, BarChart3, UsersRound, ChevronLeft, ChevronRight, ArrowLeft,
-  Download, Save, ExternalLink,
+  Download, Check, ExternalLink,
 } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore, fetchGroupProgress, setGroupSessionDone } from '../../lib/db';
@@ -14,7 +14,8 @@ import { APPROVAL } from '../../lib/approval';
 import { getOrderedSessions, withAulaSessions } from '../../lib/courseSessions';
 import { attendanceStats } from '../../lib/attendance';
 import { aulaRoster, NO_AULA } from '../../lib/roster';
-import { SubmissionContent } from '../../components/SubmitDeliverableModal';
+import SubmissionViewer from '../../components/SubmissionViewer';
+import { describeSubmission } from '../../lib/submissionPreview';
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -70,7 +71,7 @@ const EvalSidePanel = ({ vista, setVista, pendingCount, summary }) => (
 
 // --- Subvista: Entregas y revisión ---
 
-const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onReloadSubmissions }) => {
+const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onReloadSubmissions, onFocusChange }) => {
   const { addToast } = useUI();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState('all');
@@ -78,6 +79,13 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
   const [gradeDraft, setGradeDraft] = useState('');
   const [feedbackDraft, setFeedbackDraft] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Mientras se revisa una entrega, la pantalla usa todo el ancho (el visor
+  // necesita el espacio del panel lateral).
+  useEffect(() => {
+    onFocusChange?.(!!reviewingUid);
+    return () => onFocusChange?.(false);
+  }, [reviewingUid, onFocusChange]);
 
   const withDeliverable = modules.filter((m) => m.deliverable?.description);
   const moduleId = searchParams.get('modulo') && withDeliverable.some((m) => m.id === searchParams.get('modulo'))
@@ -151,43 +159,82 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
     }
   };
 
+  const weights = effectiveModuleWeights(course.id, modules);
+  const moduleTabs = (
+    <div className="review-module-tabs">
+      {withDeliverable.map((m, i) => (
+        <button key={m.id} className={`review-module-tab ${m.id === module.id ? 'active' : ''}`} onClick={() => setModuleId(m.id)} title={m.title}>
+          <strong>M{i + 1}</strong>
+          <span>{m.deliverable?.graded === false ? 'Sin nota' : `${weights[m.id]}%`}</span>
+        </button>
+      ))}
+    </div>
+  );
+  const pageHead = (
+    <div className="admin-page-head"><div><h1 className="admin-page-title">Entregas y revisión</h1><p className="admin-page-sub">{course.title}{aulaLabel ? ` · ${aulaLabel}` : ''} · Revisa el archivo completo, califica y deja retroalimentación.</p></div></div>
+  );
+
   if (reviewingRow) {
+    const sub = reviewingRow.submission;
+    const status = statusOf(reviewingRow);
+    const info = describeSubmission(sub);
+    const deliveredAt = sub?.submittedAt || sub?.updatedAt;
     return (
       <div className="anim-fade-up d1">
-        <button className="admin-btn-ghost" style={{ marginBottom: 14 }} onClick={() => setReviewingUid(null)}><ArrowLeft size={13} /> Volver a entregas</button>
-        <div className="admin-page-head">
+        {pageHead}
+        {moduleTabs}
+        <div className="review-head">
           <div>
-            <span className="admin-status admin-status-gray">{reviewIndex + 1} de {filtered.length}</span>
-            <h1 className="admin-page-title" style={{ marginTop: 8 }}>{reviewingRow.studentName}</h1>
+            <div className="review-student">
+              <h2>{reviewingRow.studentName}</h2>
+              <span className="admin-status admin-status-gray">{reviewIndex + 1} de {filtered.length}</span>
+            </div>
             <p className="admin-page-sub">{module.deliverable?.description || module.title}</p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="admin-icon-btn" disabled={reviewIndex <= 0} onClick={() => goRelative(-1)}><ChevronLeft size={16} /></button>
-            <button className="admin-icon-btn" disabled={reviewIndex >= filtered.length - 1} onClick={() => goRelative(1)}><ChevronRight size={16} /></button>
+          <div className="review-head-meta">
+            <span className={`admin-status ${status.cls}`}>{status.label}</span>
+            {deliveredAt && <span className="admin-cell-sub">Entregado: {new Date(deliveredAt).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })}</span>}
           </div>
         </div>
-        <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'flex-start' }}>
-          <div className="admin-panel">
-            <div className="admin-panel-head"><span className="admin-panel-title">Entrega del alumno</span></div>
-            {reviewingRow.submission ? (
-              <SubmissionContent submission={reviewingRow.submission} primary emptyText="El alumno no dejó una descripción." />
-            ) : (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Este alumno todavía no presenta su entrega.</p>
-            )}
+        <div className="review-nav">
+          <button className="admin-btn-ghost" onClick={() => setReviewingUid(null)}><ArrowLeft size={13} /> Volver a entregas</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="admin-icon-btn" aria-label="Entrega anterior" disabled={reviewIndex <= 0} onClick={() => goRelative(-1)}><ChevronLeft size={16} /></button>
+            <button className="admin-icon-btn" aria-label="Entrega siguiente" disabled={reviewIndex >= filtered.length - 1} onClick={() => goRelative(1)}><ChevronRight size={16} /></button>
           </div>
+        </div>
+        <div className="review-grid">
           <div className="admin-panel">
-            {reviewingRow.submission?.status === 'submitted' && reviewingRow.submission?.grade != null && (
+            <div className="admin-panel-head">
+              <div>
+                <span className="admin-panel-title">Archivo entregado</span>
+                <div className="admin-cell-sub">{info.name || 'Sin entrega'}</div>
+              </div>
+              {info.src && info.kind !== 'embed' && <a className="admin-btn-ghost" href={info.src} target="_blank" rel="noreferrer" download={info.name}><Download size={13} /> Descargar</a>}
+              {info.link && <a className="admin-btn-ghost" href={info.link} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Abrir enlace</a>}
+            </div>
+            <SubmissionViewer key={`${reviewingRow.uid}-${sub?.updatedAt || ''}`} submission={sub} />
+            {sub?.fileUrl && sub?.note && <p className="admin-cell-sub" style={{ margin: '12px 0 0' }}>Comentario del alumno: {sub.note}</p>}
+          </div>
+          <div className="admin-panel review-grade-panel">
+            {sub?.status === 'submitted' && sub?.grade != null && (
               <p className="admin-panel-caption" style={{ marginTop: 0 }}>
-                Reentrega: la versión anterior tenía {reviewingRow.submission.grade}/20{reviewingRow.submission.feedback ? ` · "${reviewingRow.submission.feedback}"` : ''}. Califica la nueva versión.
+                Reentrega: la versión anterior tenía {sub.grade}/20{sub.feedback ? ` · "${sub.feedback}"` : ''}. Califica la nueva versión.
               </p>
             )}
             {isGraded ? (
-              <div className="admin-field"><label>Nota (sobre 20)</label><input className="grade-cell-input" style={{ width: '100%' }} type="number" min="0" max="20" value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)} /></div>
+              <div className="admin-field">
+                <label htmlFor="review-grade-input">Nota</label>
+                <div className="review-grade">
+                  <input id="review-grade-input" type="number" inputMode="decimal" min="0" max="20" step="0.5" placeholder="—" value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)} />
+                  <span>/ 20</span>
+                </div>
+              </div>
             ) : (
               <p className="dash-notice" style={{ marginTop: 0 }}>Este entregable no lleva nota: deja tu retroalimentación y márcalo como revisado.</p>
             )}
-            <div className="admin-field"><label>Retroalimentación</label><textarea rows={5} value={feedbackDraft} onChange={(e) => setFeedbackDraft(e.target.value)} placeholder="Qué hizo bien, qué debe mejorar y cuál es su siguiente paso." /></div>
-            <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={saveGrade} disabled={saving}><Save size={13} /> {saving ? 'Guardando...' : isGraded ? 'Guardar calificación' : 'Marcar como revisado'}</button>
+            <div className="admin-field"><label htmlFor="review-feedback-input">Retroalimentación</label><textarea id="review-feedback-input" rows={7} value={feedbackDraft} onChange={(e) => setFeedbackDraft(e.target.value)} placeholder="Qué hizo bien, qué debe mejorar y cuál es su siguiente paso." /></div>
+            <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={saveGrade} disabled={saving || !sub}><Check size={14} /> {saving ? 'Guardando...' : isGraded ? 'Guardar calificación' : 'Marcar como revisado'}</button>
           </div>
         </div>
       </div>
@@ -196,15 +243,9 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
 
   return (
     <div className="anim-fade-up d1">
-      <div className="admin-page-head"><div><h1 className="admin-page-title">Entregas y revisión</h1><p className="admin-page-sub">{course.title}{aulaLabel ? ` · ${aulaLabel}` : ''} · Revisa el archivo completo, califica y deja retroalimentación.</p></div></div>
+      {pageHead}
 
-      <div className="admin-toolbar" style={{ gap: 8, marginBottom: 16 }}>
-        {withDeliverable.map((m, i) => (
-          <button key={m.id} className="admin-btn-ghost" style={m.id === module.id ? { background: 'var(--accent-bg)', color: 'var(--accent)', borderColor: 'transparent' } : undefined} onClick={() => setModuleId(m.id)}>
-            M{i + 1} <span className="admin-cell-sub" style={{ marginLeft: 4 }}>{m.deliverable?.graded === false ? 'Sin nota' : `${effectiveModuleWeights(course.id, modules)[m.id]}%`}</span>
-          </button>
-        ))}
-      </div>
+      {moduleTabs}
 
       <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card">
@@ -488,6 +529,7 @@ const TeacherCourseEvaluacion = () => {
   const [enrollments, setEnrollments] = useState([]);
   // Sesiones que ya tuvo el aula elegida (cada aula avanza por separado).
   const [doneIds, setDoneIds] = useState([]);
+  const [reviewFocus, setReviewFocus] = useState(false);
   const [submissions, setSubmissions] = useState([]);
   const [attendance, setAttendanceRows] = useState([]);
   const [scores, setScores] = useState([]);
@@ -604,16 +646,20 @@ const TeacherCourseEvaluacion = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando evaluación...</div>;
 
+  const focused = vista === 'entregas' && reviewFocus;
+
   return (
-    <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 300px', alignItems: 'flex-start' }}>
-      <div>
-        {vista === 'entregas' && <EntregasRevision course={course} aulaLabel={aulaLabel} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} />}
+    <div className="admin-two-col" style={{ gridTemplateColumns: focused ? '1fr' : '1fr 300px', alignItems: 'flex-start' }}>
+      <div style={{ minWidth: 0 }}>
+        {vista === 'entregas' && <EntregasRevision course={course} aulaLabel={aulaLabel} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} onFocusChange={setReviewFocus} />}
         {vista === 'notas' && <RegistroNotas course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} roster={roster} submissions={submissions} attendance={attendance} scores={scores} onGradeSaved={reloadGrades} />}
         {vista === 'asistencia' && <Asistencia course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} roster={roster} attendance={attendance} onToggle={toggleAttendance} doneIds={aulaDoneIds} globalDoneIds={globalDoneIds} onToggleDone={groupId ? (session, done) => toggleSessionDone(session, done) : null} />}
       </div>
-      <div>
-        <EvalSidePanel vista={vista} setVista={setVista} pendingCount={pendingCount} summary={classSummary} />
-      </div>
+      {!focused && (
+        <div>
+          <EvalSidePanel vista={vista} setVista={setVista} pendingCount={pendingCount} summary={classSummary} />
+        </div>
+      )}
     </div>
   );
 };

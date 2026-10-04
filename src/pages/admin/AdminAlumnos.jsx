@@ -138,7 +138,7 @@ const EnrollmentModal = ({ enrollment, courses, groups, adminName, onClose, onSa
 
 const AdminAlumnos = () => {
   const { currentUser } = useAuth();
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const { courses } = useCourseOfferings();
   const [enrollments, setEnrollments] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -155,7 +155,7 @@ const AdminAlumnos = () => {
   useEffect(() => { load(); }, []);
 
   const handleDelete = async (e) => {
-    if (!confirm(`¿Eliminar la matrícula de ${e.studentName || e.uid} en "${e.courseTitle}"? Esta acción no se puede deshacer.`)) return;
+    if (!(await confirmDialog({ title: 'Eliminar matrícula', message: `¿Eliminar la matrícula de ${e.studentName || e.uid} en "${e.courseTitle}"? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
     try {
       await deleteEnrollment(e);
       await logChange(adminName, `Eliminó la matrícula de ${e.studentName || e.uid} en "${e.courseTitle}".`);

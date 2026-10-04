@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, LogOut, Menu, HelpCircle } from 'lucide-react';
+import { Home, Calendar, BookOpen, CheckSquare, Headphones, ChevronLeft, Bell, Menu, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchMyActiveEnrollments } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import SidebarLogo from '../../components/SidebarLogo';
+import UserMenu from '../../components/UserMenu';
 import { useStudentTour } from '../../context/StudentTourContext';
 
 const NAV_ITEMS = [
@@ -22,19 +23,12 @@ const PAGE_LABELS = {
   '/student/entregas': 'Mis entregas', '/student/soporte': 'Soporte',
 };
 
-const getInitials = (name) => {
-  if (!name) return '??';
-  const parts = name.split(' ');
-  if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return parts[0].substring(0, 2).toUpperCase();
-};
-
 const StudentLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { toggleSidebar, unreadCount } = useUI();
   const { courses } = useCourseOfferings();
   const [pendingCount, setPendingCount] = useState(0);
@@ -50,11 +44,6 @@ const StudentLayout = () => {
   const handleCollapseClick = () => {
     if (window.matchMedia('(max-width: 640px)').matches) setMobileOpen(false);
     else setCollapsed((c) => !c);
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    navigate('/', { replace: true });
   };
 
   useEffect(() => {
@@ -92,13 +81,6 @@ const StudentLayout = () => {
             );
           })}
         </nav>
-
-        <div className="admin-sidebar-footer">
-          <button className="admin-nav-link admin-logout-btn" onClick={handleLogout} title="Cerrar sesión">
-            <LogOut size={17} />
-            <span className="admin-nav-label">Cerrar sesión</span>
-          </button>
-        </div>
       </aside>
 
       <div className="admin-main">
@@ -113,10 +95,7 @@ const StudentLayout = () => {
               <Bell size={18} />
               {unreadCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, background: 'var(--rose)', width: 8, height: 8, borderRadius: '50%' }}></span>}
             </button>
-            <div className="admin-avatar" title={currentUser?.displayName || currentUser?.email}>
-              {getInitials(currentUser?.displayName || currentUser?.email)}
-            </div>
-            <button className="admin-topbar-bell admin-topbar-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}><LogOut size={18} /></button>
+            <UserMenu />
           </div>
         </div>
 

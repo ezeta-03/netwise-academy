@@ -162,6 +162,21 @@ function App() {
             <Route path="historial" element={<AdminHistorial />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
           </Route>
+          {/* El admin edita el contenido de un curso sin salir de su panel: mismas
+              pantallas que el docente, con el menú y las rutas del admin. */}
+          <Route path="/admin/curso/:courseId" element={<RoleRoute allowedRoles={['admin']}><TeacherCourseLayout /></RoleRoute>}>
+            <Route index element={<Navigate to="contenido" replace />} />
+            <Route path="contenido" element={<TeacherCourseContenido />} />
+            <Route path="rubrica" element={<TeacherCourseRubrica />} />
+            <Route path="cronograma" element={<TeacherCourseCronograma />} />
+            <Route path="sala" element={<TeacherCourseSala />} />
+            <Route path="materiales" element={<TeacherCourseMateriales />} />
+            <Route path="proyecto" element={<TeacherCourseProyecto />} />
+            <Route path="evaluacion" element={<TeacherCourseEvaluacion />} />
+            <Route path="comunidad" element={<TeacherCourseComunidad />} />
+            <Route path="grupos" element={<TeacherCourseGrupos />} />
+            <Route path="ia" element={<TeacherCourseIA />} />
+          </Route>
           <Route path="/teacher" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherLayout /></RoleRoute>}>
             <Route index element={<Navigate to="inicio" replace />} />
             <Route path="inicio" element={<TeacherInicio />} />

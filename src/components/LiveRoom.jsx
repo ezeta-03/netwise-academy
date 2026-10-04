@@ -45,7 +45,7 @@ const loadJitsiScript = () => {
 // `canRecord`: docente/admin de una clase programada -- ve el botón "Grabar"
 // (grabación en su computadora, ver lib/sessionRecorder.js).
 const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobbyHeadline, lobbyMeta, joinLabel, secondaryAction, canRecord = false }) => {
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const [joined, setJoined] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
@@ -265,7 +265,7 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
                 <span title={r.name}>{r.name} · {fmtSize(r.size)}</span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadBlob(r.blob, r.name)}><Download size={14} /> Descargar</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={async () => {
-                  if (!window.confirm('¿Borrar esta grabación del navegador? Hazlo solo si ya la descargaste.')) return;
+                  if (!(await confirmDialog({ title: 'Borrar grabación', message: '¿Borrar esta grabación del navegador? Hazlo solo si ya la descargaste.', confirmLabel: 'Borrar', danger: true }))) return;
                   await deletePendingRecording(r.name);
                   refreshPending();
                 }}><Trash2 size={14} /> Borrar</button>

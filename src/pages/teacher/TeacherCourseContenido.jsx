@@ -282,7 +282,7 @@ const ModuleEditForm = ({ module, weightLocked, onSave, onCancel }) => {
 const TeacherCourseContenido = () => {
   const { course } = useOutletContext();
   const { currentUser } = useAuth();
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [modules, setModules] = useState([]);
@@ -343,8 +343,8 @@ const TeacherCourseContenido = () => {
     setEditingModule(false);
   };
 
-  const deleteModule = (id) => {
-    if (!confirm('¿Eliminar este módulo y todo su contenido?')) return;
+  const deleteModule = async (id) => {
+    if (!(await confirmDialog({ title: 'Eliminar módulo', message: '¿Eliminar este módulo y todo su contenido? Esta acción no se puede deshacer.', confirmLabel: 'Eliminar', danger: true }))) return;
     const next = modules.filter((m) => m.id !== id);
     persist(next, 'Módulo eliminado.');
     setSelectedId(next[0]?.id || null);
@@ -358,8 +358,8 @@ const TeacherCourseContenido = () => {
     setEditingSessionId(null);
   };
 
-  const deleteSession = (sessionId) => {
-    if (!confirm('¿Eliminar esta sesión grabada?')) return;
+  const deleteSession = async (sessionId) => {
+    if (!(await confirmDialog({ title: 'Eliminar sesión grabada', message: '¿Eliminar esta sesión grabada?', confirmLabel: 'Eliminar', danger: true }))) return;
     persist(modules.map((m) => (m.id === selected.id ? { ...m, lessons: m.lessons.filter((l) => l.id !== sessionId) } : m)), 'Sesión grabada eliminada.');
   };
 
@@ -372,8 +372,8 @@ const TeacherCourseContenido = () => {
     setEditingSessionDetail(null);
   };
 
-  const deleteSessionDetail = (sessionId) => {
-    if (!confirm('¿Eliminar esta sesión del módulo?')) return;
+  const deleteSessionDetail = async (sessionId) => {
+    if (!(await confirmDialog({ title: 'Eliminar sesión', message: '¿Eliminar esta sesión del módulo?', confirmLabel: 'Eliminar', danger: true }))) return;
     persist(modules.map((m) => (m.id === selected.id ? { ...m, sessions: (m.sessions || []).filter((s) => s.id !== sessionId) } : m)), 'Sesión eliminada.');
   };
 

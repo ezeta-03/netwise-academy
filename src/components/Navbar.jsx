@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, LogOut, Menu, X } from 'lucide-react';
+import { Bell, Menu, X } from 'lucide-react';
+import UserMenu from './UserMenu';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
@@ -8,7 +9,7 @@ import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { toggleSidebar, unreadCount, openLoginModal } = useUI();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
@@ -24,12 +25,6 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Cerrar sesión debe llevar al Inicio público (no logueado), no dejar que
-  // la ruta protegida en la que estabas te rebote sola a /login.
-  const handleLogout = async () => {
-    await logout();
-    navigate('/', { replace: true });
-  };
 
   // Hide Navbar on Player and active live-class room pages (similar to original design behavior)
   if (location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout') || location.pathname === '/masterclass') {
@@ -104,13 +99,7 @@ const Navbar = () => {
                 {unreadCount > 0 && <span style={{ position: 'absolute', top: -2, right: -2, background: 'var(--rose)', width: 10, height: 10, borderRadius: '50%' }}></span>}
               </button>
 
-              <Link to="/profile" className="nav-avatar" title="Mi Perfil" style={{ textDecoration: 'none' }}>
-                {currentUser.displayName ? getInitials(currentUser.displayName) : getInitials(currentUser.email)}
-              </Link>
-
-              <button className="btn-icon" title="Cerrar sesión" onClick={handleLogout}>
-                <LogOut size={16} />
-              </button>
+              <UserMenu avatarClassName="nav-avatar" />
             </div>
           ) : (
             <div className="nav-right-guest nav-desktop-only">
@@ -120,11 +109,7 @@ const Navbar = () => {
           )}
 
           {/* En teléfono los botones de escritorio se ocultan: el acceso (o la salida) queda aquí y en el menú. */}
-          {currentUser && (
-            <button type="button" className="btn-icon nav-mobile-logout" title="Cerrar sesión" aria-label="Cerrar sesión" onClick={handleLogout}>
-              <LogOut size={18} />
-            </button>
-          )}
+          {currentUser && <div className="nav-mobile-logout"><UserMenu avatarClassName="nav-avatar" /></div>}
           {!currentUser && (
             <button type="button" className="btn btn-primary btn-sm nav-mobile-login" onClick={openLoginModal}>Iniciar sesión</button>
           )}
@@ -169,11 +154,7 @@ const Navbar = () => {
         </div>
 
         <div className="mm-footer">
-          {currentUser ? (
-            <button className="btn btn-ghost btn-full" onClick={() => { closeMenu(); handleLogout(); }}>
-              <LogOut size={16} /> Cerrar sesión
-            </button>
-          ) : (
+          {currentUser ? null : (
             <div className="mm-footer-guest">
               <button type="button" className="btn btn-primary btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Inscribirme</button>
               <button type="button" className="btn btn-ghost btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Iniciar sesión</button>
