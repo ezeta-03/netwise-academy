@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchCoupons, createCoupon, updateCoupon, logChange } from '../../lib/db';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const couponStatus = (c) => {
   // "Hasta [fecha]" (ver vigenciaLabel) es inclusivo -- el cupón vale hasta
@@ -145,6 +146,7 @@ const AdminPromociones = () => {
   };
 
   const filtered = coupons.filter((c) => c.code.toLowerCase().includes(search.toLowerCase()));
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'cupones' });
 
   const scopeLabel = (scope) => scope === 'all' ? 'Todos los cursos' : (courses.find((c) => c.id.toString() === scope.toString())?.title || scope);
   const vigenciaLabel = (c) => {
@@ -175,12 +177,12 @@ const AdminPromociones = () => {
         {loading ? <div className="admin-empty-hint">Cargando cupones...</div> : filtered.length === 0 ? (
           <div className="admin-empty-hint">Todavía no has creado ningún cupón.</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead>
               <tr><th>Código</th><th>Cursos</th><th>Descuento</th><th>Vigencia</th><th>Usos</th><th>Estado</th><th>Acciones</th></tr>
             </thead>
             <tbody>
-              {filtered.map((c) => {
+              {pageRows.map((c) => {
                 const status = couponStatus(c);
                 return (
                   <tr key={c.id}>
@@ -205,7 +207,7 @@ const AdminPromociones = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
       </div>
 

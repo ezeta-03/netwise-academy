@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { fetchAuditLog } from '../../lib/db';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const AdminHistorial = () => {
   const [log, setLog] = useState([]);
@@ -10,6 +11,7 @@ const AdminHistorial = () => {
   useEffect(() => { fetchAuditLog().then((list) => { setLog(list); setLoading(false); }); }, []);
 
   const filtered = log.filter((l) => `${l.actor} ${l.message}`.toLowerCase().includes(search.toLowerCase()));
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'cambios' });
 
   return (
     <div className="anim-fade-up d1">
@@ -29,10 +31,10 @@ const AdminHistorial = () => {
         {loading ? <div className="admin-empty-hint">Cargando historial...</div> : filtered.length === 0 ? (
           <div className="admin-empty-hint">Todavía no hay cambios registrados. Aparecerán aquí apenas uses el panel.</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Fecha</th><th>Quién</th><th>Cambio</th></tr></thead>
             <tbody>
-              {filtered.map((l) => (
+              {pageRows.map((l) => (
                 <tr key={l.id}>
                   <td className="admin-cell-sub">{new Date(l.createdAt).toLocaleString('es-PE')}</td>
                   <td className="admin-cell-name">{l.actor}</td>
@@ -40,7 +42,7 @@ const AdminHistorial = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
       </div>
     </div>

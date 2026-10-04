@@ -4,6 +4,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useUI } from '../../context/UIContext';
 import { updateEnrollmentAccess, logChange } from '../../lib/db';
 import { countByGroup, freeSeats } from '../../lib/groupAssignment';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const PAYMENT_SHORT = { yape: 'Yape/Plin', transfer: 'Transferencia', card: 'Tarjeta' };
 const fmtDay = (iso) => {
@@ -20,6 +21,7 @@ const AulaStudentsModal = ({ group, groups, enrollments, orders, adminName, onCl
   const [busyId, setBusyId] = useState(null);
 
   const students = enrollments.filter((e) => e.groupId === group.id && (e.status || 'active') === 'active');
+  const { rows: pageRows, pager, tableRef } = usePagedTable(students, { label: 'alumnos' });
   const counts = countByGroup(enrollments);
   const siblings = groups.filter((g) => g.courseId?.toString() === group.courseId?.toString() && g.status !== 'closed');
   const paymentOf = (e) => orders.find((o) => o.status === 'paid' && o.uid === e.uid && o.courseId?.toString() === e.courseId?.toString()) || null;
@@ -58,10 +60,10 @@ const AulaStudentsModal = ({ group, groups, enrollments, orders, adminName, onCl
             <p className="admin-panel-caption" style={{ marginTop: 0 }}>Esta aula todavía no tiene alumnos. Asígnalos desde la pestaña "Asignar alumnos".</p>
           ) : (
             <div className="admin-table-wrap">
-              <table className="admin-table admin-table-compact">
+              <><table ref={tableRef} className="admin-table admin-table-compact table-cards">
                 <thead><tr><th>Alumno</th><th>Pago</th><th>Mover a</th><th></th></tr></thead>
                 <tbody>
-                  {students.map((e) => {
+                  {pageRows.map((e) => {
                     const order = paymentOf(e);
                     return (
                       <tr key={e.id}>
@@ -81,7 +83,7 @@ const AulaStudentsModal = ({ group, groups, enrollments, orders, adminName, onCl
                     );
                   })}
                 </tbody>
-              </table>
+              </table>{pager}</>
             </div>
           )}
 

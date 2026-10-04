@@ -7,6 +7,7 @@ import { fetchAllEnrollments, fetchWorkGroups, createWorkGroup, fetchPrivateRoom
 import { aulaRoster } from '../../lib/roster';
 import LiveRoom from '../../components/LiveRoom';
 import ModalPortal from '../../components/ModalPortal';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -134,6 +135,8 @@ const TeacherCourseGrupos = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  const { rows: pageRows, pager, tableRef } = usePagedTable(groups, { label: 'grupos' });
+
   if (loading) return <div className="admin-empty-hint">Cargando grupos de trabajo...</div>;
 
   if (activeRoom) {
@@ -188,10 +191,10 @@ const TeacherCourseGrupos = () => {
         {groups.length === 0 ? (
           <div className="admin-empty-hint">Todavía no hay grupos en este curso. Los alumnos pueden armar los suyos desde su panel, o crea uno tú.</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Grupo</th><th>Integrantes</th><th>Coordina</th><th>Próxima reunión</th><th></th></tr></thead>
             <tbody>
-              {groups.map((g) => {
+              {pageRows.map((g) => {
                 const room = rooms.find((r) => r.groupId === g.id);
                 return (
                   <tr key={g.id}>
@@ -214,7 +217,7 @@ const TeacherCourseGrupos = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
       </div>
       <p className="admin-panel-caption" style={{ marginTop: -12, marginBottom: 20 }}>Los alumnos forman sus grupos desde su panel · también puedes crearlos tú.</p>

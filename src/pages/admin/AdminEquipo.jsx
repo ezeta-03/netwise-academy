@@ -6,6 +6,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserAccount, logChange } from '../../lib/db';
 import { TeacherModal, AccessLinkModal } from './TeacherAccess';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const ROLE_LABEL = { student: 'Estudiante', teacher: 'Docente', admin: 'Administrador' };
 
@@ -171,6 +172,8 @@ const AdminEquipo = () => {
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   }), [users, userSearch, roleFilter]);
+  const { rows: memberRows, pager: memberPager, tableRef: memberTableRef } = usePagedTable(filteredMembers, { label: 'miembros' });
+  const { rows: userRows, pager: userPager, tableRef: userTableRef } = usePagedTable(filteredUsers, { label: 'usuarios' });
 
   return (
     <div className="anim-fade-up d1">
@@ -191,10 +194,10 @@ const AdminEquipo = () => {
         {loading ? <div className="admin-empty-hint">Cargando equipo...</div> : filteredMembers.length === 0 ? (
           <div className="admin-empty-hint">Todavía no has añadido a nadie al equipo.</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={memberTableRef} className="admin-table table-cards">
             <thead><tr><th>Miembro</th><th>Rol</th><th>Alcance propuesto</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {filteredMembers.map((m) => (
+              {memberRows.map((m) => (
                 <tr key={m.id}>
                   <td><div className="admin-cell-name">{m.name}</div><div className="admin-cell-sub">{m.email}</div></td>
                   <td><span className={`admin-status ${ROLE_BADGE[m.roleLabel] || 'admin-status-gray'}`}>{m.roleLabel}</span></td>
@@ -204,7 +207,7 @@ const AdminEquipo = () => {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>{memberPager}</>
         )}
         <div className="admin-footnote">
           <span>{filteredMembers.length} registro{filteredMembers.length === 1 ? '' : 's'} en total · Demostración</span>
@@ -232,10 +235,10 @@ const AdminEquipo = () => {
         </select>
       </div>
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <><table ref={userTableRef} className="admin-table table-cards">
           <thead><tr><th>Nombre</th><th>Correo y celular</th><th>Rol</th><th>Registro</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody>
-            {filteredUsers.length > 0 ? filteredUsers.map((u) => {
+            {filteredUsers.length > 0 ? userRows.map((u) => {
               const isSelf = u.uid === currentUser?.uid;
               return (
                 <tr key={u.id}>
@@ -284,7 +287,7 @@ const AdminEquipo = () => {
               <tr><td colSpan="6" className="admin-empty-hint">No se encontraron usuarios.</td></tr>
             )}
           </tbody>
-        </table>
+        </table>{userPager}</>
       </div>
 
       <p className="admin-page-footer">NETWISE ACADEMY · ADMIN V1.4</p>

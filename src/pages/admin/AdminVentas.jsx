@@ -6,6 +6,7 @@ import { downloadCsv } from '../../lib/csv';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const ORDER_STATUS = {
   paid: { label: 'Pagada', cls: 'admin-status-green' },
@@ -129,6 +130,7 @@ const AdminVentas = () => {
     const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'pedidos' });
 
   return (
     <div className="anim-fade-up d1">
@@ -155,10 +157,10 @@ const AdminVentas = () => {
         {loading ? <div className="admin-empty-hint">Cargando pedidos...</div> : filtered.length === 0 ? (
           <div className="admin-empty-hint">Todavía no se ha registrado ningún pedido.</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Pedido</th><th>Alumno</th><th>Curso</th><th>Importe</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {filtered.map((o) => {
+              {pageRows.map((o) => {
                 const status = ORDER_STATUS[o.status] || ORDER_STATUS.pending;
                 const expected = o.status === 'pending' ? amountMismatch(o) : null;
                 return (
@@ -183,7 +185,7 @@ const AdminVentas = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
       </div>
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, CheckCircle2 } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import { fetchAllSupportRequests, updateSupportRequestStatus } from '../../lib/db';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const STATUS = {
   pending: { label: 'Pendiente', cls: 'admin-status-amber' },
@@ -38,6 +39,7 @@ const AdminSoporte = () => {
     const matchesStatus = statusFilter === 'all' || (r.status || 'pending') === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'solicitudes' });
 
   const pendingCount = requests.filter((r) => (r.status || 'pending') === 'pending').length;
 
@@ -64,10 +66,10 @@ const AdminSoporte = () => {
         {loading ? <div className="admin-empty-hint">Cargando solicitudes...</div> : filtered.length === 0 ? (
           <div className="admin-empty-hint">{requests.length === 0 ? 'Todavía no hay solicitudes de soporte.' : 'No hay solicitudes que coincidan con tu búsqueda.'}</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Solicitante</th><th>Tipo</th><th>Mensaje</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody>
-              {filtered.map((r) => {
+              {pageRows.map((r) => {
                 const status = STATUS[r.status || 'pending'];
                 return (
                   <tr key={r.id}>
@@ -91,7 +93,7 @@ const AdminSoporte = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
         {requests.length > 0 && (
           <div className="admin-footnote">

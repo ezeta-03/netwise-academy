@@ -18,6 +18,7 @@ import { attendanceStats } from '../../lib/attendance';
 import { aulaRoster, NO_AULA } from '../../lib/roster';
 import SubmissionViewer from '../../components/SubmissionViewer';
 import { describeSubmission } from '../../lib/submissionPreview';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const getInitials = (name) => {
   if (!name) return '??';
@@ -96,11 +97,7 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
 
   const setModuleId = (id) => { setReviewingUid(null); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('vista', 'entregas'); next.set('modulo', id); return next; }); };
 
-  if (withDeliverable.length === 0) {
-    return <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Todavía no defines entregables en "Contenido".</div>;
-  }
-
-  const rows = roster.map((r) => ({ ...r, submission: submissions.find((s) => s.uid === r.uid && s.moduleId === module.id) || null }));
+  const rows = roster.map((r) => ({ ...r, submission: submissions.find((s) => s.uid === r.uid && s.moduleId === module?.id) || null }));
   const entregados = rows.filter((r) => r.submission).length;
   const porRevisar = rows.filter((r) => r.submission?.status === 'submitted').length;
 
@@ -117,6 +114,11 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
     if (filter === 'sin_entrega') return st === 'sin_entrega';
     return true;
   });
+  const { rows: listRows, pager: listPager } = usePagedTable(filtered, { label: 'alumnos' });
+
+  if (withDeliverable.length === 0) {
+    return <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Todavía no defines entregables en "Contenido".</div>;
+  }
 
   const reviewingRow = rows.find((r) => r.uid === reviewingUid);
   const reviewIndex = filtered.findIndex((r) => r.uid === reviewingUid);
@@ -269,7 +271,7 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
       </div>
 
       <div className="admin-panel">
-        {filtered.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>No hay alumnos en esta categoría.</p> : filtered.map((row) => {
+        {filtered.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>No hay alumnos en esta categoría.</p> : listRows.map((row) => {
           const status = statusOf(row);
           return (
             <div key={row.uid} className="dash-list-row">
@@ -287,6 +289,7 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
             </div>
           );
         })}
+        {listPager}
       </div>
     </div>
   );
@@ -304,6 +307,7 @@ const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submission
     const gradeRows = buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid]);
     return { ...r, gradeRows, summary: computeGradeSummary(gradeRows), att: attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)) };
   });
+  const { rows: gradeRowsPage, pager: gradePager } = usePagedTable(rowsByStudent, { label: 'alumnos' });
 
   // Guarda la nota de una celda al salir del campo. Módulo -> queda como entrega
   // revisada con esa nota; componente manual -> courseGrades. Vacío borra solo
@@ -384,7 +388,7 @@ const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submission
               )}
             </thead>
             <tbody>
-              {rowsByStudent.map((r) => (
+              {gradeRowsPage.map((r) => (
                 <tr key={r.uid}>
                   <td className="admin-cell-name grade-grid-student">{r.studentName}</td>
                   {model.components.map((c, i) => {
@@ -408,6 +412,7 @@ const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submission
             </tbody>
           </table>
         </div>
+        {gradePager}
         {model.footer && <p className="admin-panel-caption" style={{ marginBottom: 0 }}>{model.footer}</p>}
       </div>
     </div>
@@ -419,6 +424,7 @@ const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submission
 // `doneIds`: sesiones que ESTA aula ya tuvo; `onToggleDone` las marca (null si
 // no hay un aula concreta elegida). `globalDone`: Realizadas desde Contenido.
 const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, onToggle, doneIds, globalDoneIds, onToggleDone }) => {
+  const { rows: rosterPage, pager: rosterPager } = usePagedTable(roster, { label: 'alumnos' });
   const sessions = getOrderedSessions(modules);
   const grouped = modules.filter((m) => m.sessions?.length).map((m) => ({ module: m, sessions: sessions.filter((s) => s.moduleId === m.id) }));
 
@@ -510,7 +516,7 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
               </tr>
             </thead>
             <tbody>
-              {roster.map((row) => (
+              {rosterPage.map((row) => (
                 <tr key={row.uid}>
                   <td className="admin-cell-name">{row.studentName}</td>
                   {sessions.map((s) => {
@@ -531,6 +537,7 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
               ))}
             </tbody>
           </table>
+          {rosterPager}
         </div>
       )}
       <p className="admin-panel-caption">{onToggleDone ? 'La casilla bajo cada sesión marca que ESTA aula ya la tuvo (se marca sola al tomar lista); cada aula lleva su propio avance. ' : ''}Haz clic en una celda para alternar Presente / Tardanza / Falta / No aplica / Sin registrar. La tardanza cuenta como asistencia. «No aplica» (N/A) saca esa sesión del porcentaje del alumno: úsalo si se matriculó después o si la falta está justificada.</p>

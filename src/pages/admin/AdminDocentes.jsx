@@ -6,6 +6,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchAllUsers, fetchGroups, updateUserStatus, logChange } from '../../lib/db';
 import { TeacherModal, AccessLinkModal } from './TeacherAccess';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const initialsOf = (name) => {
   const parts = String(name || '?').trim().split(/\s+/);
@@ -50,6 +51,7 @@ const AdminDocentes = () => {
     const matchesStatus = statusFilter === 'all' || (statusFilter === 'active') === !t.disabled;
     return text.includes(search.toLowerCase()) && matchesStatus;
   });
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'docentes' });
 
   const toggleSuspended = async (t) => {
     const next = !t.disabled;
@@ -93,10 +95,10 @@ const AdminDocentes = () => {
         {loading ? <div className="admin-empty-hint">Cargando docentes...</div> : filtered.length === 0 ? (
           <div className="admin-empty-hint">{teachers.length === 0 ? 'Todavía no has registrado ningún docente.' : 'Ningún docente coincide con la búsqueda.'}</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Docente</th><th>Especialidad</th><th>Cursos asignados</th><th>Aulas</th><th>Acceso</th><th>Acciones</th></tr></thead>
             <tbody>
-              {filtered.map((t) => {
+              {pageRows.map((t) => {
                 const myCourses = coursesOf(t.uid);
                 const myAulas = aulasOf(t.uid);
                 return (
@@ -130,7 +132,7 @@ const AdminDocentes = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
         <div className="admin-footnote"><span>{filtered.length} docente{filtered.length === 1 ? '' : 's'}</span><span>Para eliminar una cuenta, usa Equipo y permisos</span></div>
       </div>

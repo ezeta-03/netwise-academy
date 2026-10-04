@@ -8,6 +8,7 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, deleteEnrollment, fetchGroups, fetchAllUsers, fetchOrders, logChange } from '../../lib/db';
 import { unassignedEnrollments } from '../../lib/groupAssignment';
 import { downloadCsv } from '../../lib/csv';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const ACCESS_STATUS = {
   active: { label: 'Activo', cls: 'admin-status-green' },
@@ -249,6 +250,7 @@ const AdminAlumnos = () => {
     const matchesCourse = courseFilter === 'all' || e.courseId?.toString() === courseFilter;
     return matchesSearch && matchesStatus && matchesCourse;
   });
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'matrículas' });
 
   // Alumnos activos sin aula válida (misma regla que Aulas > Asignar alumnos).
   const withoutAula = unassignedEnrollments(enrollments, groups);
@@ -291,10 +293,10 @@ const AdminAlumnos = () => {
         {loading ? <div className="admin-empty-hint">Cargando alumnos...</div> : filtered.length === 0 ? (
           <div className="admin-empty-hint">Todavía no hay alumnos matriculados.</div>
         ) : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Alumno</th><th>Curso</th><th>Aula</th><th>Pago</th><th>Acceso</th><th>Acciones</th></tr></thead>
             <tbody>
-              {filtered.map((e) => {
+              {pageRows.map((e) => {
                 const status = ACCESS_STATUS[e.status || 'active'] || ACCESS_STATUS.pending;
                 const group = validGroup(e);
                 const order = paymentOf(e, orders);
@@ -325,7 +327,7 @@ const AdminAlumnos = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
       </div>
 

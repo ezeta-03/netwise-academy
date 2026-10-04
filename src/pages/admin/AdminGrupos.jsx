@@ -14,6 +14,7 @@ import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLa
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
 import { planScheduleSync } from '../../lib/scheduleSync';
 import { isPendingUrl } from '../../lib/placeholders';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 // Resumen del contenido cargado de un curso. Un módulo cuenta si ya tiene
 // objetivo o sesiones (no solo el título); las grabaciones "Pendiente de
@@ -545,6 +546,7 @@ const AdminGrupos = () => {
   const freeInActive = activeGroups.reduce((sum, g) => { const f = freeSeats(g, enrolledByGroup); return f === Infinity ? sum : sum + f; }, 0);
 
   const filtered = groups.filter((g) => `${g.name} ${g.courseTitle}`.toLowerCase().includes(search.toLowerCase()));
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'aulas' });
 
   const toggleClosed = async (g) => {
     const nextStatus = g.status === 'closed' ? 'open' : 'closed';
@@ -572,7 +574,7 @@ const AdminGrupos = () => {
   const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
   const renderGroupsTable = (list, compact = false) => (
-    <table className={`admin-table ${compact ? 'admin-table-compact' : ''}`}>
+    <><table ref={tableRef} className={`admin-table table-cards ${compact ? 'admin-table-compact' : ''}`}>
       <thead><tr><th>Grupo / Curso</th><th>Fechas</th><th>Horario y docente</th><th>Cupos activo</th><th>Estado</th><th>Acciones</th></tr></thead>
       <tbody>
         {list.map((g) => {
@@ -604,7 +606,7 @@ const AdminGrupos = () => {
           );
         })}
       </tbody>
-    </table>
+    </table>{pager}</>
   );
 
   return (
@@ -651,7 +653,7 @@ const AdminGrupos = () => {
           <div className="admin-table-wrap" style={{ marginBottom: 24 }}>
             {loading ? <div className="admin-empty-hint">Cargando aulas...</div> : filtered.length === 0 ? (
               <div className="admin-empty-hint">Todavía no has creado ninguna aula.</div>
-            ) : renderGroupsTable(filtered)}
+            ) : renderGroupsTable(pageRows)}
           </div>
 
           <LiveClassesPanel courses={courses} refreshKey={sessionsKey} />

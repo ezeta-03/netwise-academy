@@ -5,6 +5,7 @@ import { useUI } from '../../context/UIContext';
 import ModalPortal from '../../components/ModalPortal';
 import { fetchAllEnrollments, fetchCourseContent, updateEnrollmentFollowUp } from '../../lib/db';
 import { aulaRoster } from '../../lib/roster';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const FOLLOW_UP = {
   ok: { label: 'Al día', cls: 'admin-status-green' },
@@ -87,6 +88,8 @@ const TeacherCourseProyecto = () => {
 
   useEffect(() => { load(); }, [load]);
 
+  const { rows: pageRows, pager, tableRef } = usePagedTable(rows, { label: 'alumnos' });
+
   if (loading) return <div className="admin-empty-hint">Cargando el proyecto del grupo...</div>;
 
   return (
@@ -100,10 +103,10 @@ const TeacherCourseProyecto = () => {
 
       <div className="admin-table-wrap">
         {rows.length === 0 ? <div className="admin-empty-hint">Todavía no hay alumnos matriculados en este curso.</div> : (
-          <table className="admin-table">
+          <><table ref={tableRef} className="admin-table table-cards">
             <thead><tr><th>Estudiante</th><th>Progreso</th><th>Asistencia</th><th>Seguimiento</th><th>Acción</th></tr></thead>
             <tbody>
-              {rows.map((r) => {
+              {pageRows.map((r) => {
                 const fu = FOLLOW_UP[r.followUp] || FOLLOW_UP.ok;
                 return (
                   <tr key={r.uid}>
@@ -116,7 +119,7 @@ const TeacherCourseProyecto = () => {
                 );
               })}
             </tbody>
-          </table>
+          </table>{pager}</>
         )}
       </div>
 

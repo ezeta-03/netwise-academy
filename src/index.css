@@ -2543,3 +2543,51 @@ body {
 .content-readonly .admin-icon-btn:not(.content-keep) { display: none; }
 
 @media (max-width: 640px) { .admin-check-grid { grid-template-columns: 1fr; } }
+
+/* ═══════════════════════════════════════════════════
+   PAGINACIÓN DE TABLAS y TARJETAS EN EL TELÉFONO
+   (ver hooks/usePagedTable.jsx)
+   ═══════════════════════════════════════════════════ */
+.table-pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px 18px; flex-wrap: wrap;
+  padding: 12px 20px; border-top: 1px solid #F3F2F8; background: #fff; font-size: .8rem; color: #6B6A7B;
+  /* Dentro de una tabla con desplazamiento lateral, no se va con ella. */
+  position: sticky; left: 0;
+}
+.table-pager-size { display: inline-flex; align-items: center; gap: 8px; }
+.table-pager-size select {
+  border: 1px solid #E3E1EE; border-radius: 8px; padding: 6px 8px; background: #fff; color: #14141F;
+  font: inherit; cursor: pointer;
+}
+.table-pager-nav { display: inline-flex; align-items: center; gap: 8px; }
+.table-pager-nav .admin-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.admin-panel > .table-pager { margin: 12px -4px 0; padding: 12px 4px 0; }
+
+@media (max-width: 640px) {
+  .table-pager { padding: 12px 14px; }
+  .table-pager-size span { display: none; }
+  .table-pager-range { order: -1; flex-basis: 100%; text-align: center; }
+
+  /* Cada fila es una tarjeta: el título de la columna va sobre su valor. */
+  .admin-table-wrap:has(> .table-cards) { background: transparent; border: none; border-radius: 0; overflow: visible; }
+  .admin-table-wrap:has(> .table-cards) > .table-pager { border: 1px solid #ECEAF3; border-radius: 12px; }
+  .admin-table.table-cards, .admin-table.table-cards tbody { display: block; }
+  .admin-table.table-cards thead { display: none; }
+  .admin-table.table-cards tr {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px;
+    background: #fff; border: 1px solid #ECEAF3; border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .admin-table.table-cards td {
+    display: block; padding: 0; border: none; font-size: .84rem; min-width: 0; overflow-wrap: anywhere;
+  }
+  .admin-table.table-cards td:first-child {
+    position: static; box-shadow: none; background: transparent;
+    grid-column: 1 / -1; padding-bottom: 10px; border-bottom: 1px solid #F3F2F8;
+  }
+  .admin-table.table-cards td:last-child:not(:first-child), .admin-table.table-cards td[colspan] { grid-column: 1 / -1; }
+  .admin-table.table-cards td[data-label]:not(:first-child)::before {
+    content: attr(data-label); display: block; margin-bottom: 4px;
+    font-size: .66rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8B8A9B;
+  }
+  .admin-table.table-cards td:empty { display: none; }
+}

@@ -8,6 +8,7 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { CATEGORIES } from '../../lib/data';
 import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, fetchAllUsers, logChange } from '../../lib/db';
+import { usePagedTable } from '../../hooks/usePagedTable';
 
 const catLabel = (catId) => {
   const cat = CATEGORIES.find((c) => c.id === catId);
@@ -104,6 +105,7 @@ const AdminCursos = () => {
     const matchesCat = catFilter === 'all' || c.cat === catFilter;
     return matchesSearch && matchesCat;
   });
+  const { rows: pageRows, pager, tableRef } = usePagedTable(filtered, { label: 'cursos' });
 
   const getOriginalPrice = (c) => {
     if (c.price == null || !c.promoPercent) return null;
@@ -162,14 +164,14 @@ const AdminCursos = () => {
       </div>
 
       <div className="admin-table-wrap">
-        <table className="admin-table">
+        <><table ref={tableRef} className="admin-table table-cards">
           <thead>
             <tr>
               <th>Curso</th><th>En la web</th><th>Inscripciones</th><th>Precio de venta</th><th>Promoción</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => {
+            {pageRows.map((c) => {
               const original = getOriginalPrice(c);
               return (
                 <tr key={c.id}>
@@ -220,7 +222,7 @@ const AdminCursos = () => {
               );
             })}
           </tbody>
-        </table>
+        </table>{pager}</>
         <div className="admin-footnote">
           <span>Los cambios no afectan las matrículas existentes.</span>
           <span>Moneda PEN · Soles peruanos</span>
