@@ -299,8 +299,25 @@ export const fetchInstitutionalAccounts = async () => {
   if (!isConfigValid) return {};
   const snap = await getDocs(collection(db, 'institutionalAccounts'));
   const map = {};
-  snap.forEach((d) => { map[d.id] = d.data(); });
+  // Sin `email` es una reserva a medio crear (ver activateInstitutionalAccount).
+  snap.forEach((d) => { if (d.data().email) map[d.id] = d.data(); });
   return map;
+};
+
+// Correo institucional del propio usuario, o null si todavía no lo activó.
+export const fetchMyInstitutionalAccount = async (uid) => {
+  if (!isConfigValid) return null;
+  const data = (await getDoc(doc(db, 'institutionalAccounts', uid))).data();
+  return data?.email ? data : null;
+};
+
+// El alumno activa su correo de la academia (o, con `reset`, pide otra
+// contraseña temporal) vía la Cloud Function activateInstitutionalAccount.
+// Devuelve { email, password, linked }.
+export const activateInstitutionalAccount = async ({ reset = false } = {}) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const { data } = await httpsCallable(functions, 'activateInstitutionalAccount', { timeout: 60000 })({ reset });
+  return data;
 };
 
 // Crea el correo institucional de una persona en Google Workspace (o, con

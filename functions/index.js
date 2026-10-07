@@ -225,6 +225,55 @@ const setDirectoryPassword = async (email, password) => {
   }
 };
 
+const emailTaken = async (email) => !(await db.collection('institutionalAccounts').where('email', '==', email).limit(1).get()).empty;
+
+// Crea la cuenta en Google (o, con `useExisting`, adopta una que ya estaba y le
+// cambia la contraseña) y devuelve su id de Google. Lanza 'already-exists' si
+// la dirección ya existe y no se pidió adoptarla.
+const createDirectoryAccount = async ({ email, displayName, password, recoveryEmail, useExisting = false }) => {
+  if (IS_EMULATOR) return null; // Emulador: no se toca Google, solo se registra el vínculo.
+  if (useExisting) {
+    const found = await directoryFetch(`/${encodeURIComponent(email)}`);
+    if (found.status === 404) throw new HttpsError('not-found', 'Esa dirección no existe en Google Workspace.');
+    if (!found.ok) throw new HttpsError('internal', 'No se pudo consultar la cuenta en Google Workspace.');
+    if (found.data.isAdmin || found.data.isDelegatedAdmin) throw new HttpsError('permission-denied', 'Esa dirección es de un administrador de Google Workspace.');
+    await setDirectoryPassword(email, password);
+    return found.data.id;
+  }
+  const [givenName, ...rest] = displayName.split(/\s+/);
+  // El correo de recuperación solo sirve si es uno externo de verdad.
+  const recovery = recoveryEmail && !recoveryEmail.toLowerCase().endsWith(`@${WORKSPACE_DOMAIN}`) ? { recoveryEmail } : {};
+  const created = await directoryFetch('', {
+    method: 'POST',
+    body: { primaryEmail: email, name: { givenName, familyName: rest.join(' ') || givenName }, password, changePasswordAtNextLogin: true, ...recovery },
+  });
+  if (created.status === 409) throw new HttpsError('already-exists', 'Esa dirección ya existe en Google Workspace.');
+  if (!created.ok) {
+    console.error('directory create', created.status, created.data?.error?.message);
+    throw new HttpsError('internal', 'No se pudo crear la cuenta en Google Workspace.');
+  }
+  return created.data.id;
+};
+
+// Enlaza la cuenta de Google a la cuenta de acceso de la persona (al entrar con
+// Google cae en su mismo perfil y matrículas) y guarda el vínculo. Si ya tenía
+// otro Google enlazado no se reemplaza: sigue entrando como antes y el correo
+// le sirve para Meet.
+const linkAndSaveAccount = async ({ accountRef, uid, email, googleId, displayName, createdBy }) => {
+  let linked = false;
+  if (googleId) {
+    try {
+      await getAuth().updateUser(uid, { providerToLink: { providerId: 'google.com', uid: googleId, email, displayName } });
+      linked = true;
+    } catch (err) {
+      console.warn('providerToLink', err?.code, err?.message);
+    }
+  }
+  const now = new Date().toISOString();
+  await accountRef.set({ uid, email, googleId, linked, createdAt: now, createdBy, passwordIssuedAt: now });
+  return linked;
+};
+
 export const provisionInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
   await assertAdmin(request);
   const uid = str(request.data?.uid).trim();
@@ -236,63 +285,101 @@ export const provisionInstitutionalAccount = onCall(ADMIN_CALL, async (request) 
   const account = (await accountRef.get()).data();
   const password = tempPassword();
 
-  if (account) {
+  if (account?.email) {
     if (request.data?.reset !== true) return { email: account.email, linked: !!account.linked };
     if (!IS_EMULATOR) await setDirectoryPassword(account.email, password);
+    await accountRef.update({ passwordIssuedAt: new Date().toISOString() });
     return { email: account.email, password, linked: !!account.linked };
   }
 
   const localPart = str(request.data?.localPart).trim().toLowerCase();
   if (!LOCAL_PART.test(localPart) || localPart.length > 60) throw new HttpsError('invalid-argument', 'La dirección solo admite letras, números y puntos.');
   const email = `${localPart}@${WORKSPACE_DOMAIN}`;
-  const taken = await db.collection('institutionalAccounts').where('email', '==', email).limit(1).get();
-  if (!taken.empty) throw new HttpsError('permission-denied', 'Esa dirección ya es de otra persona de la plataforma.');
+  if (await emailTaken(email)) throw new HttpsError('permission-denied', 'Esa dirección ya es de otra persona de la plataforma.');
 
   const displayName = str(profile.displayName).trim() || localPart;
-  let googleId = null;
-  if (IS_EMULATOR) {
-    // Emulador: no se toca Google, solo se registra el vínculo.
-  } else if (request.data?.useExisting === true) {
-    const found = await directoryFetch(`/${encodeURIComponent(email)}`);
-    if (found.status === 404) throw new HttpsError('not-found', 'Esa dirección no existe en Google Workspace.');
-    if (!found.ok) throw new HttpsError('internal', 'No se pudo consultar la cuenta en Google Workspace.');
-    if (found.data.isAdmin || found.data.isDelegatedAdmin) throw new HttpsError('permission-denied', 'Esa dirección es de un administrador de Google Workspace.');
-    await setDirectoryPassword(email, password);
-    googleId = found.data.id;
-  } else {
-    const [givenName, ...rest] = displayName.split(/\s+/);
-    const created = await directoryFetch('', {
-      method: 'POST',
-      body: {
-        primaryEmail: email,
-        name: { givenName, familyName: rest.join(' ') || givenName },
-        password,
-        changePasswordAtNextLogin: true,
-        ...(profile.email ? { recoveryEmail: profile.email } : {}),
-      },
-    });
-    // Única respuesta 'already-exists': el panel ofrece vincular esa cuenta.
-    if (created.status === 409) throw new HttpsError('already-exists', 'Esa dirección ya existe en Google Workspace.');
-    if (!created.ok) {
-      console.error('directory create', created.status, created.data?.error?.message);
-      throw new HttpsError('internal', 'No se pudo crear la cuenta en Google Workspace.');
-    }
-    googleId = created.data.id;
-  }
-
-  // Enlaza la cuenta de Google a su cuenta de acceso: al entrar con Google cae
-  // en su mismo perfil y matrículas. Si ya tenía otro Google enlazado no se
-  // reemplaza: sigue entrando como antes y el correo le sirve para Meet.
-  let linked = false;
-  if (googleId) {
-    try {
-      await getAuth().updateUser(uid, { providerToLink: { providerId: 'google.com', uid: googleId, email, displayName } });
-      linked = true;
-    } catch (err) {
-      console.warn('providerToLink', err?.code, err?.message);
-    }
-  }
-
-  await accountRef.set({ uid, email, googleId, linked, createdAt: new Date().toISOString(), createdBy: request.auth.uid });
+  // Única respuesta 'already-exists': el panel ofrece vincular esa cuenta.
+  const googleId = await createDirectoryAccount({ email, displayName, password, recoveryEmail: profile.email, useExisting: request.data?.useExisting === true });
+  const linked = await linkAndSaveAccount({ accountRef, uid, email, googleId, displayName, createdBy: request.auth.uid });
   return { email, password, linked };
+});
+
+// activateInstitutionalAccount: el propio alumno activa su correo de la academia
+// desde su panel. La primera vez se lo crea (la dirección sale de su nombre, con
+// un número si ya está tomada) y le muestra la contraseña temporal; con `reset`
+// le genera otra. Solo para quien ya tiene una matrícula activa -- es decir, el
+// admin ya validó su pago -- o es parte del equipo.
+const RESET_COOLDOWN_MS = 5 * 60 * 1000;
+const PENDING_TTL_MS = 2 * 60 * 1000;
+
+// Misma propuesta que suggestLocalPart en src/lib/institutionalEmail.js.
+const NAME_PARTICLES = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'da', 'do', 'dos', 'van', 'von']);
+const suggestLocalPart = (fullName) => {
+  const words = str(fullName).split('@')[0]
+    .normalize('NFD').replace(/\p{M}/gu, '')
+    .toLowerCase().replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/).filter((w) => w && !NAME_PARTICLES.has(w));
+  if (words.length <= 1) return words[0] || '';
+  return `${words[0]}.${words[words.length >= 4 ? 2 : 1]}`;
+};
+
+const hasActiveEnrollment = async (uid) => {
+  const snap = await db.collection('enrollments').where('uid', '==', uid).get();
+  return snap.docs.some((d) => (d.data().status || 'active') === 'active');
+};
+
+// Devuelve el vínculo si la persona ya tiene correo; si no, deja una reserva
+// para que dos clics seguidos no creen dos direcciones. Una reserva vieja (la
+// función se cortó a medias) se pisa.
+const reserveAccount = (accountRef, uid) => db.runTransaction(async (tx) => {
+  const data = (await tx.get(accountRef)).data();
+  if (data?.email) return data;
+  if (data?.pending && Date.now() - Date.parse(data.pendingAt) < PENDING_TTL_MS) throw new HttpsError('aborted', 'Tu correo ya se está creando. Espera un momento.');
+  tx.set(accountRef, { uid, pending: true, pendingAt: new Date().toISOString() });
+  return null;
+});
+
+export const activateInstitutionalAccount = onCall({ region: 'us-central1', maxInstances: 5, timeoutSeconds: 60 }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const uid = request.auth.uid;
+  const profile = (await db.collection('users').doc(uid).get()).data();
+  if (!profile || profile.disabled) throw new HttpsError('permission-denied', 'Tu cuenta no puede activar un correo.');
+  const isTeam = profile.role === 'teacher' || profile.role === 'admin';
+  if (!isTeam && !(await hasActiveEnrollment(uid))) throw new HttpsError('failed-precondition', 'Podrás activar tu correo cuando confirmemos tu pago.');
+
+  const accountRef = db.collection('institutionalAccounts').doc(uid);
+  const account = await reserveAccount(accountRef, uid);
+  const password = tempPassword();
+
+  if (account) {
+    if (request.data?.reset !== true) return { email: account.email, linked: !!account.linked };
+    if (account.passwordIssuedAt && Date.now() - Date.parse(account.passwordIssuedAt) < RESET_COOLDOWN_MS) {
+      throw new HttpsError('resource-exhausted', 'Acabas de generar una contraseña. Espera unos minutos para pedir otra.');
+    }
+    if (!IS_EMULATOR) await setDirectoryPassword(account.email, password);
+    await accountRef.update({ passwordIssuedAt: new Date().toISOString() });
+    return { email: account.email, password, linked: !!account.linked };
+  }
+
+  try {
+    const base = suggestLocalPart(profile.displayName) || suggestLocalPart(profile.email) || 'alumno';
+    const displayName = str(profile.displayName).trim() || base;
+    for (let n = 1; n <= 9; n += 1) {
+      const email = `${n === 1 ? base : `${base}${n}`}@${WORKSPACE_DOMAIN}`;
+      if (await emailTaken(email)) continue;
+      let googleId;
+      try {
+        googleId = await createDirectoryAccount({ email, displayName, password, recoveryEmail: profile.email });
+      } catch (err) {
+        if (err?.code === 'already-exists') continue; // tomada en Google: se prueba la siguiente
+        throw err;
+      }
+      const linked = await linkAndSaveAccount({ accountRef, uid, email, googleId, displayName, createdBy: uid });
+      return { email, password, linked };
+    }
+    throw new HttpsError('internal', 'No se pudo asignar una dirección.');
+  } catch (err) {
+    await accountRef.delete().catch(() => {});
+    throw err;
+  }
 });

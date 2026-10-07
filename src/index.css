@@ -2591,3 +2591,26 @@ body {
   }
   .admin-table.table-cards td:empty { display: none; }
 }
+
+/* Correo de la academia en el panel del alumno (InstitutionalEmailCard). */
+.inst-card { margin-bottom: 16px; }
+.inst-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.inst-card-head svg { color: var(--accent); flex-shrink: 0; }
+.inst-steps { display: flex; gap: 8px; margin: 16px 0 4px; }
+.inst-step { flex: 1; min-width: 0; }
+.inst-step-bar { height: 4px; border-radius: 4px; background: #ECEAF3; overflow: hidden; margin-bottom: 8px; }
+.inst-step.done .inst-step-bar { background: var(--accent); }
+.inst-step.current .inst-step-bar::after { content: ''; display: block; height: 100%; width: 40%; border-radius: 4px; background: var(--accent); animation: inst-slide 1.6s ease-in-out infinite; }
+.inst-step-label { display: flex; align-items: center; gap: 6px; font-size: .78rem; color: #8B8A9B; }
+.inst-step.done .inst-step-label, .inst-step.current .inst-step-label { color: #14141F; font-weight: 600; }
+.inst-step.done .inst-step-label svg, .inst-step.current .inst-step-label svg { color: var(--accent); }
+.inst-step-label svg { flex-shrink: 0; }
+.inst-credentials { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 12px; }
+.inst-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.inst-how { margin: 0; padding-left: 18px; font-size: .82rem; color: #4B4A5C; line-height: 1.6; }
+@keyframes inst-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .inst-step.current .inst-step-bar::after { animation: none; width: 100%; opacity: .45; } }
+@media (max-width: 640px) {
+  .inst-steps { flex-direction: column; gap: 12px; }
+  .inst-credentials { grid-template-columns: 1fr; }
+}

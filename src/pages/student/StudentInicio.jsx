@@ -8,6 +8,7 @@ import { fetchLiveSessions, fetchMyEnrollments, fetchMyOrders, isActiveEnrollmen
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { sessionsForStudent } from '../../lib/groupAssignment';
+import InstitutionalEmailCard from './InstitutionalEmailCard';
 
 const StudentInicio = () => {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ const StudentInicio = () => {
   const [pendingOrders, setPendingOrders] = useState([]);
   const [rejectedOrders, setRejectedOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Sube cuando el admin aprueba un pago mientras el alumno mira esta página.
+  const [reloadKey, setReloadKey] = useState(0);
 
   const enrolledCourses = courses.filter((c) => enrollments[c.id] && (enrollments[c.id].status || 'active') === 'active');
 
@@ -50,7 +53,7 @@ const StudentInicio = () => {
         setLoading(false);
       }).catch(() => setLoading(false));
     }).catch(() => setLoading(false));
-  }, [currentUser, courses]);
+  }, [currentUser, courses, reloadKey]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
 
@@ -82,6 +85,12 @@ const StudentInicio = () => {
           </div>
         </div>
       ))}
+      <InstitutionalEmailCard
+        uid={currentUser.uid}
+        hasActiveEnrollment={enrolledCourses.length > 0}
+        awaitingApproval={pendingOrders.length > 0}
+        onApproved={() => setReloadKey((k) => k + 1)}
+      />
       {enrolledCourses.filter((c) => !enrollments[c.id].groupId).map((c) => (
         <div key={`sin-aula-${c.id}`} className="admin-panel" role="status" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
           <Clock3 size={18} />
