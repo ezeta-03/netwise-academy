@@ -57,6 +57,9 @@ export const createAccountKeepingSession = async (email, password, displayName) 
 
 // Auth Providers
 export const googleProvider = new GoogleAuthProvider();
+// Siempre deja elegir la cuenta: quien tiene su Gmail abierto en el navegador
+// debe poder escoger la de la academia.
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 export const githubProvider = new GithubAuthProvider();
 
 export default app;

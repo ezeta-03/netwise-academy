@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { track } from '../lib/tracking';
+import { INSTITUTIONAL_DOMAIN } from '../lib/institutionalEmail';
 
 const AuthContext = createContext();
 
@@ -24,6 +25,15 @@ const MOCK_USERS = {
   'admin@netwise.com': { uid: 'mock-3', email: 'admin@netwise.com', displayName: 'System Admin', role: 'admin' },
 };
 
+// El botón de Google es solo para el correo de la academia. Una cuenta de
+// Google ajena que todavía no tiene perfil no puede estrenarse por ahí: antes,
+// quien elegía su Gmail por error creaba un alumno nuevo y vacío, y un alumno
+// registrado con su Gmail ya no podía enlazar su correo institucional. Las
+// cuentas de Google que ya tenían perfil siguen entrando.
+const isOutsideGoogleAccount = (firebaseUser) => firebaseUser.providerData.length > 0
+  && firebaseUser.providerData.every((p) => p.providerId === 'google.com')
+  && !(firebaseUser.email || '').toLowerCase().endsWith(`@${INSTITUTIONAL_DOMAIN}`);
+
 // Perfil real en Firestore (colección `users/{uid}`). Reemplaza el rol
 // hardcodeado de MOCK_USERS cuando hay un proyecto Firebase real conectado:
 // la primera vez que se ve un uid se crea el doc con role: 'student' por
@@ -33,6 +43,7 @@ const ensureUserProfile = async (firebaseUser) => {
   const ref = doc(db, 'users', firebaseUser.uid);
   const snap = await getDoc(ref);
   if (snap.exists()) return snap.data();
+  if (isOutsideGoogleAccount(firebaseUser)) return null;
 
   const profile = {
     email: firebaseUser.email,
@@ -85,6 +96,12 @@ export const AuthProvider = ({ children }) => {
       }
 
       const profile = await ensureUserProfile(user);
+      // Cuenta de Google ajena sin perfil: loginWithGoogle la descarta y avisa.
+      if (!profile) {
+        setCurrentUser(null);
+        setLoading(false);
+        return;
+      }
       // Cuenta desactivada desde Admin > Equipo y permisos (ver
       // updateUserStatus): se cierra la sesión de inmediato, no puede
       // volver a entrar mientras siga en ese estado.
@@ -189,8 +206,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Login social: GA4 distingue cuenta nueva (sign_up) de sesión (login).
-  const signInWithProvider = async (provider, method) => {
+  const signInWithProvider = async (provider, method, check) => {
     const result = await signInWithPopup(auth, provider);
+    if (check) await check(result.user);
     const isNewUser = getAdditionalUserInfo(result)?.isNewUser;
     track(isNewUser ? 'sign_up' : 'login', { method });
     return result;
@@ -207,7 +225,14 @@ export const AuthProvider = ({ children }) => {
         }, 800);
       });
     }
-    return signInWithProvider(googleProvider, 'google');
+    return signInWithProvider(googleProvider, 'google', async (user) => {
+      if (!isOutsideGoogleAccount(user) || (await getDoc(doc(db, 'users', user.uid))).exists()) return;
+      // La cuenta recién creada no se conserva: no deja rastro en la plataforma.
+      await user.delete().catch(() => firebaseSignOut(auth));
+      const err = new Error('app/google-not-institutional');
+      err.code = 'app/google-not-institutional';
+      throw err;
+    });
   };
 
   // Cambiar el nombre para mostrar, disponible para cualquier rol -- se

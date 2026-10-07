@@ -11,6 +11,7 @@ const MESSAGES = {
   'app/account-disabled': 'Tu cuenta está desactivada. Escríbenos a soporte si crees que es un error.',
   'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos e intenta de nuevo.',
   'auth/network-request-failed': 'No hay conexión. Revisa tu internet e intenta de nuevo.',
+  'app/google-not-institutional': 'Ese botón es solo para tu correo de la academia (@netwiseacademy.pe). Si todavía no lo tienes, ingresa con tu correo y contraseña.',
   'auth/popup-closed-by-user': 'Cerraste la ventana antes de terminar. Intenta de nuevo.',
 };
 
