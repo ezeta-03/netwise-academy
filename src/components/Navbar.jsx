@@ -39,7 +39,7 @@ const Navbar = () => {
   };
 
   // "Cursos" no es una página aparte -- son los talleres que ya se muestran
-  // en el Inicio (sección #talleres), así que en vez de un link a /catalog
+  // en el Inicio (sección #talleres), así que en vez de un link a otra página
   // lleva ahí: si ya estás en el Inicio, hace scroll directo; si no, navega
   // al Inicio y le pide que haga scroll apenas monte (ver Home.jsx).
   const goToCourses = () => {
@@ -56,7 +56,7 @@ const Navbar = () => {
   // solo tienen sentido una vez logueado -- ver nota de roles más abajo.
   const navItems = currentUser
     ? [
-        { to: '/catalog', label: 'Explorar' },
+        { to: '/cursos', label: 'Explorar' },
         ...(currentUser.role === 'student' ? [{ to: '/student', label: 'Mi Campus' }] : []),
       ]
     : [
@@ -103,7 +103,7 @@ const Navbar = () => {
             </div>
           ) : (
             <div className="nav-right-guest nav-desktop-only">
-              <button type="button" className="btn btn-primary btn-sm nav-cta" onClick={openLoginModal}>Inscribirme</button>
+              <button type="button" className="btn btn-primary btn-sm nav-cta" onClick={goToCourses}>Inscribirme</button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={openLoginModal}>Plataforma</button>
             </div>
           )}
@@ -156,7 +156,7 @@ const Navbar = () => {
         <div className="mm-footer">
           {currentUser ? null : (
             <div className="mm-footer-guest">
-              <button type="button" className="btn btn-primary btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Inscribirme</button>
+              <button type="button" className="btn btn-primary btn-full" onClick={goToCourses}>Inscribirme</button>
               <button type="button" className="btn btn-ghost btn-full" onClick={() => { closeMenu(); openLoginModal(); }}>Iniciar sesión</button>
             </div>
           )}

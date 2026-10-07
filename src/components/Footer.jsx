@@ -8,7 +8,7 @@ import TermsModal from './TermsModal';
 const Footer = ({ onCoursesClick, onMethodologyClick }) => {
   const navigate = useNavigate();
   const [legalTab, setLegalTab] = useState(null);
-  const handleCourses = onCoursesClick || (() => navigate('/catalog'));
+  const handleCourses = onCoursesClick || (() => navigate('/cursos'));
   const handleMethodology = onMethodologyClick || (() => navigate('/metodologia'));
 
   return (

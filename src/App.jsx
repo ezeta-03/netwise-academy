@@ -11,7 +11,6 @@ import { StudentTourProvider } from './context/StudentTourContext';
 import Home from './pages/Home';
 import Metodologia from './pages/Metodologia';
 import Masterclass from './pages/Masterclass';
-import Catalog from './pages/Catalog';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
 import AuthAction from './pages/AuthAction';
@@ -109,7 +108,7 @@ const ScrollToTop = () => {
   return null;
 };
 
-// "/" es pública (como /catalog y /course/:id): un visitante sin sesión
+// "/" es pública (como /cursos y /course/:id): un visitante sin sesión
 // también puede ver el Inicio. Un docente o admin logueado no tiene nada
 // que hacer ahí -- su propio panel ya vive en /teacher y /admin. Un
 // estudiante (o nadie logueado) ve el Home normal.
@@ -138,7 +137,10 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<RoleHome />} />
-          <Route path="/catalog" element={<Catalog />} />
+          {/* Los cursos son la sección #talleres del Inicio. /cursos la muestra también a quien
+              ya inició sesión ("/" lo manda a su panel); /catalog era la página antigua. */}
+          <Route path="/cursos" element={<Home scrollTo="talleres" />} />
+          <Route path="/catalog" element={<Navigate to="/cursos" replace />} />
           <Route path="/metodologia" element={<Metodologia />} />
           <Route path="/masterclass" element={<Masterclass />} />
           <Route path="/course/:id" element={<CourseDetail />} />

@@ -11,7 +11,7 @@ import MasterclassPopup from '../components/masterclass/MasterclassPopup';
 import heroImg from '../assets/NETWISE ACADEMY WEB/hero_principal.webp';
 import videoFuturo from '../assets/NETWISE ACADEMY WEB/videos/video_futuro.mp4';
 
-const Home = () => {
+const Home = ({ scrollTo = null }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { courses: COURSES } = useCourseOfferings();
@@ -31,11 +31,13 @@ const Home = () => {
   // en desarrollo, por el doble-invoke de StrictMode) y a veces cancelaba el
   // scroll; en el peor caso de dejarlo, un "atrás" del navegador que vuelva
   // a esta misma entrada del historial como mucho vuelve a hacer scroll.
+  // `scrollTo` llega por prop en la ruta /cursos.
+  const scrollTarget = scrollTo || location.state?.scrollTo;
   useEffect(() => {
-    if (location.state?.scrollTo) {
-      document.getElementById(location.state.scrollTo)?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollTarget) {
+      document.getElementById(scrollTarget)?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [location.state]);
+  }, [scrollTarget, location.state]);
 
   return (
     <div className="view active">

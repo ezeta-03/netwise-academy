@@ -25,8 +25,9 @@ const Step = ({ state, children }) => (
 // Correo de la academia (nombre@netwiseacademy.pe) en el inicio del alumno.
 // Mientras el admin valida el pago muestra en qué paso va; con el pago aprobado
 // aparece "Activar", que crea la cuenta de Google y enseña la contraseña
-// temporal una sola vez. Después queda el correo a la vista.
-const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval, onApproved }) => {
+// temporal una sola vez. Después queda el correo a la vista; con `hideWhenActive`
+// (checkout y panel del curso) desaparece una vez activado.
+const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval = false, onApproved, hideWhenActive = false }) => {
   const { addToast } = useUI();
   const [account, setAccount] = useState(undefined); // undefined: cargando
   const [result, setResult] = useState(null); // { email, password, linked }
@@ -42,13 +43,14 @@ const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval, on
   useEffect(() => {
     if (!waiting) return undefined;
     const timer = setInterval(() => {
-      fetchMyActiveEnrollments(uid).then((list) => { if (Object.keys(list || {}).length > 0) onApproved(); }).catch(() => {});
+      fetchMyActiveEnrollments(uid).then((list) => { if (Object.keys(list || {}).length > 0) onApproved?.(); }).catch(() => {});
     }, POLL_MS);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting, uid]);
 
   if (account === undefined || (!account && !hasActiveEnrollment && !awaitingApproval)) return null;
+  if (hideWhenActive && account && !result) return null;
 
   const run = async (reset) => {
     setError('');

@@ -83,7 +83,7 @@ const CourseDetail = () => {
         <div className="empty-state" style={{ padding: '96px 24px' }}>
           <div className="es-icon">📭</div>
           <p>Este curso no existe o todavía no está disponible.</p>
-          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => navigate('/catalog')}>Ver catálogo</button>
+          <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => navigate('/cursos')}>Ver cursos</button>
         </div>
       </div>
     );

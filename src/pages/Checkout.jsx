@@ -5,6 +5,7 @@ import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import { useEnrollment } from '../hooks/useEnrollment';
+import InstitutionalEmailCard from './student/InstitutionalEmailCard';
 import { fetchCoupons, redeemCoupon, saveUserPhone, createOrder, fetchMyOrders, uploadPaymentProof, fetchLiveSessions, fetchAcademySettings } from '../lib/db';
 import { getLiveSessionStatus } from '../lib/liveSessionStatus';
 import { PAYMENT_METHODS, checkoutMethods, buildPaymentInstructions } from '../lib/paymentMethods';
@@ -130,7 +131,7 @@ const Checkout = () => {
       <div className="view active">
         <div className="empty-state" style={{ padding: '96px 24px' }}>
           <p>Este curso no existe o todavía no está disponible.</p>
-          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => navigate('/catalog')}>Ver catálogo</button>
+          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => navigate('/cursos')}>Ver cursos</button>
         </div>
       </div>
     );
@@ -583,6 +584,13 @@ const Checkout = () => {
                       <div className="checkout-confirm-row"><span>Curso</span><span>{course.title}</span></div>
                       <div className="checkout-confirm-row"><span>Estado del pago</span><span className="admin-status admin-status-amber" style={{ display: 'inline-flex' }}>En validación</span></div>
                     </div>
+
+                    {/* Avisa solo cuando el admin aprueba y lleva al inicio, donde se activa el correo. */}
+                    {currentUser && (
+                      <div style={{ textAlign: 'left' }}>
+                        <InstitutionalEmailCard uid={currentUser.uid} hasActiveEnrollment={false} awaitingApproval hideWhenActive onApproved={() => navigate('/student/inicio')} />
+                      </div>
+                    )}
 
                     <a className="checkout-confirm-link" onClick={() => navigate('/')}>Volver al inicio</a>
                     <p className="checkout-confirm-footnote">Cuando quede confirmado, tu curso aparecerá en tu campus al iniciar sesión con {currentUser?.email}.</p>

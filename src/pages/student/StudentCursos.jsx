@@ -66,7 +66,7 @@ const StudentCursos = () => {
 
       {enrolledCourses.length === 0 ? (
         waitingCourses.length === 0 && <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B', marginBottom: 24 }}>
-          Todavía no estás inscrito en ningún curso. Explora el <a href="/catalog" onClick={(e) => { e.preventDefault(); navigate('/catalog'); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>catálogo</a>.
+          Todavía no estás inscrito en ningún curso. Explora los <a href="/cursos" onClick={(e) => { e.preventDefault(); navigate('/cursos'); }} style={{ color: 'var(--accent)', cursor: 'pointer' }}>cursos disponibles</a>.
         </div>
       ) : (
         <div className="home-courses-grid" style={{ marginBottom: preregisteredCourses.length ? 32 : 0 }}>

@@ -10,6 +10,7 @@ import { useStudentTour } from '../../context/StudentTourContext';
 import { COURSE_TOUR_START } from '../../lib/studentTourSteps';
 import SidebarLogo from '../../components/SidebarLogo';
 import UserMenu from '../../components/UserMenu';
+import InstitutionalEmailCard from './InstitutionalEmailCard';
 
 // Mismos enlaces que StudentLayout.jsx -- este sidebar de curso lo reemplaza
 // por completo mientras el alumno está dentro de un curso, así que sin esto
@@ -178,6 +179,7 @@ const StudentCourseLayout = () => {
         </div>
 
         <div className="admin-content" data-tour="page">
+          <InstitutionalEmailCard uid={currentUser.uid} hasActiveEnrollment hideWhenActive />
           <Outlet context={{ course, group, enrollment }} />
         </div>
       </div>

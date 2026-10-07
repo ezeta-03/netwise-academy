@@ -82,7 +82,7 @@ const Metodologia = () => {
             <div className="meth-cta-blob" />
             <div className="meth-cta-content">
               <h2 className="meth-cta-title">¿Listo para tu<br /><em>primer curso?</em></h2>
-              <button className="btn btn-primary btn-lg" onClick={() => navigate('/catalog')}>Encuentra tu taller <ArrowUpRight size={18} /></button>
+              <button className="btn btn-primary btn-lg" onClick={() => navigate('/cursos')}>Encuentra tu taller <ArrowUpRight size={18} /></button>
             </div>
           </div>
         </section>
