@@ -293,6 +293,26 @@ export const deleteUserAccount = async (uid) => {
   return data || {};
 };
 
+// Correos institucionales ya asignados (`institutionalAccounts/{uid}`), como
+// mapa uid -> { email, linked }.
+export const fetchInstitutionalAccounts = async () => {
+  if (!isConfigValid) return {};
+  const snap = await getDocs(collection(db, 'institutionalAccounts'));
+  const map = {};
+  snap.forEach((d) => { map[d.id] = d.data(); });
+  return map;
+};
+
+// Crea el correo institucional de una persona en Google Workspace (o, con
+// `reset`, le genera otra contraseña temporal) vía la Cloud Function
+// provisionInstitutionalAccount. Devuelve { email, password, linked }; la
+// contraseña solo se ve en esa respuesta, no queda guardada.
+export const provisionInstitutionalAccount = async ({ uid, localPart, useExisting = false, reset = false }) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const { data } = await httpsCallable(functions, 'provisionInstitutionalAccount', { timeout: 30000 })({ uid, localPart, useExisting, reset });
+  return data;
+};
+
 // Borra el perfil/rol de Firestore (Admin > Equipo y permisos, limpiar
 // cuentas de prueba). Esto NO borra la cuenta de Firebase Auth -- si esa
 // persona vuelve a iniciar sesión, `ensureUserProfile` le crea un perfil

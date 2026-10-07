@@ -242,6 +242,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Correo institucional de cada persona (nombre@netwiseacademy.pe). Solo lo
+    // escribe la Cloud Function provisionInstitutionalAccount.
+    match /institutionalAccounts/{userId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow write: if false;
+    }
+
     // Directorio interno del equipo (Admin > Equipo y permisos). Es una
     // propuesta de alcance, no el rol real (ver `users`) -- solo el admin la
     // ve y la edita.

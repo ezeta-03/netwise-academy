@@ -9,6 +9,8 @@ import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { randomBytes } from 'node:crypto';
+import process from 'node:process';
 
 initializeApp();
 const db = getFirestore();
@@ -162,7 +164,135 @@ export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
     }
   }
   await db.collection('users').doc(uid).delete();
+  // Su cuenta de Google Workspace no se borra: solo se suelta el vínculo.
+  await db.collection('institutionalAccounts').doc(uid).delete();
   const taught = await db.collection('courseOfferings').where('teacherUid', '==', uid).get();
   await Promise.all(taught.docs.map((d) => d.ref.update({ teacherUid: null })));
   return { deleted: true, coursesUnassigned: taught.size };
+});
+
+// provisionInstitutionalAccount: correo institucional (nombre@netwiseacademy.pe)
+// de una persona de la plataforma. Crea la cuenta en Google (Cloud Identity
+// Free, sin buzón) con la Directory API y la enlaza a su cuenta de acceso, para
+// que también pueda entrar con "Continuar con Google". Con `reset` le genera
+// otra contraseña temporal; con `useExisting` adopta una dirección que ya
+// existía en Google en vez de crearla.
+//
+// La función se autentica con su propia cuenta de servicio, sin clave: en
+// admin.google.com esa cuenta de servicio debe tener el rol "Administrador de
+// gestión de usuarios", y el proyecto, la Admin SDK API habilitada.
+//
+// El vínculo vive en `institutionalAccounts/{uid}`, que solo escribe el Admin
+// SDK: si estuviera en el perfil, el propio alumno podría apuntarlo al correo
+// de otra persona y heredar su contraseña en el siguiente restablecimiento.
+const WORKSPACE_DOMAIN = 'netwiseacademy.pe';
+const DIRECTORY_USERS = 'https://admin.googleapis.com/admin/directory/v1/users';
+const DIRECTORY_SCOPE = 'https://www.googleapis.com/auth/admin.directory.user';
+const METADATA_TOKEN = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token';
+const LOCAL_PART = /^[a-z0-9]+([._-][a-z0-9]+)*$/;
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === 'true';
+
+// Sin caracteres que se confunden al dictarla o copiarla (0/O, 1/l/I).
+const PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const tempPassword = () => Array.from(randomBytes(12), (b) => PASSWORD_ALPHABET[b % PASSWORD_ALPHABET.length]).join('');
+
+const directoryFetch = async (path, { method = 'GET', body } = {}) => {
+  const tokenRes = await fetch(`${METADATA_TOKEN}?scopes=${encodeURIComponent(DIRECTORY_SCOPE)}`, { headers: { 'Metadata-Flavor': 'Google' } });
+  const { access_token: token } = tokenRes.ok ? await tokenRes.json() : {};
+  if (!token) {
+    console.error('directory token', tokenRes.status);
+    throw new HttpsError('internal', 'No se pudo conectar con Google Workspace.');
+  }
+  const res = await fetch(`${DIRECTORY_USERS}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => null);
+  if (res.status === 401 || res.status === 403) {
+    console.error('directory', method, res.status, data?.error?.message);
+    throw new HttpsError('failed-precondition', 'Google Workspace todavía no autoriza a la plataforma a gestionar usuarios.');
+  }
+  return { status: res.status, ok: res.ok, data };
+};
+
+const setDirectoryPassword = async (email, password) => {
+  const res = await directoryFetch(`/${encodeURIComponent(email)}`, { method: 'PUT', body: { password, changePasswordAtNextLogin: true } });
+  if (res.status === 404) throw new HttpsError('not-found', 'Esa cuenta ya no existe en Google Workspace.');
+  if (!res.ok) {
+    console.error('directory password', res.status, res.data?.error?.message);
+    throw new HttpsError('internal', 'No se pudo cambiar la contraseña en Google Workspace.');
+  }
+};
+
+export const provisionInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
+  await assertAdmin(request);
+  const uid = str(request.data?.uid).trim();
+  if (!uid) throw new HttpsError('invalid-argument', 'Falta el usuario.');
+  const profile = (await db.collection('users').doc(uid).get()).data();
+  if (!profile) throw new HttpsError('not-found', 'Esa persona no tiene cuenta en la plataforma.');
+
+  const accountRef = db.collection('institutionalAccounts').doc(uid);
+  const account = (await accountRef.get()).data();
+  const password = tempPassword();
+
+  if (account) {
+    if (request.data?.reset !== true) return { email: account.email, linked: !!account.linked };
+    if (!IS_EMULATOR) await setDirectoryPassword(account.email, password);
+    return { email: account.email, password, linked: !!account.linked };
+  }
+
+  const localPart = str(request.data?.localPart).trim().toLowerCase();
+  if (!LOCAL_PART.test(localPart) || localPart.length > 60) throw new HttpsError('invalid-argument', 'La dirección solo admite letras, números y puntos.');
+  const email = `${localPart}@${WORKSPACE_DOMAIN}`;
+  const taken = await db.collection('institutionalAccounts').where('email', '==', email).limit(1).get();
+  if (!taken.empty) throw new HttpsError('permission-denied', 'Esa dirección ya es de otra persona de la plataforma.');
+
+  const displayName = str(profile.displayName).trim() || localPart;
+  let googleId = null;
+  if (IS_EMULATOR) {
+    // Emulador: no se toca Google, solo se registra el vínculo.
+  } else if (request.data?.useExisting === true) {
+    const found = await directoryFetch(`/${encodeURIComponent(email)}`);
+    if (found.status === 404) throw new HttpsError('not-found', 'Esa dirección no existe en Google Workspace.');
+    if (!found.ok) throw new HttpsError('internal', 'No se pudo consultar la cuenta en Google Workspace.');
+    if (found.data.isAdmin || found.data.isDelegatedAdmin) throw new HttpsError('permission-denied', 'Esa dirección es de un administrador de Google Workspace.');
+    await setDirectoryPassword(email, password);
+    googleId = found.data.id;
+  } else {
+    const [givenName, ...rest] = displayName.split(/\s+/);
+    const created = await directoryFetch('', {
+      method: 'POST',
+      body: {
+        primaryEmail: email,
+        name: { givenName, familyName: rest.join(' ') || givenName },
+        password,
+        changePasswordAtNextLogin: true,
+        ...(profile.email ? { recoveryEmail: profile.email } : {}),
+      },
+    });
+    // Única respuesta 'already-exists': el panel ofrece vincular esa cuenta.
+    if (created.status === 409) throw new HttpsError('already-exists', 'Esa dirección ya existe en Google Workspace.');
+    if (!created.ok) {
+      console.error('directory create', created.status, created.data?.error?.message);
+      throw new HttpsError('internal', 'No se pudo crear la cuenta en Google Workspace.');
+    }
+    googleId = created.data.id;
+  }
+
+  // Enlaza la cuenta de Google a su cuenta de acceso: al entrar con Google cae
+  // en su mismo perfil y matrículas. Si ya tenía otro Google enlazado no se
+  // reemplaza: sigue entrando como antes y el correo le sirve para Meet.
+  let linked = false;
+  if (googleId) {
+    try {
+      await getAuth().updateUser(uid, { providerToLink: { providerId: 'google.com', uid: googleId, email, displayName } });
+      linked = true;
+    } catch (err) {
+      console.warn('providerToLink', err?.code, err?.message);
+    }
+  }
+
+  await accountRef.set({ uid, email, googleId, linked, createdAt: new Date().toISOString(), createdBy: request.auth.uid });
+  return { email, password, linked };
 });

@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Download, X, Pencil, Trash2 } from 'lucide-react';
+import { Search, Plus, Download, X, Pencil, Trash2, AtSign } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, deleteEnrollment, fetchGroups, fetchAllUsers, fetchOrders, logChange } from '../../lib/db';
+import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, deleteEnrollment, fetchGroups, fetchAllUsers, fetchOrders, fetchInstitutionalAccounts, logChange } from '../../lib/db';
 import { unassignedEnrollments } from '../../lib/groupAssignment';
 import { downloadCsv } from '../../lib/csv';
 import { usePagedTable } from '../../hooks/usePagedTable';
+import { InstitutionalAccountModal } from './InstitutionalAccount';
 
 const ACCESS_STATUS = {
   active: { label: 'Activo', cls: 'admin-status-green' },
@@ -224,6 +225,9 @@ const AdminAlumnos = () => {
   const [assigning, setAssigning] = useState(null);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
+  // Correos institucionales ya asignados (uid -> { email }) y de quién se está gestionando uno.
+  const [instAccounts, setInstAccounts] = useState({});
+  const [instFor, setInstFor] = useState(null);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
 
@@ -231,6 +235,7 @@ const AdminAlumnos = () => {
     setEnrollments(e); setGroups(g); setOrders(o); setLoading(false);
   });
   useEffect(() => { load(); }, []);
+  useEffect(() => { fetchInstitutionalAccounts().then(setInstAccounts).catch(() => {}); }, []);
 
   const handleDelete = async (e) => {
     if (!(await confirmDialog({ title: 'Eliminar matrícula', message: `¿Eliminar la matrícula de ${e.studentName || e.uid} en "${e.courseTitle}"? Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
@@ -254,6 +259,8 @@ const AdminAlumnos = () => {
 
   // Alumnos activos sin aula válida (misma regla que Aulas > Asignar alumnos).
   const withoutAula = unassignedEnrollments(enrollments, groups);
+  // Las altas manuales sin cuenta (uid `manual-...`) y los datos de ejemplo no tienen a quién enlazar el correo.
+  const hasAccount = (e) => !!e.uid && !e.uid.startsWith('manual-') && !e.demo;
   const validGroup = (e) => groups.find((g) => g.id === e.groupId && g.courseId?.toString() === e.courseId?.toString()) || null;
 
   return (
@@ -302,7 +309,7 @@ const AdminAlumnos = () => {
                 const order = paymentOf(e, orders);
                 return (
                   <tr key={e.id || `${e.uid}_${e.courseId}`}>
-                    <td><div className="admin-cell-name">{e.studentName || e.uid}</div><div className="admin-cell-sub">{e.studentEmail}{e.demo ? ' · ejemplo' : ''}</div></td>
+                    <td><div className="admin-cell-name">{e.studentName || e.uid}</div><div className="admin-cell-sub">{e.studentEmail}{e.demo ? ' · ejemplo' : ''}</div>{instAccounts[e.uid] && <div className="admin-cell-sub">{instAccounts[e.uid].email}</div>}</td>
                     <td>{e.courseTitle}</td>
                     <td>
                       {group ? (
@@ -320,6 +327,7 @@ const AdminAlumnos = () => {
                     <td>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', enrollment: e })} title="Editar"><Pencil size={14} /></button>
+                        {hasAccount(e) && <button className="admin-icon-btn" onClick={() => setInstFor({ uid: e.uid, name: e.studentName || e.studentEmail, email: e.studentEmail })} title={instAccounts[e.uid] ? 'Correo institucional (nueva contraseña)' : 'Crear correo institucional'} aria-label={`Correo institucional de ${e.studentName || e.studentEmail}`}><AtSign size={14} /></button>}
                         <button className="admin-icon-btn" onClick={() => handleDelete(e)} title="Eliminar" style={{ color: '#BE123C' }}><Trash2 size={14} /></button>
                       </div>
                     </td>
@@ -340,6 +348,12 @@ const AdminAlumnos = () => {
           adminName={adminName}
           onClose={() => setModal(null)}
           onSaved={load}
+        />
+      )}
+      {instFor && (
+        <InstitutionalAccountModal
+          user={instFor} account={instAccounts[instFor.uid] || null} adminName={adminName} onClose={() => setInstFor(null)}
+          onSaved={(uid, account) => setInstAccounts((map) => ({ ...map, [uid]: account }))}
         />
       )}
       {assigning && <AssignGroupModal enrollment={assigning} groups={groups} adminName={adminName} onClose={() => setAssigning(null)} onSaved={load} />}

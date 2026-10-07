@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound } from 'lucide-react';
+import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound, AtSign } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, updateUserRole, updateUserStatus, deleteUserAccount, logChange } from '../../lib/db';
+import { fetchTeamMembers, createTeamMember, updateTeamMember, fetchAllUsers, fetchInstitutionalAccounts, updateUserRole, updateUserStatus, deleteUserAccount, logChange } from '../../lib/db';
 import { TeacherModal, AccessLinkModal } from './TeacherAccess';
+import { InstitutionalAccountModal } from './InstitutionalAccount';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
 const ROLE_LABEL = { student: 'Estudiante', teacher: 'Docente', admin: 'Administrador' };
@@ -103,6 +104,9 @@ const AdminEquipo = () => {
   const [modal, setModal] = useState(null);
   const [teacherModal, setTeacherModal] = useState(false);
   const [accessFor, setAccessFor] = useState(null);
+  // Correos institucionales ya asignados (uid -> { email }) y de quién se está gestionando uno.
+  const [instAccounts, setInstAccounts] = useState({});
+  const [instFor, setInstFor] = useState(null);
   const { courses, refresh: refreshCourses } = useCourseOfferings();
 
   const [users, setUsers] = useState(MOCK_USER_ROWS);
@@ -122,6 +126,7 @@ const AdminEquipo = () => {
     })));
   });
   useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { fetchInstitutionalAccounts().then(setInstAccounts).catch(() => {}); }, []);
 
 
   const handleRoleChange = async (targetUser, newRole) => {
@@ -243,7 +248,7 @@ const AdminEquipo = () => {
               return (
                 <tr key={u.id}>
                   <td className="admin-cell-name">{u.name}</td>
-                  <td className="admin-cell-sub">{u.email}{u.phone ? <div>{u.phone}</div> : null}</td>
+                  <td className="admin-cell-sub">{u.email}{instAccounts[u.uid] ? <div>{instAccounts[u.uid].email}</div> : null}{u.phone ? <div>{u.phone}</div> : null}</td>
                   <td>
                     <select
                       className="admin-select"
@@ -264,6 +269,9 @@ const AdminEquipo = () => {
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="admin-icon-btn" onClick={() => setAccessFor({ user: u })} title="Enlace de acceso (crear o recuperar contraseña)" aria-label={`Enlace de acceso de ${u.name}`}>
                         <KeyRound size={14} />
+                      </button>
+                      <button className="admin-icon-btn" onClick={() => setInstFor(u)} title={instAccounts[u.uid] ? 'Correo institucional (nueva contraseña)' : 'Crear correo institucional'} aria-label={`Correo institucional de ${u.name}`}>
+                        <AtSign size={14} />
                       </button>
                       <button
                         className="admin-icon-btn" disabled={isSelf} onClick={() => toggleUserDisabled(u)}
@@ -312,6 +320,12 @@ const AdminEquipo = () => {
         <AccessLinkModal
           user={accessFor.user} intro={accessFor.intro} onClose={() => setAccessFor(null)}
           onPhoneSaved={(uid, phone) => setUsers((list) => list.map((u) => (u.uid === uid ? { ...u, phone } : u)))}
+        />
+      )}
+      {instFor && (
+        <InstitutionalAccountModal
+          user={instFor} account={instAccounts[instFor.uid] || null} adminName={adminName} onClose={() => setInstFor(null)}
+          onSaved={(uid, account) => setInstAccounts((map) => ({ ...map, [uid]: account }))}
         />
       )}
     </div>
