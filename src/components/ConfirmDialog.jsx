@@ -5,13 +5,15 @@ import ModalPortal from './ModalPortal';
 // Diálogo de confirmación propio de la app, en vez del confirm()/prompt() del
 // navegador. Se abre con `confirmDialog(...)` de UIContext, que devuelve una
 // promesa: true/false, o -- con `input` -- el texto escrito (null si cancela).
+// Con `checkbox: { label, defaultChecked }` confirma con { checked } (false si cancela).
 const ConfirmDialog = ({ options, onResolve }) => {
-  const { title = 'Confirmar', message = '', confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, input = null } = options;
+  const { title = 'Confirmar', message = '', confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, input = null, checkbox = null } = options;
   const [value, setValue] = useState(input?.defaultValue || '');
+  const [checked, setChecked] = useState(checkbox?.defaultChecked ?? false);
   const confirmRef = useRef(null);
   const inputRef = useRef(null);
   const cancel = () => onResolve(input ? null : false);
-  const confirm = () => onResolve(input ? value.trim() : true);
+  const confirm = () => onResolve(input ? value.trim() : checkbox ? { checked } : true);
 
   useEffect(() => {
     (input ? inputRef : confirmRef).current?.focus();
@@ -35,6 +37,12 @@ const ConfirmDialog = ({ options, onResolve }) => {
               {input.label && <label htmlFor="confirm-dialog-input">{input.label}</label>}
               <textarea id="confirm-dialog-input" ref={inputRef} rows={3} value={value} placeholder={input.placeholder || ''} onChange={(e) => setValue(e.target.value)} />
             </div>
+          )}
+          {checkbox && (
+            <label className="admin-check-card" style={{ marginTop: 14 }}>
+              <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+              <span>{checkbox.label}</span>
+            </label>
           )}
           <div className="admin-modal-actions">
             <button className="admin-btn-ghost" onClick={cancel}>{cancelLabel}</button>

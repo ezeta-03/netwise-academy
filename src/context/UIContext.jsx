@@ -138,7 +138,8 @@ export const UIProvider = ({ children }) => {
 
   // Confirmación propia de la app (reemplaza confirm()/prompt() del navegador).
   // `await confirmDialog({ title, message, confirmLabel, danger })` -> true/false;
-  // con `input: { label, defaultValue }` -> el texto escrito, o null si cancela.
+  // con `input: { label, defaultValue }` -> el texto escrito, o null si cancela;
+  // con `checkbox: { label, defaultChecked }` -> { checked }, o false si cancela.
   const [dialog, setDialog] = useState(null);
   const confirmDialog = useCallback((options) => new Promise((resolve) => {
     setDialog({ id: Date.now(), options: typeof options === 'string' ? { message: options } : options, resolve });

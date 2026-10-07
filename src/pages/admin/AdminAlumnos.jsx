@@ -353,7 +353,7 @@ const AdminAlumnos = () => {
       {instFor && (
         <InstitutionalAccountModal
           user={instFor} account={instAccounts[instFor.uid] || null} adminName={adminName} onClose={() => setInstFor(null)}
-          onSaved={(uid, account) => setInstAccounts((map) => ({ ...map, [uid]: account }))}
+          onSaved={(uid, account) => setInstAccounts((map) => { const next = { ...map }; if (account) next[uid] = account; else delete next[uid]; return next; })}
         />
       )}
       {assigning && <AssignGroupModal enrollment={assigning} groups={groups} adminName={adminName} onClose={() => setAssigning(null)} onSaved={load} />}

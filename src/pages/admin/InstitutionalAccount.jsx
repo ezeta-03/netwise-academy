@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Copy, MessageCircle, Loader2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useUI } from '../../context/UIContext';
-import { provisionInstitutionalAccount, logChange } from '../../lib/db';
+import { provisionInstitutionalAccount, syncInstitutionalAccount, logChange } from '../../lib/db';
 import { whatsAppLink } from '../../lib/phone';
 import { INSTITUTIONAL_DOMAIN, suggestLocalPart, isValidLocalPart } from '../../lib/institutionalEmail';
 
@@ -63,6 +63,23 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
     run({ reset: true }, 'Generó otra contraseña temporal para');
   };
 
+  // Elimina su cuenta de Google y libera el cupo; su cuenta de la plataforma no se toca.
+  const remove = async () => {
+    if (!(await confirmDialog({ title: 'Retirar correo de la academia', message: `¿Retirar ${account.email} a ${user.name}?\n\nSe elimina su cuenta de Google (ya no podrá entrar a Meet con ella) y se libera su cupo. Sigue entrando a la plataforma con ${user.email}, y conserva sus cursos, pagos y entregas.\n\nSe puede recuperar durante 20 días desde Google Admin.`, confirmLabel: 'Retirar correo', danger: true }))) return;
+    setError('');
+    setBusy(true);
+    try {
+      await syncInstitutionalAccount(user.uid, 'remove');
+      await logChange(adminName, `Retiró el correo institucional ${account.email} (${user.name}).`);
+      addToast('Correo de la academia retirado.', 'success');
+      onSaved?.(user.uid, null);
+      onClose();
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+
   const copy = async (text, label) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -105,7 +122,7 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
           ) : account ? (
             <>
               <div className="admin-field"><label htmlFor="inst-email">Correo</label><input id="inst-email" readOnly value={account.email} onFocus={(e) => e.target.select()} /></div>
-              <p className="admin-cell-sub" style={{ marginBottom: 12 }}>Si olvidó su contraseña, genera una temporal y envíasela.</p>
+              <p className="admin-cell-sub" style={{ marginBottom: 12 }}>Si olvidó su contraseña, genera una temporal y envíasela. Si ya terminó su curso, puedes retirarle el correo para liberar su cupo.</p>
             </>
           ) : (
             <>
@@ -127,6 +144,7 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
           )}
 
           <div className="admin-modal-actions">
+            {account && !result?.password && <button className="admin-btn-ghost" style={{ color: '#BE123C', marginRight: 'auto' }} onClick={remove} disabled={busy}>Retirar correo</button>}
             <button className="admin-btn-ghost" onClick={onClose} disabled={busy}>{result?.password ? 'Listo' : 'Cancelar'}</button>
             {!result?.password && (
               <button className="admin-btn-edit" onClick={account ? reset : existsInGoogle ? linkExisting : create} disabled={busy}>

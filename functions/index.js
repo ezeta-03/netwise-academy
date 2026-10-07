@@ -143,8 +143,9 @@ export const findAccountByEmail = onCall(ADMIN_CALL, async (request) => {
   }
 });
 
-// deleteUserAccount: borra de verdad a un usuario -- su cuenta de acceso y su
-// perfil -- y lo quita como docente de los cursos que tuviera. No toca sus
+// deleteUserAccount: borra de verdad a un usuario -- su cuenta de acceso, su
+// perfil y (salvo `keepInstitutional`) su correo de la academia en Google -- y
+// lo quita como docente de los cursos que tuviera. No toca sus
 // matrículas, pedidos ni entregas (historial de la academia). Nadie puede
 // borrarse a sí mismo ni borrar a otro admin desde acá.
 export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
@@ -155,6 +156,12 @@ export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
   const profile = await db.collection('users').doc(uid).get();
   if (profile.data()?.role === 'admin') throw new HttpsError('failed-precondition', 'Primero cámbiale el rol: no se elimina a un administrador.');
 
+  // Primero Google: si falla, no se borra nada y el admin puede reintentar.
+  const accountRef = db.collection('institutionalAccounts').doc(uid);
+  const account = (await accountRef.get()).data();
+  const dropInstitutional = !!account?.email && request.data?.keepInstitutional !== true;
+  if (dropInstitutional) await deleteDirectoryAccount(account.email);
+
   try {
     await getAuth().deleteUser(uid);
   } catch (err) {
@@ -164,11 +171,10 @@ export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
     }
   }
   await db.collection('users').doc(uid).delete();
-  // Su cuenta de Google Workspace no se borra: solo se suelta el vínculo.
-  await db.collection('institutionalAccounts').doc(uid).delete();
+  await accountRef.delete();
   const taught = await db.collection('courseOfferings').where('teacherUid', '==', uid).get();
   await Promise.all(taught.docs.map((d) => d.ref.update({ teacherUid: null })));
-  return { deleted: true, coursesUnassigned: taught.size };
+  return { deleted: true, coursesUnassigned: taught.size, institutionalDeleted: dropInstitutional ? account.email : null };
 });
 
 // provisionInstitutionalAccount: correo institucional (nombre@netwiseacademy.pe)
@@ -334,6 +340,8 @@ const hasActiveEnrollment = async (uid) => {
 const reserveAccount = (accountRef, uid) => db.runTransaction(async (tx) => {
   const data = (await tx.get(accountRef)).data();
   if (data?.email) return data;
+  // El admin se lo retiró (syncInstitutionalAccount): solo él lo vuelve a crear.
+  if (data?.removed) throw new HttpsError('failed-precondition', 'Tu correo de la academia fue retirado.');
   if (data?.pending && Date.now() - Date.parse(data.pendingAt) < PENDING_TTL_MS) throw new HttpsError('aborted', 'Tu correo ya se está creando. Espera un momento.');
   tx.set(accountRef, { uid, pending: true, pendingAt: new Date().toISOString() });
   return null;
@@ -382,4 +390,52 @@ export const activateInstitutionalAccount = onCall({ region: 'us-central1', maxI
     await accountRef.delete().catch(() => {});
     throw err;
   }
+});
+
+// Elimina la cuenta en Google (recuperable 20 días desde Google Admin). Si ya
+// no existía, se da por eliminada.
+const deleteDirectoryAccount = async (email) => {
+  if (IS_EMULATOR) return;
+  const res = await directoryFetch(`/${encodeURIComponent(email)}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) {
+    console.error('directory delete', res.status, res.data?.error?.message);
+    throw new HttpsError('internal', 'No se pudo eliminar la cuenta en Google Workspace.');
+  }
+};
+
+// syncInstitutionalAccount: lleva a Google lo que el admin hace con una cuenta
+// de la plataforma. 'suspend' / 'restore' acompañan a Desactivar / Reactivar
+// (suspendida no entra a Meet, pero no pierde nada); 'remove' retira el correo
+// de la academia -- elimina la cuenta de Google y libera su cupo -- sin tocar
+// la cuenta de la plataforma, p. ej. cuando el alumno termina su curso. Queda
+// una marca `removed` para que el alumno no lo reactive solo desde su panel.
+export const syncInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
+  await assertAdmin(request);
+  const uid = str(request.data?.uid).trim();
+  const action = str(request.data?.action);
+  if (!uid || !['suspend', 'restore', 'remove'].includes(action)) throw new HttpsError('invalid-argument', 'Solicitud incompleta.');
+
+  const accountRef = db.collection('institutionalAccounts').doc(uid);
+  const account = (await accountRef.get()).data();
+  if (!account?.email) return { email: null };
+
+  if (action === 'remove') {
+    await deleteDirectoryAccount(account.email);
+    if (account.linked) {
+      await getAuth().updateUser(uid, { providersToUnlink: ['google.com'] }).catch((err) => console.warn('providersToUnlink', err?.code, err?.message));
+    }
+    await accountRef.set({ uid, removed: true, removedAt: new Date().toISOString(), removedBy: request.auth.uid, previousEmail: account.email });
+    return { email: account.email, removed: true };
+  }
+
+  const suspended = action === 'suspend';
+  if (!IS_EMULATOR) {
+    const res = await directoryFetch(`/${encodeURIComponent(account.email)}`, { method: 'PUT', body: { suspended } });
+    if (!res.ok && res.status !== 404) {
+      console.error('directory suspend', res.status, res.data?.error?.message);
+      throw new HttpsError('internal', 'No se pudo actualizar la cuenta en Google Workspace.');
+    }
+  }
+  await accountRef.update({ suspended });
+  return { email: account.email, suspended };
 });

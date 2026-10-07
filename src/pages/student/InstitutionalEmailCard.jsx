@@ -51,6 +51,8 @@ const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval = f
 
   if (account === undefined || (!account && !hasActiveEnrollment && !awaitingApproval)) return null;
   if (hideWhenActive && account && !result) return null;
+  // El admin se lo retiró: no se ofrece activarlo otra vez.
+  if (account?.removed && !result) return null;
 
   const run = async (reset) => {
     setError('');

@@ -57,10 +57,11 @@ const AdminDocentes = () => {
     const next = !t.disabled;
     if (next && !(await confirmDialog({ title: 'Suspender acceso', message: `${t.name} no podrá iniciar sesión hasta que lo reactives. Sus cursos, aulas y calificaciones no se tocan.`, confirmLabel: 'Suspender', danger: true }))) return;
     try {
-      await updateUserStatus(t.uid, next);
+      const { googleFailed } = await updateUserStatus(t.uid, next);
       await logChange(adminName, `${next ? 'Suspendió' : 'Reactivó'} el acceso del docente ${t.name}.`);
       setUsers((list) => list.map((u) => (u.uid === t.uid ? { ...u, disabled: next } : u)));
-      addToast(next ? `Acceso de ${t.name} suspendido.` : `Acceso de ${t.name} reactivado.`, 'success');
+      if (googleFailed) addToast(`Acceso de ${t.name} ${next ? 'suspendido' : 'reactivado'} en la plataforma, pero su correo de la academia no se pudo ${next ? 'suspender' : 'reactivar'} en Google. Revísalo en Google Admin.`, 'warning');
+      else addToast(next ? `Acceso de ${t.name} suspendido.` : `Acceso de ${t.name} reactivado.`, 'success');
     } catch {
       addToast('No se pudo actualizar el acceso.', 'error');
     }

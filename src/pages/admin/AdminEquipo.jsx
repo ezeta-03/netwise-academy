@@ -147,9 +147,10 @@ const AdminEquipo = () => {
     if (targetUser.uid === currentUser?.uid) return;
     const nextDisabled = !targetUser.disabled;
     try {
-      await updateUserStatus(targetUser.uid, nextDisabled);
+      const { googleFailed } = await updateUserStatus(targetUser.uid, nextDisabled);
       await logChange(adminName, `${nextDisabled ? 'Desactivó' : 'Reactivó'} la cuenta de ${targetUser.name}.`);
-      addToast(`${targetUser.name} ${nextDisabled ? 'desactivado' : 'reactivado'}.`, 'success');
+      if (googleFailed) addToast(`${targetUser.name} ${nextDisabled ? 'desactivado' : 'reactivado'} en la plataforma, pero su correo de la academia no se pudo ${nextDisabled ? 'suspender' : 'reactivar'} en Google. Revísalo en Google Admin.`, 'warning');
+      else addToast(`${targetUser.name} ${nextDisabled ? 'desactivado' : 'reactivado'}.`, 'success');
       setUsers((prev) => prev.map((u) => (u.id === targetUser.id ? { ...u, disabled: nextDisabled } : u)));
     } catch {
       addToast('No se pudo actualizar la cuenta.', 'error');
@@ -159,10 +160,14 @@ const AdminEquipo = () => {
   const handleDeleteUser = async (targetUser) => {
     if (targetUser.uid === currentUser?.uid) return;
     if (targetUser.role === 'admin') { addToast('Primero cámbiale el rol: no se elimina a un administrador.', 'warning'); return; }
-    if (!(await confirmDialog({ title: 'Eliminar cuenta', message: `¿Eliminar la cuenta de ${targetUser.name} (${targetUser.email})?\n\nSe borran su acceso y su perfil: ya no podrá iniciar sesión y el correo queda libre para crear una cuenta nueva. Si era docente, sus cursos quedan sin docente asignado. Sus matrículas, pedidos y entregas no se borran.\n\nPara suspenderla sin perder nada, usa "Desactivar".`, confirmLabel: 'Eliminar cuenta', danger: true }))) return;
+    const instEmail = instAccounts[targetUser.uid]?.email;
+    const answer = await confirmDialog({ title: 'Eliminar cuenta', message: `¿Eliminar la cuenta de ${targetUser.name} (${targetUser.email})?\n\nSe borran su acceso y su perfil: ya no podrá iniciar sesión y el correo queda libre para crear una cuenta nueva. Si era docente, sus cursos quedan sin docente asignado. Sus matrículas, pedidos y entregas no se borran.\n\nPara suspenderla sin perder nada, usa "Desactivar".`, confirmLabel: 'Eliminar cuenta', danger: true, checkbox: instEmail ? { label: `Eliminar también su correo de la academia (${instEmail}) en Google. Se puede recuperar durante 20 días desde Google Admin.`, defaultChecked: true } : null });
+    if (!answer) return;
+    const keepInstitutional = !!instEmail && !answer.checked;
     try {
-      const { coursesUnassigned } = await deleteUserAccount(targetUser.uid);
-      await logChange(adminName, `Eliminó la cuenta de ${targetUser.name} (${targetUser.email}).`);
+      const { coursesUnassigned } = await deleteUserAccount(targetUser.uid, { keepInstitutional });
+      await logChange(adminName, `Eliminó la cuenta de ${targetUser.name} (${targetUser.email})${instEmail ? (keepInstitutional ? `; su correo ${instEmail} sigue en Google` : ` y su correo ${instEmail}`) : ''}.`);
+      setInstAccounts((map) => { const next = { ...map }; delete next[targetUser.uid]; return next; });
       addToast(coursesUnassigned ? `Cuenta eliminada. ${coursesUnassigned} curso(s) quedaron sin docente: asígnalos en Cursos y precios.` : 'Cuenta eliminada.', coursesUnassigned ? 'warning' : 'success');
       setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
       if (coursesUnassigned) refreshCourses();
@@ -325,7 +330,7 @@ const AdminEquipo = () => {
       {instFor && (
         <InstitutionalAccountModal
           user={instFor} account={instAccounts[instFor.uid] || null} adminName={adminName} onClose={() => setInstFor(null)}
-          onSaved={(uid, account) => setInstAccounts((map) => ({ ...map, [uid]: account }))}
+          onSaved={(uid, account) => setInstAccounts((map) => { const next = { ...map }; if (account) next[uid] = account; else delete next[uid]; return next; })}
         />
       )}
     </div>

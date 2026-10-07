@@ -279,17 +279,37 @@ export const markTourSeen = async (uid, key) => {
 // `disabled` es true, se cierra su sesión apenas inicia y no puede volver a
 // entrar mientras siga así). No borra nada -- es la forma real de "dar de
 // baja" a alguien sin tocar su cuenta de Firebase Auth.
+// Si la persona tiene correo de la academia, también se suspende o reactiva en
+// Google (no entra a Meet mientras esté desactivada). Devuelve
+// { googleFailed } para que la pantalla avise si eso no se pudo.
 export const updateUserStatus = async (uid, disabled) => {
-  if (!isConfigValid) return;
+  if (!isConfigValid) return { googleFailed: false };
   await setDoc(doc(db, 'users', uid), { disabled }, { merge: true });
+  try {
+    await syncInstitutionalAccount(uid, disabled ? 'suspend' : 'restore');
+    return { googleFailed: false };
+  } catch {
+    return { googleFailed: true };
+  }
+};
+
+// Lleva a Google un cambio sobre el correo de la academia de alguien:
+// 'suspend', 'restore' o 'remove' (retirarlo sin tocar su cuenta de la
+// plataforma). Sin correo asignado no hace nada. Ver syncInstitutionalAccount
+// en functions/index.js.
+export const syncInstitutionalAccount = async (uid, action) => {
+  if (!isConfigValid) return {};
+  const { data } = await httpsCallable(functions, 'syncInstitutionalAccount', { timeout: 30000 })({ uid, action });
+  return data || {};
 };
 
 // Elimina de verdad a un usuario: su cuenta de acceso y su perfil, vía la
 // Cloud Function deleteUserAccount (el navegador no puede borrar la cuenta de
-// acceso de otra persona). Devuelve { coursesUnassigned }.
-export const deleteUserAccount = async (uid) => {
+// acceso de otra persona). También elimina su correo de la academia en Google,
+// salvo `keepInstitutional`. Devuelve { coursesUnassigned }.
+export const deleteUserAccount = async (uid, { keepInstitutional = false } = {}) => {
   if (!isConfigValid) return { coursesUnassigned: 0 };
-  const { data } = await httpsCallable(functions, 'deleteUserAccount', { timeout: 30000 })({ uid });
+  const { data } = await httpsCallable(functions, 'deleteUserAccount', { timeout: 30000 })({ uid, keepInstitutional });
   return data || {};
 };
 
@@ -305,10 +325,11 @@ export const fetchInstitutionalAccounts = async () => {
 };
 
 // Correo institucional del propio usuario, o null si todavía no lo activó.
+// `{ removed: true }` si el admin se lo retiró.
 export const fetchMyInstitutionalAccount = async (uid) => {
   if (!isConfigValid) return null;
   const data = (await getDoc(doc(db, 'institutionalAccounts', uid))).data();
-  return data?.email ? data : null;
+  return data?.email || data?.removed ? data : null;
 };
 
 // El alumno activa su correo de la academia (o, con `reset`, pide otra
