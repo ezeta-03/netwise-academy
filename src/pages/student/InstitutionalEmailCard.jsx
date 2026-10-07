@@ -82,6 +82,7 @@ const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval = f
       <div className="inst-card-head">
         <AtSign size={18} />
         <span className="admin-panel-title">Tu correo de la academia</span>
+        {email && !result?.password && <span className="admin-status admin-status-green">Activo</span>}
       </div>
 
       {email ? (
@@ -89,6 +90,12 @@ const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval = f
           <div className="admin-cell-sub">Con este correo entras a tus clases en Google Meet{account?.linked ? ' y a la plataforma, con el botón "Ingresar con tu correo de la academia"' : ''}.</div>
           {result?.password ? (
             <>
+              {/* Recién activado: los tres pasos quedan cumplidos. */}
+              <div className="inst-steps">
+                <Step state="done">Pago registrado</Step>
+                <Step state="done">Pago confirmado</Step>
+                <Step state="done">Correo activado</Step>
+              </div>
               <div className="inst-credentials">
                 <div className="admin-field" style={{ marginBottom: 0 }}><label htmlFor="my-inst-email">Correo</label><input id="my-inst-email" readOnly value={email} onFocus={(e) => e.target.select()} /></div>
                 <div className="admin-field" style={{ marginBottom: 0 }}><label htmlFor="my-inst-password">Contraseña temporal</label><input id="my-inst-password" readOnly value={result.password} onFocus={(e) => e.target.select()} /></div>
