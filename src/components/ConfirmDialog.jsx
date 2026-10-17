@@ -5,15 +5,17 @@ import ModalPortal from './ModalPortal';
 // Diálogo de confirmación propio de la app, en vez del confirm()/prompt() del
 // navegador. Se abre con `confirmDialog(...)` de UIContext, que devuelve una
 // promesa: true/false, o -- con `input` -- el texto escrito (null si cancela).
-// Con `checkbox: { label, defaultChecked }` confirma con { checked } (false si cancela).
+// Con `checkbox: { label, defaultChecked }` confirma con { checked } (false si cancela);
+// con `checkboxes: [{ key, label, defaultChecked }]`, con { checks: { [key]: bool } }.
 const ConfirmDialog = ({ options, onResolve }) => {
-  const { title = 'Confirmar', message = '', confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, input = null, checkbox = null } = options;
+  const { title = 'Confirmar', message = '', confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', danger = false, input = null, checkbox = null, checkboxes = null } = options;
   const [value, setValue] = useState(input?.defaultValue || '');
   const [checked, setChecked] = useState(checkbox?.defaultChecked ?? false);
+  const [checks, setChecks] = useState(() => Object.fromEntries((checkboxes || []).map((c) => [c.key, !!c.defaultChecked])));
   const confirmRef = useRef(null);
   const inputRef = useRef(null);
   const cancel = () => onResolve(input ? null : false);
-  const confirm = () => onResolve(input ? value.trim() : checkbox ? { checked } : true);
+  const confirm = () => onResolve(input ? value.trim() : checkbox ? { checked } : checkboxes ? { checks } : true);
 
   useEffect(() => {
     (input ? inputRef : confirmRef).current?.focus();
@@ -44,6 +46,12 @@ const ConfirmDialog = ({ options, onResolve }) => {
               <span>{checkbox.label}</span>
             </label>
           )}
+          {checkboxes && checkboxes.map((c, i) => (
+            <label key={c.key} className="admin-check-card" style={{ marginTop: i ? 8 : 14 }}>
+              <input type="checkbox" checked={checks[c.key]} onChange={(e) => setChecks((x) => ({ ...x, [c.key]: e.target.checked }))} />
+              <span>{c.label}</span>
+            </label>
+          ))}
           <div className="admin-modal-actions">
             <button className="admin-btn-ghost" onClick={cancel}>{cancelLabel}</button>
             <button ref={confirmRef} className={`admin-btn-edit ${danger ? 'confirm-dialog-danger' : ''}`} onClick={confirm}>{confirmLabel}</button>

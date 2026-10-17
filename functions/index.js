@@ -9,7 +9,11 @@ import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import { randomBytes } from 'node:crypto';
+import { getStorage } from 'firebase-admin/storage';
+import { randomBytes, createHash } from 'node:crypto';
+import dns from 'node:dns/promises';
+import nodemailer from 'nodemailer';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
 initializeApp();
@@ -143,12 +147,36 @@ export const findAccountByEmail = onCall(ADMIN_CALL, async (request) => {
   }
 });
 
+// Todo lo que una persona deja en la academia, por colección y campo con su
+// uid. Solo se borra al eliminar una cuenta de prueba (`purgeHistory`).
+const HISTORY_BY_UID = [
+  ['enrollments', 'uid'], ['orders', 'uid'], ['submissions', 'uid'], ['attendance', 'uid'],
+  ['courseGrades', 'uid'], ['projectAdvances', 'uid'], ['projectProfiles', 'uid'],
+  ['preregistrations', 'uid'], ['supportRequests', 'requesterUid'], ['aiUsage', 'uid'],
+];
+
+const purgeUserHistory = async (uid) => {
+  let removed = 0;
+  for (const [name, field] of HISTORY_BY_UID) {
+    const snap = await db.collection(name).where(field, '==', uid).get();
+    const writer = db.bulkWriter();
+    snap.docs.forEach((d) => writer.delete(d.ref));
+    await writer.close();
+    removed += snap.size;
+  }
+  // Comprobantes de pago y archivos de entregas del alumno.
+  const bucket = getStorage().bucket();
+  await Promise.all(['paymentProofs', 'submissions'].map((folder) => bucket.deleteFiles({ prefix: `${folder}/${uid}/` }).catch((err) => console.error('purge storage', folder, err?.message))));
+  return removed;
+};
+
 // deleteUserAccount: borra de verdad a un usuario -- su cuenta de acceso, su
 // perfil y (salvo `keepInstitutional`) su correo de la academia en Google -- y
-// lo quita como docente de los cursos que tuviera. No toca sus
-// matrículas, pedidos ni entregas (historial de la academia). Nadie puede
-// borrarse a sí mismo ni borrar a otro admin desde acá.
-export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
+// lo quita como docente de los cursos que tuviera. Sus matrículas, pedidos y
+// entregas (historial de la academia) se conservan, salvo con `purgeHistory`,
+// pensado para cuentas de prueba. Nadie puede borrarse a sí mismo ni borrar a
+// otro admin desde acá.
+export const deleteUserAccount = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, async (request) => {
   await assertAdmin(request);
   const uid = str(request.data?.uid).trim();
   if (!uid) throw new HttpsError('invalid-argument', 'Falta el usuario.');
@@ -174,7 +202,8 @@ export const deleteUserAccount = onCall(ADMIN_CALL, async (request) => {
   await accountRef.delete();
   const taught = await db.collection('courseOfferings').where('teacherUid', '==', uid).get();
   await Promise.all(taught.docs.map((d) => d.ref.update({ teacherUid: null })));
-  return { deleted: true, coursesUnassigned: taught.size, institutionalDeleted: dropInstitutional ? account.email : null };
+  const historyRemoved = request.data?.purgeHistory === true ? await purgeUserHistory(uid) : 0;
+  return { deleted: true, coursesUnassigned: taught.size, institutionalDeleted: dropInstitutional ? account.email : null, historyRemoved };
 });
 
 // provisionInstitutionalAccount: correo institucional (nombre@netwiseacademy.pe)
@@ -439,3 +468,111 @@ export const syncInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
   await accountRef.update({ suspended });
   return { email: account.email, suspended };
 });
+
+// sendProgramEmail: el visitante que pide el programa de un curso (Descargar
+// programa en /course/:id) lo recibe como PDF adjunto en su correo, en vez de
+// descargarlo en el acto: así el contacto que deja tiene que ser real. Antes de
+// enviar se comprueba que el dominio del correo reciba correo (registro MX) y
+// que el celular sea un móvil peruano de 9 dígitos. El lead queda en
+// `programLeads`, como los del formulario del Inicio.
+//
+// Envía por SMTP de Gmail con la cuenta de la academia y una contraseña de
+// aplicación (Cuenta de Google > Seguridad > Contraseñas de aplicaciones):
+//   npx firebase-tools functions:secrets:set MAIL_USER
+//   npx firebase-tools functions:secrets:set MAIL_PASSWORD
+const MAIL_USER = defineSecret('MAIL_USER');
+const MAIL_PASSWORD = defineSecret('MAIL_PASSWORD');
+const PROGRAM_COURSES = {
+  1: 'Estrategias de Redes Sociales',
+  2: 'Branding y Gestión de Marcas',
+  3: 'Marketing Digital desde 0',
+  4: 'Creación de Negocios Digitales',
+};
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
+const PROGRAM_MAILS_PER_EMAIL = 3;
+const PROGRAM_MAILS_PER_IP = 20;
+
+// Móvil peruano: 9 dígitos que empiezan en 9, con o sin +51 delante.
+const peruMobile = (value) => {
+  let digits = str(value).replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('51')) digits = digits.slice(2);
+  return /^9\d{8}$/.test(digits) ? digits : null;
+};
+
+// false solo si el dominio seguro no recibe correo; ante un error de DNS
+// pasajero se deja pasar (el correo igual tiene que llegar para servir).
+const domainReceivesMail = async (domain) => {
+  try {
+    const records = await dns.resolveMx(domain);
+    return records.some((r) => r.exchange);
+  } catch (err) {
+    return !['ENOTFOUND', 'ENODATA', 'ESERVFAIL', 'EBADNAME'].includes(err?.code);
+  }
+};
+
+const takeMailQuota = (key, limit) => db.runTransaction(async (tx) => {
+  const day = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+  const ref = db.collection('programMailQuota').doc(`${createHash('sha256').update(key).digest('hex').slice(0, 32)}_${day}`);
+  const snap = await tx.get(ref);
+  if ((snap.data()?.count || 0) >= limit) return false;
+  tx.set(ref, { day, count: FieldValue.increment(1) }, { merge: true });
+  return true;
+});
+
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+export const sendProgramEmail = onCall(
+  { secrets: [MAIL_USER, MAIL_PASSWORD], region: 'us-central1', maxInstances: 5, timeoutSeconds: 60 },
+  async (request) => {
+    const data = request.data || {};
+    const courseId = Number(data.courseId);
+    const courseTitle = PROGRAM_COURSES[courseId];
+    const name = str(data.name).trim().slice(0, 120);
+    const email = str(data.email).trim().toLowerCase().slice(0, 160);
+    const phone = peruMobile(data.phone);
+    if (!courseTitle) throw new HttpsError('invalid-argument', 'Ese curso no tiene programa.');
+    if (name.length < 3) throw new HttpsError('invalid-argument', 'Escribe tu nombre completo.');
+    if (!EMAIL_FORMAT.test(email)) throw new HttpsError('invalid-argument', 'Revisa tu correo: no parece una dirección válida.');
+    if (!phone) throw new HttpsError('invalid-argument', 'Escribe tu celular de 9 dígitos (empieza con 9).');
+    if (!(await domainReceivesMail(email.split('@')[1]))) {
+      throw new HttpsError('invalid-argument', `El dominio "${email.split('@')[1]}" no recibe correos. Revisa que esté bien escrito.`);
+    }
+    if (!(await takeMailQuota(`email:${email}`, PROGRAM_MAILS_PER_EMAIL))
+      || !(await takeMailQuota(`ip:${request.rawRequest?.ip || 'sin-ip'}`, PROGRAM_MAILS_PER_IP))) {
+      throw new HttpsError('resource-exhausted', 'Ya te enviamos el programa hoy. Revisa tu bandeja de entrada y la carpeta de spam.');
+    }
+
+    const firstName = escapeHtml(name.split(/\s+/)[0]);
+    const courseUrl = `https://netwiseacademy.pe/course/${courseId}`;
+    const transport = nodemailer.createTransport({
+      host: 'smtp.gmail.com', port: 465, secure: true,
+      auth: { user: MAIL_USER.value(), pass: MAIL_PASSWORD.value() },
+    });
+    try {
+      await transport.sendMail({
+        from: `"Netwise Academy" <${MAIL_USER.value()}>`,
+        to: email,
+        subject: `Tu programa de ${courseTitle} · Netwise Academy`,
+        text: `Hola ${name.split(/\s+/)[0]},\n\nTe enviamos adjunto el programa completo de ${courseTitle}: módulos, contenidos y entregables.\n\nPuedes ver horarios e inscribirte aquí: ${courseUrl}\n\nNetwise Academy`,
+        html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a2e;max-width:560px">
+<p>Hola ${firstName},</p>
+<p>Te enviamos adjunto el programa completo de <strong>${escapeHtml(courseTitle)}</strong>: módulos, contenidos y entregables.</p>
+<p><a href="${courseUrl}" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:bold">Ver horarios e inscribirme</a></p>
+<p>Si tienes dudas, responde este correo.</p>
+<p>Netwise Academy</p></div>`,
+        attachments: [{ filename: `Programa - ${courseTitle}.pdf`, path: fileURLToPath(new URL(`./programs/${courseId}.pdf`, import.meta.url)) }],
+      });
+    } catch (err) {
+      console.error('sendProgramEmail', err?.code, err?.responseCode, err?.message);
+      if (err?.code === 'EENVELOPE') throw new HttpsError('invalid-argument', 'No pudimos entregar el correo a esa dirección. Revísala.');
+      throw new HttpsError('unavailable', 'No pudimos enviar el correo. Intenta de nuevo en unos minutos.');
+    }
+
+    const now = new Date().toISOString();
+    await db.collection('programLeads').add({
+      courseId, courseTitle: str(data.courseTitle).slice(0, 120) || courseTitle, name, email, phone,
+      source: 'download', marketingConsent: data.marketingConsent === true, createdAt: now, emailSentAt: now,
+    });
+    return { sent: true };
+  },
+);

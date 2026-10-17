@@ -14,3 +14,15 @@ export const whatsAppLink = (phone, message) => {
   const number = toWhatsAppNumber(phone);
   return `https://wa.me/${number || ''}?text=${encodeURIComponent(message)}`;
 };
+
+// Celular peruano: 9 dígitos que empiezan en 9, con o sin +51 delante.
+// Devuelve los 9 dígitos, o null si no lo es.
+export const toPeruMobile = (phone) => {
+  let digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 11 && digits.startsWith('51')) digits = digits.slice(2);
+  return /^9\d{8}$/.test(digits) ? digits : null;
+};
+
+// Formato de correo: algo@dominio.ext, con una extensión de al menos 2 letras.
+// (Que el dominio reciba correo lo comprueba la función sendProgramEmail.)
+export const isEmailFormat = (email) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(String(email || '').trim());

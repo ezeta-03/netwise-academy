@@ -9,7 +9,7 @@ import { useCourseOfferings } from '../context/CourseOfferingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import DownloadProgramModal from '../components/DownloadProgramModal';
-import { downloadProgramPdf, getProgramPdf } from '../lib/programDownloads';
+import { getProgramPdf } from '../lib/programDownloads';
 
 const OUTCOME_ICONS = { sparkles: Sparkles, fingerprint: Fingerprint, 'trending-up': TrendingUp, rocket: Rocket };
 
@@ -21,31 +21,6 @@ const hoursOfRange = (range) => {
   const [from, to] = range.split('-');
   const toMinutes = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
   return (toMinutes(to) - toMinutes(from)) / 60;
-};
-
-// Con PDF real del curso (lib/programDownloads.js) se descarga ese; sin PDF cae al
-// resumen de texto armado con el temario.
-const downloadProgram = (course, modules) => {
-  if (downloadProgramPdf(course)) return;
-  const lines = [
-    `${course.title} — Programa del curso`,
-    '',
-    course.description,
-    '',
-    `Duración: ${course.duration} · Modalidad: Online en vivo · Nivel: ${course.level.replace('Nivel ', '')}`,
-    `Horario: ${course.scheduleLabel}`,
-    `Proyecto final: ${course.projectFinal}`,
-    '',
-    'Módulos:',
-    ...modules.map((m, i) => `  ${i + 1}. ${m.title}${m.weeksLabel ? ` (${m.weeksLabel})` : ''}`),
-  ];
-  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `Programa - ${course.title}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
 };
 
 const CourseDetail = () => {
@@ -67,7 +42,7 @@ const CourseDetail = () => {
     if (!course) return;
     // Resumen público (solo título/semanas, sin links de video) -- se lee sin
     // sesión para que un visitante vea el temario y pueda descargar el
-    // programa dejando su contacto (DownloadProgramModal). El contenido real
+    // programa por correo dejando su contacto (DownloadProgramModal). El contenido real
     // con las grabaciones sigue viviendo en `courseContent`, solo para
     // usuarios logueados (se consume desde el reproductor).
     fetchCourseSummary(course.id).then((data) => setModules(data.modules || [])).catch(() => setModules([]));
@@ -173,7 +148,7 @@ const CourseDetail = () => {
               </ul>
 
               <h2 className="cd-section-h2" id="cd-modules">Lo que vas a <em>aprender.</em></h2>
-              <p className="cd-section-sub">Cuatro módulos, ocho semanas y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
+              <p className="cd-section-sub">Cuatro módulos, {course.duration} y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
 
               {modules.length === 0 ? (
                 <p className="cd-section-sub">El programa detallado de este taller se publica muy pronto.</p>
@@ -191,10 +166,10 @@ const CourseDetail = () => {
                 </div>
               )}
 
-              {(modules.length > 0 || getProgramPdf(course.id)) && (
+              {getProgramPdf(course.id) && (
                 <div className="cd-download-wrap">
-                  <button className="cd-download-btn" onClick={() => setDownloadModalOpen(true)}><Download size={16} /> Descargar programa del curso</button>
-                  <p className="cd-download-caption">Consulta los contenidos y entregables de cada módulo en el programa completo.</p>
+                  <button className="cd-download-btn" onClick={() => setDownloadModalOpen(true)}><Download size={16} /> Recibir el programa del curso</button>
+                  <p className="cd-download-caption">Te lo enviamos a tu correo: contenidos y entregables de cada módulo.</p>
                 </div>
               )}
 
@@ -313,7 +288,6 @@ const CourseDetail = () => {
         <DownloadProgramModal
           course={course}
           onClose={() => setDownloadModalOpen(false)}
-          onDownload={() => downloadProgram(course, modules)}
         />
       )}
     </div>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { captureProgramLead } from '../lib/db';
 import { useUI } from '../context/UIContext';
+import { toPeruMobile, isEmailFormat } from '../lib/phone';
 import TermsModal from './TermsModal';
 
 // Formulario de interés general del hero: SIEMPRE visible (antes se abría con una
@@ -23,13 +24,15 @@ const HeroLeadPanel = ({ courses }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isEmailFormat(email)) { addToast('Escribe un correo válido, por ejemplo nombre@gmail.com.', 'error'); return; }
+    if (!toPeruMobile(phone)) { addToast('Escribe tu celular de 9 dígitos (empieza con 9).', 'error'); return; }
     setSaving(true);
     try {
       const topicCourse = visibleCourses.find((c) => c.id.toString() === topic);
       await captureProgramLead({
         name: `${name} ${lastName}`.trim(),
-        email,
-        phone,
+        email: email.trim().toLowerCase(),
+        phone: toPeruMobile(phone),
         courseId: topicCourse?.id ?? null,
         courseTitle: topicCourse?.title ?? null,
         acceptedTerms,
@@ -68,8 +71,8 @@ const HeroLeadPanel = ({ courses }) => {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" required />
         </div>
         <div className="home-lead-field">
-          <label>Teléfono</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Tu número de contacto" />
+          <label>Celular</label>
+          <input type="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9XX XXX XXX" autoComplete="tel" maxLength={16} required />
         </div>
         <div className="home-lead-field">
           <label>¿Qué te gustaría aprender?</label>

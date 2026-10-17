@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Download, Eye, X, Check, Loader2, Ban, AlertTriangle } from 'lucide-react';
+import { Search, Download, Eye, X, Check, Loader2, Ban, AlertTriangle, Plus } from 'lucide-react';
 import { fetchOrders, fetchGroups, fetchCoupons, approveOrder, rejectOrder, logChange } from '../../lib/db';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { downloadCsv } from '../../lib/csv';
@@ -7,6 +7,8 @@ import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { usePagedTable } from '../../hooks/usePagedTable';
+import RegisterSaleModal from './RegisterSaleModal';
+import { AccessLinkModal } from './TeacherAccess';
 
 const ORDER_STATUS = {
   paid: { label: 'Pagada', cls: 'admin-status-green' },
@@ -18,6 +20,8 @@ const PAYMENT_LABELS = {
   yape: 'Yape Empresas / Plin Negocios',
   transfer: 'Transferencia bancaria',
   card: 'Tarjeta de crédito/débito',
+  cash: 'Efectivo',
+  other: 'Otro medio',
 };
 
 const exportOrdersCsv = (rows) => downloadCsv(
@@ -42,6 +46,16 @@ const AdminVentas = () => {
   const { courses } = useCourseOfferings();
   // Aula elegida en el detalle del pedido ('' = automática, ver lib/groupAssignment.js).
   const [groupChoice, setGroupChoice] = useState('');
+  const [registering, setRegistering] = useState(false);
+  // Alumno nuevo creado al registrar una venta: se abre su enlace de acceso.
+  const [accessFor, setAccessFor] = useState(null);
+
+  const handleSaleCreated = (order, { student, newAccount }) => {
+    setOrders((list) => [order, ...list].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
+    setRegistering(false);
+    refreshNotifications();
+    if (newAccount) setAccessFor(student);
+  };
 
   useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }).catch(() => setLoading(false)); }, []);
   useEffect(() => { fetchGroups().then(setGroups).catch(() => {}); }, []);
@@ -140,7 +154,10 @@ const AdminVentas = () => {
           <h1 className="admin-page-title">Pedidos y pagos</h1>
           <p className="admin-page-sub">Revisa importes y estados de pago. Las matrículas se gestionan en Alumnos y accesos.</p>
         </div>
-        <button className="admin-btn-ghost" onClick={() => exportOrdersCsv(filtered)}><Download size={15} /> Exportar CSV</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="admin-btn-ghost" onClick={() => exportOrdersCsv(filtered)}><Download size={15} /> Exportar CSV</button>
+          <button className="admin-btn-edit" onClick={() => setRegistering(true)}><Plus size={15} /> Registrar venta</button>
+        </div>
       </div>
 
       <div className="admin-toolbar">
@@ -165,7 +182,7 @@ const AdminVentas = () => {
                 const expected = o.status === 'pending' ? amountMismatch(o) : null;
                 return (
                   <tr key={o.id}>
-                    <td><div className="admin-cell-name">{o.code}{o.demo ? <span className="admin-cell-sub"> · ejemplo</span> : null}</div><div className="admin-cell-sub">{new Date(o.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</div></td>
+                    <td><div className="admin-cell-name">{o.code}{o.demo ? <span className="admin-cell-sub"> · ejemplo</span> : null}{o.manual ? <span className="admin-cell-sub"> · manual</span> : null}</div><div className="admin-cell-sub">{new Date(o.createdAt).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}</div></td>
                     <td>{o.studentName}</td>
                     <td>{o.courseTitle}</td>
                     <td className="admin-price">S/ {Number(o.amount).toFixed(2)}{expected !== null && <div className="admin-cell-sub" style={{ color: '#B45309' }} title="El importe del pedido no coincide con el precio vigente"><AlertTriangle size={11} /> Esperado S/ {expected.toFixed(2)}</div>}</td>
@@ -191,6 +208,11 @@ const AdminVentas = () => {
 
       <p className="admin-page-footer">NETWISE ACADEMY · ADMIN V1.4</p>
 
+      {registering && (
+        <RegisterSaleModal courses={courses} groups={groups} adminName={adminName} onClose={() => setRegistering(false)} onCreated={handleSaleCreated} />
+      )}
+      {accessFor && <AccessLinkModal user={accessFor} intro="Alumno creado: envíale su acceso" onClose={() => setAccessFor(null)} />}
+
       {viewing && (
         <ModalPortal>
         <div className="admin-modal-overlay">
@@ -208,7 +230,8 @@ const AdminVentas = () => {
             </div>
             <div className="admin-field"><label>Método de pago</label><div>{PAYMENT_LABELS[viewing.paymentMethod] || 'No especificado'}</div></div>
             <div className="admin-field"><label>Cupón</label><div>{viewing.couponCode || (viewing.couponId ? 'Sí (código no registrado)' : 'Sin cupón')}</div></div>
-            <div className="admin-field"><label>Fecha</label><div>{new Date(viewing.createdAt).toLocaleString('es-PE')}</div></div>
+            <div className="admin-field"><label>{viewing.manual ? 'Fecha del pago' : 'Fecha'}</label><div>{viewing.manual ? new Date(viewing.createdAt).toLocaleDateString('es-PE') : new Date(viewing.createdAt).toLocaleString('es-PE')}</div></div>
+            {viewing.manual && <div className="admin-field"><label>Registro</label><div>Venta registrada a mano por {viewing.registeredBy || 'el admin'}{viewing.note ? ` · ${viewing.note}` : ''}</div></div>}
             <div className="admin-field"><label>Estado</label><div>{(ORDER_STATUS[viewing.status] || ORDER_STATUS.pending).label}{viewing.status === 'rejected' && viewing.rejectReason ? ` · ${viewing.rejectReason}` : ''}</div></div>
 
             {viewing.paymentMethod && viewing.paymentMethod !== 'card' && (

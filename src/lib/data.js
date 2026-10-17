@@ -68,7 +68,7 @@ export const COURSES = [
     outcomeHeadline: 'Construir una marca con identidad propia y una experiencia coherente en cada punto de contacto.',
     longDescription: [
       'Construye una marca desde su estrategia hasta la forma en que se expresa y se vive. Trabajarás el propósito, la personalidad y el posicionamiento de tu proyecto, conectándolos con una identidad verbal y visual coherente.',
-      'Durante ocho semanas de clases en vivo, avanzarás en tu plataforma y manual de marca. También explorarás sus puntos de contacto y prepararás un plan de lanzamiento para presentar una propuesta reconocible y consistente.',
+      'Durante cuatro semanas de clases en vivo, avanzarás en tu plataforma y manual de marca. También explorarás sus puntos de contacto y prepararás un plan de lanzamiento para presentar una propuesta reconocible y consistente.',
     ],
     doableList: [
       'Definir el propósito, la personalidad y la propuesta de valor de tu marca.',
@@ -80,7 +80,7 @@ export const COURSES = [
     projectFinal: 'Plataforma, manual y plan de lanzamiento de marca',
     price: 360,
     promoPercent: 25,
-    duration: '8 semanas',
+    duration: '4 semanas',
     level: 'Nivel básico',
     cardTag: 'Identidad & Diseño',
     cardTitle: ['Branding y', 'Gestión de Marcas'],
@@ -105,7 +105,7 @@ export const COURSES = [
     outcomeHeadline: 'Planificar campañas digitales y usar los datos para mejorar tus resultados.',
     longDescription: [
       'Aprende a conectar estrategia, captación y medición en un plan de marketing digital. El curso reúne fundamentos de growth e inbound, posicionamiento en buscadores, publicidad digital y analítica para trabajar cada etapa del recorrido de tus clientes.',
-      'En ocho semanas de clases en vivo, desarrollarás un embudo de conversión, propuestas de campañas y una página de captación. Usarás indicadores y tableros para analizar resultados y orientar la mejora de tus acciones.',
+      'En cuatro semanas de clases en vivo, desarrollarás un embudo de conversión, propuestas de campañas y una página de captación. Usarás indicadores y tableros para analizar resultados y orientar la mejora de tus acciones.',
     ],
     doableList: [
       'Diseñar un embudo de captación con objetivos e indicadores definidos.',
@@ -117,7 +117,7 @@ export const COURSES = [
     projectFinal: 'Embudo, campañas y dashboard de marketing',
     price: 450,
     promoPercent: 25,
-    duration: '8 semanas',
+    duration: '4 semanas',
     level: 'Nivel básico',
     cardTag: 'Growth & Performance',
     cardTitle: ['Marketing', 'Digital desde 0'],
@@ -142,7 +142,7 @@ export const COURSES = [
     outcomeHeadline: 'Validar tu idea, construir un MVP y preparar el lanzamiento de tu negocio digital.',
     longDescription: [
       'Transforma una idea en una propuesta de negocio que puedas poner a prueba. Aprenderás a investigar el problema que quieres resolver, definir tu modelo de negocio y construir una primera versión de tu producto digital con herramientas no-code y apoyo de IA.',
-      'Durante ocho semanas de clases en vivo, trabajarás la validación, el desarrollo de tu producto mínimo viable y la preparación de su salida al mercado. Organizarás tu propuesta en un pitch con proyección financiera para comunicar cómo funcionaría tu negocio.',
+      'Durante cuatro semanas de clases en vivo, trabajarás la validación, el desarrollo de tu producto mínimo viable y la preparación de su salida al mercado. Organizarás tu propuesta en un pitch con proyección financiera para comunicar cómo funcionaría tu negocio.',
     ],
     doableList: [
       'Validar el problema y la propuesta de valor de tu idea de negocio.',
@@ -154,7 +154,7 @@ export const COURSES = [
     projectFinal: 'MVP y pitch deck con proyección financiera',
     price: 480,
     promoPercent: 25,
-    duration: '8 semanas',
+    duration: '4 semanas',
     level: 'Nivel básico',
     cardTag: 'Negocios & Estrategia',
     cardTitle: ['Creación de', 'Negocios Digitales'],

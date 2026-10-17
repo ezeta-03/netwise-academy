@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { captureMasterclassLead } from '../../lib/db';
+import { toPeruMobile, isEmailFormat } from '../../lib/phone';
 import { MASTERCLASSES, MASTERCLASS_TIME } from '../../data/masterclasses';
 import TermsModal from '../TermsModal';
 
@@ -85,12 +86,12 @@ const MasterclassForm = ({ onClose }) => {
     const bad = {
       firstName: !values.firstName.trim(),
       lastName: !values.lastName.trim(),
-      email: !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email.trim()),
-      whatsapp: values.whatsapp.replace(/\D/g, '').length < 6,
+      email: !isEmailFormat(values.email),
+      whatsapp: !toPeruMobile(values.whatsapp),
     };
     setInvalid(bad);
     if (!picked.length) { setError('Elige al menos una masterclass.'); return; }
-    if (Object.values(bad).some(Boolean)) { setError('Completa tus datos correctamente.'); return; }
+    if (Object.values(bad).some(Boolean)) { setError(bad.whatsapp && !bad.email ? 'Escribe tu WhatsApp de 9 dígitos (empieza con 9).' : 'Completa tus datos correctamente.'); return; }
     if (!acceptedTerms) { setError('Debes aceptar los Términos y la Política de privacidad.'); return; }
     setError('');
     sendingRef.current = true;
@@ -154,7 +155,7 @@ const MasterclassForm = ({ onClose }) => {
             <label className="mcl-fld">Apellido<input className={invalid.lastName ? 'invalid' : ''} value={values.lastName} onChange={setField('lastName')} placeholder="Tu apellido" autoComplete="family-name" maxLength={80} /></label>
           </div>
           <label className="mcl-fld">Correo electrónico<input type="email" className={invalid.email ? 'invalid' : ''} value={values.email} onChange={setField('email')} placeholder="tucorreo@ejemplo.com" autoComplete="email" maxLength={160} /></label>
-          <label className="mcl-fld">Whatsapp<input type="tel" inputMode="tel" className={invalid.whatsapp ? 'invalid' : ''} value={values.whatsapp} onChange={setField('whatsapp')} placeholder="Tu número de contacto" autoComplete="tel" maxLength={30} /></label>
+          <label className="mcl-fld">Whatsapp<input type="tel" inputMode="tel" className={invalid.whatsapp ? 'invalid' : ''} value={values.whatsapp} onChange={setField('whatsapp')} placeholder="9XX XXX XXX" autoComplete="tel" maxLength={16} /></label>
           <div className="mcl-consents">
             <label className="mcl-check">
               <input type="checkbox" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />

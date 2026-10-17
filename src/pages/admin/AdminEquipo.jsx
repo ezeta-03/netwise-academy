@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound, AtSign } from 'lucide-react';
+import { Search, Plus, X, Pencil, Ban, RotateCcw, Trash2, GraduationCap, KeyRound, AtSign, Loader2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
@@ -107,6 +107,7 @@ const AdminEquipo = () => {
   // Correos institucionales ya asignados (uid -> { email }) y de quién se está gestionando uno.
   const [instAccounts, setInstAccounts] = useState({});
   const [instFor, setInstFor] = useState(null);
+  const [deletingUid, setDeletingUid] = useState(null);
   const { courses, refresh: refreshCourses } = useCourseOfferings();
 
   const [users, setUsers] = useState(MOCK_USER_ROWS);
@@ -158,21 +159,38 @@ const AdminEquipo = () => {
   };
 
   const handleDeleteUser = async (targetUser) => {
-    if (targetUser.uid === currentUser?.uid) return;
+    if (targetUser.uid === currentUser?.uid || deletingUid) return;
     if (targetUser.role === 'admin') { addToast('Primero cámbiale el rol: no se elimina a un administrador.', 'warning'); return; }
     const instEmail = instAccounts[targetUser.uid]?.email;
-    const answer = await confirmDialog({ title: 'Eliminar cuenta', message: `¿Eliminar la cuenta de ${targetUser.name} (${targetUser.email})?\n\nSe borran su acceso y su perfil: ya no podrá iniciar sesión y el correo queda libre para crear una cuenta nueva. Si era docente, sus cursos quedan sin docente asignado. Sus matrículas, pedidos y entregas no se borran.\n\nPara suspenderla sin perder nada, usa "Desactivar".`, confirmLabel: 'Eliminar cuenta', danger: true, checkbox: instEmail ? { label: `Eliminar también su correo de la academia (${instEmail}) en Google. Se puede recuperar durante 20 días desde Google Admin.`, defaultChecked: true } : null });
+    const answer = await confirmDialog({
+      title: 'Eliminar cuenta',
+      message: `¿Eliminar la cuenta de ${targetUser.name} (${targetUser.email})?
+
+Se borran su acceso y su perfil: ya no podrá iniciar sesión y el correo queda libre para crear una cuenta nueva. Si era docente, sus cursos quedan sin docente asignado.
+
+Para suspenderla sin perder nada, usa "Desactivar".`,
+      confirmLabel: 'Eliminar cuenta', danger: true,
+      checkboxes: [
+        { key: 'history', label: 'Borrar también sus matrículas, pedidos, entregas, notas y asistencia. Úsalo para cuentas de prueba: no se puede deshacer.', defaultChecked: false },
+        ...(instEmail ? [{ key: 'institutional', label: `Eliminar también su correo de la academia (${instEmail}) en Google. Se puede recuperar durante 20 días desde Google Admin.`, defaultChecked: true }] : []),
+      ],
+    });
     if (!answer) return;
-    const keepInstitutional = !!instEmail && !answer.checked;
+    const keepInstitutional = !!instEmail && !answer.checks.institutional;
+    const purgeHistory = !!answer.checks.history;
+    setDeletingUid(targetUser.uid);
     try {
-      const { coursesUnassigned } = await deleteUserAccount(targetUser.uid, { keepInstitutional });
-      await logChange(adminName, `Eliminó la cuenta de ${targetUser.name} (${targetUser.email})${instEmail ? (keepInstitutional ? `; su correo ${instEmail} sigue en Google` : ` y su correo ${instEmail}`) : ''}.`);
+      const { coursesUnassigned, historyRemoved } = await deleteUserAccount(targetUser.uid, { keepInstitutional, purgeHistory });
       setInstAccounts((map) => { const next = { ...map }; delete next[targetUser.uid]; return next; });
-      addToast(coursesUnassigned ? `Cuenta eliminada. ${coursesUnassigned} curso(s) quedaron sin docente: asígnalos en Cursos y precios.` : 'Cuenta eliminada.', coursesUnassigned ? 'warning' : 'success');
       setUsers((prev) => prev.filter((u) => u.id !== targetUser.id));
       if (coursesUnassigned) refreshCourses();
-    } catch {
-      addToast('No se pudo eliminar la cuenta. Intenta de nuevo.', 'error');
+      addToast(coursesUnassigned ? `Cuenta eliminada. ${coursesUnassigned} curso(s) quedaron sin docente: asígnalos en Cursos y precios.` : `Cuenta eliminada${purgeHistory ? ` junto con ${historyRemoved || 0} registro(s) de su historial` : ''}.`, coursesUnassigned ? 'warning' : 'success');
+      // La bitácora no debe hacer parecer que falló algo que ya se hizo.
+      logChange(adminName, `Eliminó la cuenta de ${targetUser.name} (${targetUser.email})${purgeHistory ? ' y su historial' : ''}${instEmail ? (keepInstitutional ? `; su correo ${instEmail} sigue en Google` : ` y su correo ${instEmail}`) : ''}.`).catch(() => {});
+    } catch (err) {
+      addToast(err?.message && err?.code?.startsWith('functions/') && err.code !== 'functions/internal' ? err.message : 'No se pudo eliminar la cuenta. Intenta de nuevo.', 'error');
+    } finally {
+      setDeletingUid(null);
     }
   };
 
@@ -286,11 +304,11 @@ const AdminEquipo = () => {
                         {u.disabled ? <RotateCcw size={14} /> : <Ban size={14} />}
                       </button>
                       <button
-                        className="admin-icon-btn" disabled={isSelf} onClick={() => handleDeleteUser(u)}
+                        className="admin-icon-btn" disabled={isSelf || !!deletingUid} onClick={() => handleDeleteUser(u)}
                         title={isSelf ? 'No puedes eliminar tu propia cuenta.' : 'Eliminar cuenta'}
                         style={isSelf ? undefined : { color: '#BE123C' }}
                       >
-                        <Trash2 size={14} />
+                        {deletingUid === u.uid ? <Loader2 size={14} className="spin" /> : <Trash2 size={14} />}
                       </button>
                     </div>
                   </td>

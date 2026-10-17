@@ -222,6 +222,31 @@ export const createTeacherAccount = async ({ name, email, phone = '', courseIds 
   return { uid };
 };
 
+// Alta de un alumno por el admin (Ventas > Registrar venta, para un pago
+// hecho fuera de la web): misma idea que createTeacherAccount, con rol
+// alumno. Su contraseña la crea él con el enlace de acceso. Si el correo ya
+// tiene cuenta, la reutiliza. Devuelve { uid }.
+export const createStudentAccount = async ({ name, email, phone = '' }) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const cleanEmail = email.trim().toLowerCase();
+  let uid;
+  try {
+    uid = await createAccountKeepingSession(cleanEmail, randomPassword(), name.trim());
+  } catch (err) {
+    if (err?.code !== 'auth/email-already-in-use') throw err;
+    const { data } = await httpsCallable(functions, 'findAccountByEmail', { timeout: 30000 })({ email: cleanEmail });
+    if (!data?.uid) throw err;
+    uid = data.uid;
+  }
+  const ref = doc(db, 'users', uid);
+  const existing = await getDoc(ref);
+  // Un perfil que ya existía conserva su rol y su fecha de registro.
+  await setDoc(ref, existing.exists()
+    ? { ...(phone.trim() ? { phone: phone.trim() } : {}) }
+    : { email: cleanEmail, displayName: name.trim(), phone: phone.trim(), role: 'student', createdAt: new Date().toISOString() }, { merge: true });
+  return { uid };
+};
+
 // Ficha de un docente (Admin > Docentes): nombre, celular, especialidad,
 // biografía y qué funciones del panel puede usar (lib/permissions.js). Solo se
 // escriben los campos que llegan.
@@ -306,10 +331,12 @@ export const syncInstitutionalAccount = async (uid, action) => {
 // Elimina de verdad a un usuario: su cuenta de acceso y su perfil, vía la
 // Cloud Function deleteUserAccount (el navegador no puede borrar la cuenta de
 // acceso de otra persona). También elimina su correo de la academia en Google,
-// salvo `keepInstitutional`. Devuelve { coursesUnassigned }.
-export const deleteUserAccount = async (uid, { keepInstitutional = false } = {}) => {
-  if (!isConfigValid) return { coursesUnassigned: 0 };
-  const { data } = await httpsCallable(functions, 'deleteUserAccount', { timeout: 30000 })({ uid, keepInstitutional });
+// salvo `keepInstitutional`. Con `purgeHistory` (cuentas de prueba) borra
+// también sus matrículas, pedidos, entregas y demás registros. Devuelve
+// { coursesUnassigned, historyRemoved }.
+export const deleteUserAccount = async (uid, { keepInstitutional = false, purgeHistory = false } = {}) => {
+  if (!isConfigValid) return { coursesUnassigned: 0, historyRemoved: 0 };
+  const { data } = await httpsCallable(functions, 'deleteUserAccount', { timeout: 60000 })({ uid, keepInstitutional, purgeHistory });
   return data || {};
 };
 
@@ -979,8 +1006,11 @@ export const uploadCourseMaterial = async (courseId, moduleId, file) => {
   return getDownloadURL(ref);
 };
 
-export const createOrder = async ({ uid, studentName, studentEmail, courseId, courseTitle, amount, status, paymentMethod, couponId, couponCode, proofCode, proofUrl }) => {
+// `createdAt` y `extra` solo los usa el admin al registrar una venta hecha
+// fuera de la web (fecha real del pago, quién la registró, nota).
+export const createOrder = async ({ uid, studentName, studentEmail, courseId, courseTitle, amount, status, paymentMethod, couponId, couponCode, proofCode, proofUrl, createdAt, extra }) => {
   const base = {
+    ...(extra || {}),
     uid, studentName, studentEmail: studentEmail || null, courseId, courseTitle, amount,
     paymentMethod: paymentMethod || null,
     couponId: couponId || null,
@@ -988,7 +1018,7 @@ export const createOrder = async ({ uid, studentName, studentEmail, courseId, co
     proofCode: proofCode || null,
     proofUrl: proofUrl || null,
     status: status || 'paid',
-    createdAt: new Date().toISOString(),
+    createdAt: createdAt || new Date().toISOString(),
   };
 
   if (!isConfigValid) {
@@ -1444,6 +1474,17 @@ export const captureProgramLead = async ({ courseId, courseTitle, name, email, p
 
   await addDoc(collection(db, 'programLeads'), payload);
   return payload;
+};
+
+// "Descargar programa" de un curso: el PDF se envía al correo del visitante
+// (Cloud Function sendProgramEmail, que valida correo y celular y guarda el
+// lead) en vez de descargarse. El Sheet de leads recibe la misma fila.
+export const requestProgramByEmail = async ({ courseId, courseTitle, name, email, phone, marketingConsent }) => {
+  const payload = { courseId, courseTitle, name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(), marketingConsent: !!marketingConsent };
+  if (!isConfigValid) return { sent: true };
+  await httpsCallable(functions, 'sendProgramEmail', { timeout: 60000 })(payload);
+  sendLeadToSheet({ ...payload, source: 'download', createdAt: new Date().toISOString() });
+  return { sent: true };
 };
 
 // --- Teléfono del usuario (extiende `users/{uid}`) ---
