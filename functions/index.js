@@ -469,12 +469,13 @@ export const syncInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
   return { email: account.email, suspended };
 });
 
-// sendProgramEmail: el visitante que pide el programa de un curso (Descargar
-// programa en /course/:id) lo recibe como PDF adjunto en su correo, en vez de
-// descargarlo en el acto: así el contacto que deja tiene que ser real. Antes de
-// enviar se comprueba que el dominio del correo reciba correo (registro MX) y
-// que el celular sea un móvil peruano de 9 dígitos. El lead queda en
-// `programLeads`, como los del formulario del Inicio.
+// sendProgramEmail: el visitante que pide el programa de un curso (Recibir el
+// programa en /course/:id) recibe un correo con el botón "Descargar programa":
+// el PDF no viaja adjunto, se baja desde /programa/<código>. Así el contacto
+// solo queda verificado (`verifiedAt`) si la persona abrió ese correo -- ver
+// confirmProgramEmail. Antes de enviar se comprueba que el dominio del correo
+// reciba correo (registro MX) y que el celular sea un móvil peruano de 9
+// dígitos. El lead queda en `programLeads/{código}` desde el envío.
 //
 // Envía por SMTP de Gmail con la cuenta de la academia y una contraseña de
 // aplicación (Cuenta de Google > Seguridad > Contraseñas de aplicaciones):
@@ -542,8 +543,21 @@ export const sendProgramEmail = onCall(
       throw new HttpsError('resource-exhausted', 'Ya te enviamos el programa hoy. Revisa tu bandeja de entrada y la carpeta de spam.');
     }
 
+    // El código del enlace es el id del lead: aleatorio y no adivinable.
+    const token = randomBytes(18).toString('base64url');
+    const leadRef = db.collection('programLeads').doc(token);
+    const now = new Date().toISOString();
+    await leadRef.set({
+      courseId, courseTitle: str(data.courseTitle).slice(0, 120) || courseTitle, name, email, phone,
+      source: 'download', marketingConsent: data.marketingConsent === true, createdAt: now, emailSentAt: now,
+      verifiedAt: null, downloads: 0,
+    });
+
+    const requested = str(request.rawRequest?.headers?.origin);
+    const origin = ACCESS_LINK_ORIGINS.includes(requested) || LOCAL_ORIGIN.test(requested) ? requested : ACCESS_LINK_ORIGINS[0];
+    const downloadUrl = `${origin}/programa/${token}`;
+    const courseUrl = `${origin}/course/${courseId}`;
     const firstName = escapeHtml(name.split(/\s+/)[0]);
-    const courseUrl = `https://netwiseacademy.pe/course/${courseId}`;
     const transport = nodemailer.createTransport({
       host: 'smtp.gmail.com', port: 465, secure: true,
       auth: { user: MAIL_USER.value(), pass: MAIL_PASSWORD.value() },
@@ -553,26 +567,57 @@ export const sendProgramEmail = onCall(
         from: `"Netwise Academy" <${MAIL_USER.value()}>`,
         to: email,
         subject: `Tu programa de ${courseTitle} · Netwise Academy`,
-        text: `Hola ${name.split(/\s+/)[0]},\n\nTe enviamos adjunto el programa completo de ${courseTitle}: módulos, contenidos y entregables.\n\nPuedes ver horarios e inscribirte aquí: ${courseUrl}\n\nNetwise Academy`,
-        html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a2e;max-width:560px">
-<p>Hola ${firstName},</p>
-<p>Te enviamos adjunto el programa completo de <strong>${escapeHtml(courseTitle)}</strong>: módulos, contenidos y entregables.</p>
-<p><a href="${courseUrl}" style="display:inline-block;background:#7c3aed;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:bold">Ver horarios e inscribirme</a></p>
-<p>Si tienes dudas, responde este correo.</p>
-<p>Netwise Academy</p></div>`,
-        attachments: [{ filename: `Programa - ${courseTitle}.pdf`, path: fileURLToPath(new URL(`./programs/${courseId}.pdf`, import.meta.url)) }],
+        text: `Hola ${name.split(/\s+/)[0]},\n\nDescarga el programa completo de ${courseTitle} (módulos, contenidos y entregables) aquí:\n${downloadUrl}\n\nHorarios e inscripción: ${courseUrl}\n\nNetwise Academy`,
+        // Logo blanco sobre una franja oscura, incrustado en el correo (cid):
+        // Gmail no muestra imágenes en data: ni SVG.
+        html: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1a1a2e">
+<tr><td bgcolor="#1a1035" style="background:#1a1035;padding:22px 28px;border-radius:14px 14px 0 0"><img src="cid:netwise-logo" width="160" height="45" alt="Netwise Academy" style="display:block;border:0"></td></tr>
+<tr><td style="padding:24px 28px;border:1px solid #ECEAF3;border-top:0;border-radius:0 0 14px 14px">
+<p style="margin:0 0 14px">Hola ${firstName},</p>
+<p style="margin:0 0 18px">Aquí tienes el programa completo de <strong>${escapeHtml(courseTitle)}</strong>: módulos, contenidos y entregables.</p>
+<p style="margin:0 0 18px"><a href="${downloadUrl}" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:bold">Descargar programa</a></p>
+<p style="margin:0 0 14px">¿Listo para empezar? <a href="${courseUrl}" style="color:#7c3aed;font-weight:bold">Ver horarios e inscribirme</a></p>
+<p style="margin:0 0 14px">Si tienes dudas, responde este correo.</p>
+<p style="margin:0">Netwise Academy<br><a href="https://netwiseacademy.pe" style="color:#7c3aed">netwiseacademy.pe</a></p>
+</td></tr></table>`,
+        attachments: [
+          { filename: 'netwise.png', path: fileURLToPath(new URL('./assets/logo-email.png', import.meta.url)), cid: 'netwise-logo' },
+        ],
       });
     } catch (err) {
       console.error('sendProgramEmail', err?.code, err?.responseCode, err?.message);
+      await leadRef.delete().catch(() => {});
       if (err?.code === 'EENVELOPE') throw new HttpsError('invalid-argument', 'No pudimos entregar el correo a esa dirección. Revísala.');
       throw new HttpsError('unavailable', 'No pudimos enviar el correo. Intenta de nuevo en unos minutos.');
     }
 
-    const now = new Date().toISOString();
-    await db.collection('programLeads').add({
-      courseId, courseTitle: str(data.courseTitle).slice(0, 120) || courseTitle, name, email, phone,
-      source: 'download', marketingConsent: data.marketingConsent === true, createdAt: now, emailSentAt: now,
-    });
     return { sent: true };
   },
 );
+
+// confirmProgramEmail: la página /programa/<código> (el botón del correo) la
+// llama al abrirse. Marca el lead como verificado la primera vez -- el correo
+// existe y la persona lo abrió -- y devuelve qué programa descargar.
+// `firstTime` avisa a la página para que mande el contacto al Sheet de leads
+// una sola vez.
+const PROGRAM_TOKEN = /^[A-Za-z0-9_-]{24}$/;
+
+export const confirmProgramEmail = onCall({ region: 'us-central1', maxInstances: 5, timeoutSeconds: 30 }, async (request) => {
+  const token = str(request.data?.token);
+  if (!PROGRAM_TOKEN.test(token)) throw new HttpsError('not-found', 'Este enlace no es válido.');
+  const ref = db.collection('programLeads').doc(token);
+  const lead = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return null;
+    const data = snap.data();
+    const firstTime = !data.verifiedAt;
+    const verifiedAt = data.verifiedAt || new Date().toISOString();
+    tx.update(ref, { verifiedAt, downloads: FieldValue.increment(1), lastDownloadAt: new Date().toISOString() });
+    return { ...data, verifiedAt, firstTime };
+  });
+  if (!lead) throw new HttpsError('not-found', 'Este enlace no es válido.');
+  return {
+    courseId: lead.courseId, courseTitle: lead.courseTitle, name: lead.name, email: lead.email, phone: lead.phone,
+    marketingConsent: !!lead.marketingConsent, createdAt: lead.createdAt, verifiedAt: lead.verifiedAt, firstTime: lead.firstTime,
+  };
+});

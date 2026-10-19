@@ -5,9 +5,9 @@ import { toPeruMobile, isEmailFormat } from '../lib/phone';
 import ModalPortal from './ModalPortal';
 import TermsModal from './TermsModal';
 
-// El programa (PDF) llega al correo del visitante -- ya no se descarga al
-// enviar el formulario: así el contacto que deja tiene que ser real. La
-// función sendProgramEmail vuelve a validar correo y celular.
+// El visitante recibe un correo con el botón "Descargar programa" -- el PDF
+// no se descarga al enviar el formulario: así el contacto que deja tiene que
+// ser real. La función sendProgramEmail vuelve a validar correo y celular.
 const DownloadProgramModal = ({ course, onClose }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -56,7 +56,7 @@ const DownloadProgramModal = ({ course, onClose }) => {
             <div style={{ textAlign: 'center', padding: '8px 4px 12px' }}>
               <CheckCircle2 size={44} color="#16A34A" style={{ marginBottom: 12 }} />
               <h2 className="lead-modal-title">Revisa tu <em>correo.</em></h2>
-              <p className="lead-modal-desc">Te enviamos el programa de {course.title} a <strong>{sentTo}</strong>. Si no lo ves en unos minutos, revisa la carpeta de spam o promociones.</p>
+              <p className="lead-modal-desc">Te enviamos un correo a <strong>{sentTo}</strong> con el botón para descargar el programa de {course.title}. Si no lo ves en unos minutos, revisa la carpeta de spam o promociones.</p>
               <button type="button" className="lead-submit-btn" onClick={onClose}>Entendido</button>
             </div>
           ) : (

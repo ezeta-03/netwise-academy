@@ -1476,15 +1476,29 @@ export const captureProgramLead = async ({ courseId, courseTitle, name, email, p
   return payload;
 };
 
-// "Descargar programa" de un curso: el PDF se envía al correo del visitante
-// (Cloud Function sendProgramEmail, que valida correo y celular y guarda el
-// lead) en vez de descargarse. El Sheet de leads recibe la misma fila.
+// "Recibir el programa" de un curso: le llega un correo con el botón
+// "Descargar programa" (Cloud Function sendProgramEmail, que valida correo y
+// celular y guarda el lead). El Sheet de leads recibe el contacto recién
+// cuando abre ese enlace (ver confirmProgramDownload): solo correos reales.
 export const requestProgramByEmail = async ({ courseId, courseTitle, name, email, phone, marketingConsent }) => {
   const payload = { courseId, courseTitle, name: name.trim(), email: email.trim().toLowerCase(), phone: phone.trim(), marketingConsent: !!marketingConsent };
   if (!isConfigValid) return { sent: true };
   await httpsCallable(functions, 'sendProgramEmail', { timeout: 60000 })(payload);
-  sendLeadToSheet({ ...payload, source: 'download', createdAt: new Date().toISOString() });
   return { sent: true };
+};
+
+// Página /programa/:token (el botón del correo): verifica el contacto y
+// devuelve qué programa descargar. La primera vez lo manda al Sheet de leads.
+export const confirmProgramDownload = async (token) => {
+  if (!isConfigValid) return { courseId: 1, firstTime: false };
+  const { data } = await httpsCallable(functions, 'confirmProgramEmail', { timeout: 30000 })({ token });
+  if (data?.firstTime) {
+    sendLeadToSheet({
+      courseId: data.courseId, courseTitle: data.courseTitle, name: data.name, email: data.email, phone: data.phone,
+      marketingConsent: data.marketingConsent, source: 'download (correo verificado)', createdAt: data.verifiedAt,
+    });
+  }
+  return data;
 };
 
 // --- Teléfono del usuario (extiende `users/{uid}`) ---

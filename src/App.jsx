@@ -14,6 +14,7 @@ import Masterclass from './pages/Masterclass';
 import CourseDetail from './pages/CourseDetail';
 import Checkout from './pages/Checkout';
 import AuthAction from './pages/AuthAction';
+import ProgramDownload from './pages/ProgramDownload';
 import Player from './pages/Player';
 import BackGuard from './components/BackGuard';
 import LiveClassRoom from './pages/LiveClassRoom';
@@ -147,6 +148,7 @@ function App() {
           <Route path="/checkout/:courseId" element={<Checkout />} />
           {/* Enlaces de los correos de Firebase (crear o recuperar contraseña). */}
           <Route path="/auth/accion" element={<AuthAction />} />
+          <Route path="/programa/:token" element={<ProgramDownload />} />
 
           {/* Protected Routes */}
           <Route path="/player/:courseId/:lessonId" element={<ProtectedRoute><Player /></ProtectedRoute>} />
