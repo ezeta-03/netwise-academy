@@ -309,6 +309,45 @@ const linkAndSaveAccount = async ({ accountRef, uid, email, googleId, displayNam
   return linked;
 };
 
+// Con el correo de la academia enlazado, la persona entra solo con él: el
+// acceso pasa a ese correo, así que el correo personal ya no inicia sesión y
+// queda en el perfil (`personalEmail`) como contacto. La contraseña no se
+// quita: quitarla también borra el correo de la cuenta de acceso. Así se usa siempre la
+// cuenta de la academia (Meet, asistencia). Un admin conserva su acceso.
+// Devuelve true si quedó así.
+const makeInstitutionalExclusive = async ({ uid, email, accountRef }) => {
+  const profileRef = db.collection('users').doc(uid);
+  const profile = (await profileRef.get()).data() || {};
+  if (profile.role === 'admin') return false;
+  const user = await getAuth().getUser(uid);
+  const current = str(user.email).toLowerCase();
+  const personalEmail = current && current !== email ? current : (profile.personalEmail || null);
+  try {
+    await getAuth().updateUser(uid, { email, emailVerified: true });
+  } catch (err) {
+    console.error('exclusive email', err?.code, err?.message);
+    return false;
+  }
+  await profileRef.set({ email, personalEmail }, { merge: true });
+  await accountRef.set({ exclusive: true, personalEmail }, { merge: true });
+  return true;
+};
+
+// Al retirar el correo de la academia, el acceso vuelve al correo personal con
+// la contraseña de siempre. Quien se creó directo con el correo de la academia
+// no tiene una: el admin le manda el enlace de acceso para crearla.
+const restorePersonalLogin = async (uid, account) => {
+  if (!account.exclusive || !account.personalEmail) return null;
+  try {
+    await getAuth().updateUser(uid, { email: account.personalEmail });
+  } catch (err) {
+    console.error('restore personal email', err?.code, err?.message);
+    return null;
+  }
+  await db.collection('users').doc(uid).set({ email: account.personalEmail }, { merge: true });
+  return account.personalEmail;
+};
+
 export const provisionInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
   await assertAdmin(request);
   const uid = str(request.data?.uid).trim();
@@ -336,7 +375,8 @@ export const provisionInstitutionalAccount = onCall(ADMIN_CALL, async (request) 
   // Única respuesta 'already-exists': el panel ofrece vincular esa cuenta.
   const googleId = await createDirectoryAccount({ email, displayName, password, recoveryEmail: profile.email, useExisting: request.data?.useExisting === true });
   const linked = await linkAndSaveAccount({ accountRef, uid, email, googleId, displayName, createdBy: request.auth.uid });
-  return { email, password, linked };
+  const exclusive = linked && await makeInstitutionalExclusive({ uid, email, accountRef });
+  return { email, password, linked, exclusive };
 });
 
 // activateInstitutionalAccount: el propio alumno activa su correo de la academia
@@ -412,12 +452,64 @@ export const activateInstitutionalAccount = onCall({ region: 'us-central1', maxI
         throw err;
       }
       const linked = await linkAndSaveAccount({ accountRef, uid, email, googleId, displayName, createdBy: uid });
-      return { email, password, linked };
+      const exclusive = linked && await makeInstitutionalExclusive({ uid, email, accountRef });
+      return { email, password, linked, exclusive };
     }
     throw new HttpsError('internal', 'No se pudo asignar una dirección.');
   } catch (err) {
     await accountRef.delete().catch(() => {});
     throw err;
+  }
+});
+
+// createInstitutionalStudent: el admin da de alta a un alumno directamente con
+// su correo de la academia (Alumnos y accesos > Nueva matrícula, Ventas >
+// Registrar venta): se crea la cuenta en Google y su acceso a la plataforma con
+// ese mismo correo, sin contraseña propia -- entra con "Continuar con Google".
+// El correo personal (opcional) queda como contacto y correo de recuperación de
+// Google. Devuelve la contraseña temporal de Google para pasársela.
+export const createInstitutionalStudent = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, async (request) => {
+  await assertAdmin(request);
+  const displayName = str(request.data?.name).trim().slice(0, 120);
+  const localPart = str(request.data?.localPart).trim().toLowerCase();
+  const personalEmail = str(request.data?.personalEmail).trim().toLowerCase() || null;
+  const phone = peruMobile(request.data?.phone);
+  if (displayName.length < 3) throw new HttpsError('invalid-argument', 'Escribe el nombre completo del alumno.');
+  if (!LOCAL_PART.test(localPart) || localPart.length > 60) throw new HttpsError('invalid-argument', 'La dirección solo admite letras, números y puntos.');
+  if (personalEmail && (!EMAIL_FORMAT.test(personalEmail) || personalEmail.endsWith(`@${WORKSPACE_DOMAIN}`))) throw new HttpsError('invalid-argument', 'El correo personal no es válido.');
+  if (request.data?.phone && !phone) throw new HttpsError('invalid-argument', 'El celular debe tener 9 dígitos y empezar con 9.');
+  const email = `${localPart}@${WORKSPACE_DOMAIN}`;
+  if (await emailTaken(email)) throw new HttpsError('permission-denied', 'Esa dirección ya es de otra persona de la plataforma.');
+  for (const address of [email, personalEmail].filter(Boolean)) {
+    try {
+      await getAuth().getUserByEmail(address);
+      throw new HttpsError('already-exists', `${address} ya tiene cuenta en la plataforma: elígelo como alumno ya registrado.`);
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      if (err?.code !== 'auth/user-not-found') throw new HttpsError('internal', 'No se pudo consultar la cuenta.');
+    }
+  }
+  const byProfile = personalEmail && !(await db.collection('users').where('email', '==', personalEmail).limit(1).get()).empty;
+  if (byProfile) throw new HttpsError('already-exists', `${personalEmail} ya tiene cuenta en la plataforma: elígelo como alumno ya registrado.`);
+
+  const password = tempPassword();
+  // 'already-exists' si la dirección ya está en Google: el panel pide otra.
+  const googleId = await createDirectoryAccount({ email, displayName, password, recoveryEmail: personalEmail });
+  let uid;
+  try {
+    uid = (await getAuth().createUser({ email, emailVerified: true, displayName })).uid;
+    const accountRef = db.collection('institutionalAccounts').doc(uid);
+    const linked = await linkAndSaveAccount({ accountRef, uid, email, googleId, displayName, createdBy: request.auth.uid });
+    await accountRef.set({ exclusive: true, personalEmail }, { merge: true });
+    await db.collection('users').doc(uid).set({
+      email, personalEmail, displayName, phone: phone || '', role: 'student', createdAt: new Date().toISOString(),
+    });
+    return { uid, email, password, linked, exclusive: true };
+  } catch (err) {
+    console.error('createInstitutionalStudent', err?.code, err?.message);
+    if (uid) await getAuth().deleteUser(uid).catch(() => {});
+    await deleteDirectoryAccount(email).catch(() => {});
+    throw new HttpsError('internal', 'No se pudo crear la cuenta del alumno.');
   }
 });
 
@@ -453,8 +545,9 @@ export const syncInstitutionalAccount = onCall(ADMIN_CALL, async (request) => {
     if (account.linked) {
       await getAuth().updateUser(uid, { providersToUnlink: ['google.com'] }).catch((err) => console.warn('providersToUnlink', err?.code, err?.message));
     }
+    const personalEmail = await restorePersonalLogin(uid, account);
     await accountRef.set({ uid, removed: true, removedAt: new Date().toISOString(), removedBy: request.auth.uid, previousEmail: account.email });
-    return { email: account.email, removed: true };
+    return { email: account.email, removed: true, personalEmail };
   }
 
   const suspended = action === 'suspend';

@@ -378,6 +378,15 @@ export const provisionInstitutionalAccount = async ({ uid, localPart, useExistin
   return data;
 };
 
+// Alta de un alumno directamente con su correo de la academia (Cloud Function
+// createInstitutionalStudent): sin cuenta personal; entra con "Continuar con
+// Google". Devuelve { uid, email, password } -- la contraseña temporal de Google.
+export const createInstitutionalStudent = async ({ name, localPart, personalEmail = '', phone = '' }) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const { data } = await httpsCallable(functions, 'createInstitutionalStudent', { timeout: 60000 })({ name, localPart, personalEmail, phone });
+  return data;
+};
+
 // Borra el perfil/rol de Firestore (Admin > Equipo y permisos, limpiar
 // cuentas de prueba). Esto NO borra la cuenta de Firebase Auth -- si esa
 // persona vuelve a iniciar sesión, `ensureUserProfile` le crea un perfil

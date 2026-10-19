@@ -16,6 +16,51 @@ const errorMessage = (err) => (err?.message === 'app/needs-firebase'
   ? 'Esta función necesita la base de datos real conectada.'
   : ERRORS[err?.code] || 'No se pudo completar. Revisa tu conexión e intenta de nuevo.');
 
+// Mensaje para WhatsApp con el correo y la contraseña temporal de Google.
+const credentialsMessage = ({ name, email, password, linked, exclusive }) => {
+  const firstName = (name || '').split(' ')[0] || '';
+  const access = exclusive
+    ? ' y a https://netwiseacademy.pe con el botón "Ingresar con tu correo de la academia" (desde ahora es tu único acceso a la plataforma)'
+    : linked ? ' y a https://netwiseacademy.pe con el botón "Continuar con Google"' : '';
+  return `Hola ${firstName}, este es tu correo institucional de Netwise Academy:\n\nCorreo: ${email}\nContraseña temporal: ${password}\n\nEntra en https://accounts.google.com con esos datos; Google te pedirá crear tu propia contraseña. Con esa cuenta ingresas a las clases en Google Meet${access}.`;
+};
+
+// Correo y contraseña temporal recién creados, listos para mandar por WhatsApp.
+// La contraseña solo se ve acá. También lo usan las altas de alumno con correo
+// de la academia (Alumnos y accesos, Ventas).
+export const InstitutionalCredentials = ({ name, phone, email, password, linked, exclusive }) => {
+  const { addToast } = useUI();
+  const message = credentialsMessage({ name, email, password, linked, exclusive });
+  const copy = async (text, label) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast(`${label} copiado.`, 'success');
+    } catch {
+      addToast('No se pudo copiar. Selecciona el texto y cópialo a mano.', 'error');
+    }
+  };
+  return (
+    <>
+      <p className="admin-cell-sub" style={{ marginBottom: 12 }}>Envíale estos datos. La contraseña es temporal y solo se muestra ahora: Google le pedirá crear la suya al entrar.</p>
+      <div className="admin-field-row">
+        <div className="admin-field"><label htmlFor="inst-email">Correo</label><input id="inst-email" readOnly value={email} onFocus={(e) => e.target.select()} /></div>
+        <div className="admin-field"><label htmlFor="inst-password">Contraseña temporal</label><input id="inst-password" readOnly value={password} onFocus={(e) => e.target.select()} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <a className="admin-btn-edit" href={whatsAppLink(phone, message)} target="_blank" rel="noreferrer"><MessageCircle size={14} /> Enviar por WhatsApp</a>
+        <button className="admin-btn-ghost" onClick={() => copy(message, 'Mensaje')}><Copy size={14} /> Copiar mensaje</button>
+      </div>
+      <p className="dash-notice" style={{ marginTop: 0 }}>
+        {exclusive
+          ? 'Desde ahora entra a la plataforma solo con este correo, con el botón "Ingresar con tu correo de la academia": su correo personal ya no inicia sesión. Llega a su mismo perfil y cursos.'
+          : linked
+            ? 'Con esta cuenta también puede entrar a la plataforma con "Continuar con Google": llega a su mismo perfil y cursos.'
+            : 'Esta cuenta le sirve para Google Meet. A la plataforma sigue entrando como hasta ahora: no se pudo enlazar a su acceso (suele pasar si ya entraba con otra cuenta de Google).'}
+      </p>
+    </>
+  );
+};
+
 // Correo institucional de una persona (nombre@netwiseacademy.pe): lo crea en
 // Google Workspace o, si ya lo tiene, le genera otra contraseña temporal. La
 // contraseña solo se muestra acá, para que el admin se la pase por WhatsApp;
@@ -32,9 +77,6 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
 
   const email = result?.email || account?.email || `${localPart}@${INSTITUTIONAL_DOMAIN}`;
   const firstName = (user.name || '').split(' ')[0] || '';
-  const message = result?.password
-    ? `Hola ${firstName}, este es tu correo institucional de Netwise Academy:\n\nCorreo: ${result.email}\nContraseña temporal: ${result.password}\n\nEntra en https://accounts.google.com con esos datos; Google te pedirá crear tu propia contraseña. Con esa cuenta ingresas a las clases en Google Meet${result.linked ? ' y a https://netwiseacademy.pe con el botón "Continuar con Google"' : ''}.`
-    : '';
 
   const run = async (params, logText) => {
     setError('');
@@ -44,7 +86,7 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
       setResult(data);
       setExistsInGoogle(false);
       await logChange(adminName, `${logText} ${data.email} (${user.name}).`);
-      onSaved?.(user.uid, { email: data.email, linked: data.linked });
+      onSaved?.(user.uid, { email: data.email, linked: data.linked, exclusive: data.exclusive });
     } catch (err) {
       if (err?.code === 'functions/already-exists') setExistsInGoogle(true);
       else setError(errorMessage(err));
@@ -65,27 +107,18 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
 
   // Elimina su cuenta de Google y libera el cupo; su cuenta de la plataforma no se toca.
   const remove = async () => {
-    if (!(await confirmDialog({ title: 'Retirar correo de la academia', message: `¿Retirar ${account.email} a ${user.name}?\n\nSe elimina su cuenta de Google (ya no podrá entrar a Meet con ella) y se libera su cupo. Sigue entrando a la plataforma con ${user.email}, y conserva sus cursos, pagos y entregas.\n\nSe puede recuperar durante 20 días desde Google Admin.`, confirmLabel: 'Retirar correo', danger: true }))) return;
+    if (!(await confirmDialog({ title: 'Retirar correo de la academia', message: `¿Retirar ${account.email} a ${user.name}?\n\nSe elimina su cuenta de Google (ya no podrá entrar a Meet con ella) y se libera su cupo. ${account.exclusive ? `Vuelve a entrar a la plataforma con su correo personal (${account.personalEmail || 'el que tenía'}) y su contraseña de siempre; si no tiene o no la recuerda, envíale el enlace de acceso (icono de llave).` : `Sigue entrando a la plataforma con ${user.email}.`} Conserva sus cursos, pagos y entregas.\n\nSe puede recuperar durante 20 días desde Google Admin.`, confirmLabel: 'Retirar correo', danger: true }))) return;
     setError('');
     setBusy(true);
     try {
-      await syncInstitutionalAccount(user.uid, 'remove');
+      const { personalEmail } = await syncInstitutionalAccount(user.uid, 'remove');
       await logChange(adminName, `Retiró el correo institucional ${account.email} (${user.name}).`);
-      addToast('Correo de la academia retirado.', 'success');
+      addToast(personalEmail ? `Correo retirado. Vuelve a entrar con ${personalEmail}; si no tiene contraseña, envíale el enlace de acceso.` : 'Correo de la academia retirado.', personalEmail ? 'warning' : 'success');
       onSaved?.(user.uid, null);
       onClose();
     } catch (err) {
       setError(errorMessage(err));
       setBusy(false);
-    }
-  };
-
-  const copy = async (text, label) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      addToast(`${label} copiado.`, 'success');
-    } catch {
-      addToast('No se pudo copiar. Selecciona el texto y cópialo a mano.', 'error');
     }
   };
 
@@ -103,22 +136,7 @@ export const InstitutionalAccountModal = ({ user, account, adminName, onClose, o
           {error && <div className="checkout-error" role="alert" style={{ marginBottom: 12 }}>{error}</div>}
 
           {result?.password ? (
-            <>
-              <p className="admin-cell-sub" style={{ marginBottom: 12 }}>Envíale estos datos. La contraseña es temporal y solo se muestra ahora: Google le pedirá crear la suya al entrar.</p>
-              <div className="admin-field-row">
-                <div className="admin-field"><label htmlFor="inst-email">Correo</label><input id="inst-email" readOnly value={result.email} onFocus={(e) => e.target.select()} /></div>
-                <div className="admin-field"><label htmlFor="inst-password">Contraseña temporal</label><input id="inst-password" readOnly value={result.password} onFocus={(e) => e.target.select()} /></div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <a className="admin-btn-edit" href={whatsAppLink(user.phone, message)} target="_blank" rel="noreferrer"><MessageCircle size={14} /> Enviar por WhatsApp</a>
-                <button className="admin-btn-ghost" onClick={() => copy(message, 'Mensaje')}><Copy size={14} /> Copiar mensaje</button>
-              </div>
-              <p className="dash-notice" style={{ marginTop: 0 }}>
-                {result.linked
-                  ? 'Con esta cuenta también puede entrar a la plataforma con "Continuar con Google": llega a su mismo perfil y cursos.'
-                  : 'Esta cuenta le sirve para Google Meet. A la plataforma sigue entrando como hasta ahora: no se pudo enlazar a su acceso (suele pasar si ya entraba con otra cuenta de Google).'}
-              </p>
-            </>
+            <InstitutionalCredentials name={user.name} phone={user.phone} email={result.email} password={result.password} linked={result.linked} exclusive={result.exclusive} />
           ) : account ? (
             <>
               <div className="admin-field"><label htmlFor="inst-email">Correo</label><input id="inst-email" readOnly value={account.email} onFocus={(e) => e.target.select()} /></div>

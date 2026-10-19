@@ -271,7 +271,7 @@ Para suspenderla sin perder nada, usa "Desactivar".`,
               return (
                 <tr key={u.id}>
                   <td className="admin-cell-name">{u.name}</td>
-                  <td className="admin-cell-sub">{u.email}{instAccounts[u.uid] ? <div>{instAccounts[u.uid].email}</div> : null}{u.phone ? <div>{u.phone}</div> : null}</td>
+                  <td className="admin-cell-sub">{u.email}{instAccounts[u.uid] && instAccounts[u.uid].email !== u.email ? <div>{instAccounts[u.uid].email}</div> : null}{instAccounts[u.uid]?.exclusive && instAccounts[u.uid].personalEmail ? <div>Personal: {instAccounts[u.uid].personalEmail}</div> : null}{u.phone ? <div>{u.phone}</div> : null}</td>
                   <td>
                     <select
                       className="admin-select"

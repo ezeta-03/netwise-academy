@@ -32,6 +32,22 @@
         "auth,firestore,storage"
       ],
       "port": 4000
+    },
+    {
+      "name": "netwise-emulators-fn",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "firebase-tools",
+        "emulators:start",
+        "--project",
+        "demo-netwise",
+        "--only",
+        "auth,firestore,storage,functions"
+      ],
+      "port": 4000,
+      "env": {
+        "FUNCTIONS_DISCOVERY_TIMEOUT": "60"
+      }
     }
   ]
 }

@@ -4,7 +4,7 @@ const MESSAGES = {
   'auth/email-already-in-use': 'Ese correo ya tiene una cuenta. Inicia sesión.',
   'auth/invalid-email': 'El correo no es válido.',
   'auth/weak-password': 'La contraseña es muy débil: usa al menos 8 caracteres.',
-  'auth/invalid-credential': 'Correo o contraseña incorrectos.',
+  'auth/invalid-credential': 'Correo o contraseña incorrectos. Si ya tienes tu correo de la academia, entra con el botón "Ingresar con tu correo de la academia".',
   'auth/wrong-password': 'Correo o contraseña incorrectos.',
   'auth/user-not-found': 'Correo o contraseña incorrectos.',
   'auth/user-disabled': 'Tu cuenta está desactivada. Escríbenos a soporte si crees que es un error.',

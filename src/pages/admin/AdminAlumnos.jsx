@@ -9,7 +9,8 @@ import { fetchAllEnrollments, adminCreateEnrollment, updateEnrollmentAccess, del
 import { unassignedEnrollments } from '../../lib/groupAssignment';
 import { downloadCsv } from '../../lib/csv';
 import { usePagedTable } from '../../hooks/usePagedTable';
-import { InstitutionalAccountModal } from './InstitutionalAccount';
+import { InstitutionalAccountModal, InstitutionalCredentials } from './InstitutionalAccount';
+import { useInstitutionalStudentForm } from './InstitutionalStudentForm';
 
 const ACCESS_STATUS = {
   active: { label: 'Activo', cls: 'admin-status-green' },
@@ -100,6 +101,12 @@ const EnrollmentModal = ({ enrollment, courses, groups, payment, adminName, onCl
   const [status, setStatus] = useState(enrollment?.status || 'active');
   const [reason, setReason] = useState(enrollment?.reason || 'Matrícula de ejemplo');
   const [saving, setSaving] = useState(false);
+  // 'existing': alumno registrado o datos a mano; 'institutional': alumno nuevo
+  // con su correo de la academia.
+  const [source, setSource] = useState('existing');
+  const [error, setError] = useState('');
+  const [credentials, setCredentials] = useState(null);
+  const institutional = useInstitutionalStudentForm({ disabled: saving });
 
   useEffect(() => {
     if (isEdit) return;
@@ -115,6 +122,30 @@ const EnrollmentModal = ({ enrollment, courses, groups, payment, adminName, onCl
   };
 
   const handleSave = async () => {
+    setError('');
+    if (source === 'institutional' && !isEdit) {
+      setSaving(true);
+      try {
+        const course = courses.find((c) => c.id.toString() === courseId.toString());
+        const group = courseGroups.find((g) => g.id === groupId);
+        const student = await institutional.create();
+        await logChange(adminName, `Creó al alumno ${student.name} con el correo de la academia ${student.email}.`).catch(() => {});
+        const created = await adminCreateEnrollment({
+          uid: student.uid, studentName: student.name, studentEmail: student.email,
+          courseId: course?.id ?? courseId, courseTitle: course?.title || '', groupId: group?.id, groupName: group?.name,
+          status, reason,
+        });
+        await logChange(adminName, `Matriculó a ${student.name} en "${course?.title}".`).catch(() => {});
+        addToast(created?.groupName ? `Alumno creado y matriculado en el aula ${created.groupName}.` : 'Alumno creado y matriculado.', 'success');
+        onSaved();
+        setCredentials(student);
+      } catch (err) {
+        setError(err.message || 'No se pudo crear la matrícula.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (!studentName.trim() || !studentEmail.trim()) { addToast('Nombre y correo son obligatorios.', 'error'); return; }
     setSaving(true);
     try {
@@ -155,7 +186,20 @@ const EnrollmentModal = ({ enrollment, courses, groups, payment, adminName, onCl
           <button className="admin-modal-close" onClick={onClose}><X size={18} /></button>
         </div>
 
+        {credentials ? (
+          <>
+            <InstitutionalCredentials name={credentials.name} phone={credentials.phone} email={credentials.email} password={credentials.password} linked={credentials.linked} exclusive={credentials.exclusive} />
+            <div className="admin-modal-actions"><button className="admin-btn-edit" onClick={onClose}>Listo</button></div>
+          </>
+        ) : (<>
         {!isEdit && (
+          <div className="admin-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={source === 'existing'} className={`admin-tab ${source === 'existing' ? 'active' : ''}`} onClick={() => { setSource('existing'); setError(''); }}>Alumno registrado</button>
+            <button type="button" role="tab" aria-selected={source === 'institutional'} className={`admin-tab ${source === 'institutional' ? 'active' : ''}`} onClick={() => { setSource('institutional'); setError(''); }}>Nuevo con correo de la academia</button>
+          </div>
+        )}
+        {!isEdit && source === 'institutional' && institutional.fields}
+        {!isEdit && source === 'existing' && (
           <>
             <div className="admin-field">
               <label>Alumno ya registrado · opcional</label>
@@ -201,10 +245,12 @@ const EnrollmentModal = ({ enrollment, courses, groups, payment, adminName, onCl
             : <div className="admin-field"><label>Motivo</label><input value={reason} onChange={(e) => setReason(e.target.value)} /></div>}
         </div>
 
+        {error && <div className="checkout-error" role="alert">{error}</div>}
         <div className="admin-modal-actions">
-          <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="admin-btn-edit" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</button>
+          <button className="admin-btn-ghost" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="admin-btn-edit" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : source === 'institutional' && !isEdit ? 'Crear alumno y matricular' : 'Guardar'}</button>
         </div>
+        </>)}
       </div>
     </div>
     </ModalPortal>

@@ -4,6 +4,7 @@ import ModalPortal from '../../components/ModalPortal';
 import { useUI } from '../../context/UIContext';
 import { fetchAllUsers, createStudentAccount, createOrder, adminCreateEnrollment, logChange } from '../../lib/db';
 import { toPeruMobile, isEmailFormat } from '../../lib/phone';
+import { useInstitutionalStudentForm } from './InstitutionalStudentForm';
 
 const SALE_PAYMENT_METHODS = [
   { id: 'yape', label: 'Yape / Plin' },
@@ -22,11 +23,12 @@ const todayLocal = () => {
 // registra y queda igual que una compra por la web ya validada -- un pedido
 // "Pagada" en Pedidos y pagos y la matrícula activa en Alumnos y accesos, en
 // el aula elegida o en la próxima con cupos. Si el alumno todavía no tiene
-// cuenta, se le crea; `onCreated(order, { student, newAccount })` deja al
-// llamador abrir su enlace de acceso.
+// cuenta, se le crea -- con su correo de la academia (recomendado) o con su
+// correo personal; `onCreated(order, { student, newAccount, credentials })`
+// deja al llamador mostrar su contraseña temporal o su enlace de acceso.
 const RegisterSaleModal = ({ courses, groups, adminName, onClose, onCreated }) => {
   const { addToast } = useUI();
-  const [mode, setMode] = useState('existing'); // 'existing' | 'new'
+  const [mode, setMode] = useState('existing'); // 'existing' | 'institutional' | 'new'
   const [students, setStudents] = useState(null);
   const [filter, setFilter] = useState('');
   const [selectedUid, setSelectedUid] = useState('');
@@ -42,6 +44,7 @@ const RegisterSaleModal = ({ courses, groups, adminName, onClose, onCreated }) =
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const institutional = useInstitutionalStudentForm({ disabled: saving });
 
   useEffect(() => {
     fetchAllUsers()
@@ -79,10 +82,24 @@ const RegisterSaleModal = ({ courses, groups, adminName, onClose, onCreated }) =
     if (!paidOn) { setError('Indica la fecha del pago.'); return; }
 
     setSaving(true);
+    let credentials = null;
     try {
-      const student = mode === 'existing'
-        ? { uid: selected.uid, name: selected.displayName || selected.email, email: selected.email, phone: selected.phone || '' }
-        : { uid: (await createStudentAccount({ name, email, phone: toPeruMobile(phone) })).uid, name: name.trim(), email: email.trim().toLowerCase(), phone: toPeruMobile(phone) };
+      let student;
+      if (mode === 'existing') {
+        student = { uid: selected.uid, name: selected.displayName || selected.email, email: selected.email, phone: selected.phone || '' };
+      } else if (mode === 'institutional') {
+        try {
+          credentials = await institutional.create();
+        } catch (err) {
+          setError(err.message);
+          setSaving(false);
+          return;
+        }
+        student = { uid: credentials.uid, name: credentials.name, email: credentials.email, phone: credentials.phone };
+        logChange(adminName, `Creó al alumno ${student.name} con el correo de la academia ${student.email}.`).catch(() => {});
+      } else {
+        student = { uid: (await createStudentAccount({ name, email, phone: toPeruMobile(phone) })).uid, name: name.trim(), email: email.trim().toLowerCase(), phone: toPeruMobile(phone) };
+      }
       const group = courseGroups.find((g) => g.id === groupId) || null;
       const order = await createOrder({
         uid: student.uid, studentName: student.name, studentEmail: student.email,
@@ -100,9 +117,9 @@ const RegisterSaleModal = ({ courses, groups, adminName, onClose, onCreated }) =
       await logChange(adminName, `Registró la venta ${order.code}: ${student.name} en "${course.title}" por S/ ${value.toFixed(2)} (pago externo).`).catch(() => {});
       const groupName = group?.name || enrollment?.groupName;
       addToast(groupName ? `Venta registrada. ${student.name} ya tiene acceso (aula ${groupName}).` : 'Venta registrada. No hay aula con cupos: asígnalo en Aulas y horarios.', groupName ? 'success' : 'warning');
-      onCreated(order, { student, newAccount: mode === 'new' });
+      onCreated(order, { student, newAccount: mode === 'new', credentials });
     } catch (err) {
-      setError(err?.code === 'auth/invalid-email' ? 'Ese correo no es válido.' : 'No se pudo registrar la venta. Intenta de nuevo.');
+      setError(err?.code === 'auth/invalid-email' ? 'Ese correo no es válido.' : credentials ? `La cuenta ${credentials.email} se creó, pero no se pudo registrar la venta: elígelo en "Ya tiene cuenta" e intenta de nuevo.` : 'No se pudo registrar la venta. Intenta de nuevo.');
       setSaving(false);
     }
   };
@@ -121,10 +138,11 @@ const RegisterSaleModal = ({ courses, groups, adminName, onClose, onCreated }) =
 
           <div className="admin-tabs" role="tablist">
             <button type="button" role="tab" aria-selected={mode === 'existing'} className={`admin-tab ${mode === 'existing' ? 'active' : ''}`} onClick={() => { setMode('existing'); setError(''); }}>Ya tiene cuenta</button>
-            <button type="button" role="tab" aria-selected={mode === 'new'} className={`admin-tab ${mode === 'new' ? 'active' : ''}`} onClick={() => { setMode('new'); setError(''); }}>Alumno nuevo</button>
+            <button type="button" role="tab" aria-selected={mode === 'institutional'} className={`admin-tab ${mode === 'institutional' ? 'active' : ''}`} onClick={() => { setMode('institutional'); setError(''); }}>Nuevo con correo de la academia</button>
+            <button type="button" role="tab" aria-selected={mode === 'new'} className={`admin-tab ${mode === 'new' ? 'active' : ''}`} onClick={() => { setMode('new'); setError(''); }}>Nuevo con correo personal</button>
           </div>
 
-          {mode === 'existing' ? (
+          {mode === 'institutional' ? institutional.fields : mode === 'existing' ? (
             <div className="admin-field">
               <label htmlFor="sale-student">Alumno</label>
               <input placeholder="Buscar por nombre o correo..." value={filter} onChange={(e) => setFilter(e.target.value)} style={{ marginBottom: 6 }} />

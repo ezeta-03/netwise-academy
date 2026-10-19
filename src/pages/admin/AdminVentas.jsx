@@ -9,6 +9,7 @@ import { useUI } from '../../context/UIContext';
 import { usePagedTable } from '../../hooks/usePagedTable';
 import RegisterSaleModal from './RegisterSaleModal';
 import { AccessLinkModal } from './TeacherAccess';
+import { InstitutionalCredentials } from './InstitutionalAccount';
 
 const ORDER_STATUS = {
   paid: { label: 'Pagada', cls: 'admin-status-green' },
@@ -49,12 +50,15 @@ const AdminVentas = () => {
   const [registering, setRegistering] = useState(false);
   // Alumno nuevo creado al registrar una venta: se abre su enlace de acceso.
   const [accessFor, setAccessFor] = useState(null);
+  // Alumno nuevo con correo de la academia: se muestra su contraseña temporal.
+  const [credentials, setCredentials] = useState(null);
 
-  const handleSaleCreated = (order, { student, newAccount }) => {
+  const handleSaleCreated = (order, { student, newAccount, credentials: created }) => {
     setOrders((list) => [order, ...list].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))));
     setRegistering(false);
     refreshNotifications();
     if (newAccount) setAccessFor(student);
+    if (created) setCredentials(created);
   };
 
   useEffect(() => { fetchOrders().then((list) => { setOrders(list); setLoading(false); }).catch(() => setLoading(false)); }, []);
@@ -212,6 +216,23 @@ const AdminVentas = () => {
         <RegisterSaleModal courses={courses} groups={groups} adminName={adminName} onClose={() => setRegistering(false)} onCreated={handleSaleCreated} />
       )}
       {accessFor && <AccessLinkModal user={accessFor} intro="Alumno creado: envíale su acceso" onClose={() => setAccessFor(null)} />}
+      {credentials && (
+        <ModalPortal>
+          <div className="admin-modal-overlay">
+            <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="admin-modal-head">
+                <div>
+                  <div className="admin-modal-title">Alumno creado: envíale su correo</div>
+                  <div className="admin-modal-sub">{credentials.name}</div>
+                </div>
+                <button className="admin-modal-close" onClick={() => setCredentials(null)} aria-label="Cerrar"><X size={18} /></button>
+              </div>
+              <InstitutionalCredentials name={credentials.name} phone={credentials.phone} email={credentials.email} password={credentials.password} linked={credentials.linked} exclusive={credentials.exclusive} />
+              <div className="admin-modal-actions"><button className="admin-btn-edit" onClick={() => setCredentials(null)}>Listo</button></div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       {viewing && (
         <ModalPortal>

@@ -89,7 +89,7 @@ const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval = f
 
       {email ? (
         <>
-          <div className="admin-cell-sub">Con este correo entras a tus clases en Google Meet{account?.linked ? ' y a la plataforma, con el botón "Ingresar con tu correo de la academia"' : ''}.</div>
+          <div className="admin-cell-sub">Con este correo entras a tus clases en Google Meet{account?.linked ? ' y a la plataforma, con el botón "Ingresar con tu correo de la academia"' : ''}.{result?.exclusive ? ' Tu correo personal ya no sirve para iniciar sesión.' : ''}</div>
           {result?.password ? (
             <>
               {/* Recién activado: los tres pasos quedan cumplidos. */}
@@ -106,6 +106,7 @@ const InstitutionalEmailCard = ({ uid, hasActiveEnrollment, awaitingApproval = f
                 <li>Copia tu contraseña temporal: solo se muestra ahora.</li>
                 <li>Entra a <a href="https://accounts.google.com" target="_blank" rel="noreferrer">accounts.google.com</a> con tu correo y esa contraseña.</li>
                 <li>Google te pedirá crear tu propia contraseña. Desde ahí, usa siempre la tuya.</li>
+                {result.exclusive && <li>La próxima vez que entres a la plataforma, usa el botón <strong>"Ingresar con tu correo de la academia"</strong>: tu correo personal ya no inicia sesión.</li>}
               </ol>
               <div className="inst-actions">
                 <button className="admin-btn-edit" onClick={() => copy(result.password, 'Contraseña')}><Copy size={14} /> Copiar contraseña</button>
