@@ -25,10 +25,17 @@ const ProgramDownload = () => {
     return () => { cancelled = true; };
   }, [token]);
 
-  // La descarga arranca sola en cuanto se sabe qué curso es.
+  // La descarga arranca sola solo la primera vez que se abre el enlace en este
+  // navegador; al volver (o recargar) queda el botón para bajarlo a mano.
+  const storageKey = `nw_program_downloaded_${token}`;
+  const [firstVisit] = useState(() => {
+    try { return !localStorage.getItem(storageKey); } catch { return true; }
+  });
   useEffect(() => {
-    if (stage === 'ready' && course) downloadProgramPdf(course);
-  }, [stage, course]);
+    if (stage !== 'ready' || !course || !firstVisit) return;
+    try { localStorage.setItem(storageKey, new Date().toISOString()); } catch { /* sin almacenamiento: no se recuerda */ }
+    downloadProgramPdf(course);
+  }, [stage, course, firstVisit, storageKey]);
 
   return (
     <div className="view active auth-action">
@@ -47,9 +54,9 @@ const ProgramDownload = () => {
           {stage === 'ready' && (
             <div className="auth-action-center">
               <div className="auth-action-icon auth-action-icon-ok"><Check size={26} /></div>
-              <h1 className="auth-action-title">Tu programa se está descargando</h1>
+              <h1 className="auth-action-title">{firstVisit ? 'Tu programa se está descargando' : 'Tu programa del curso'}</h1>
               <p className="auth-action-desc">
-                {course ? <>Programa de <strong>{course.title}</strong>: módulos, contenidos y entregables.</> : 'Programa del curso.'} Si no empezó la descarga, usa el botón.
+                {course ? <>Programa de <strong>{course.title}</strong>: módulos, contenidos y entregables.</> : 'Programa del curso.'} {firstVisit ? 'Si no empezó la descarga, usa el botón.' : 'Descárgalo otra vez cuando quieras.'}
               </p>
               <button type="button" className="checkout-submit-btn" onClick={() => course && downloadProgramPdf(course)} disabled={!course}>
                 <Download size={16} /> Descargar programa
