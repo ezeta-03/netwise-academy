@@ -4,11 +4,11 @@ import { Download, Loader2, AlertTriangle, Check } from 'lucide-react';
 import { confirmProgramDownload } from '../lib/db';
 import { downloadProgramPdf } from '../lib/programDownloads';
 import { useCourseOfferings } from '../context/CourseOfferingsContext';
-import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 
 // Destino del botón "Descargar programa" del correo (ver sendProgramEmail).
 // Abrirla confirma que el correo es real y descarga el PDF del curso; el
-// enlace sigue sirviendo para volver a bajarlo.
+// enlace sigue sirviendo para volver a bajarlo. Va con la barra principal del
+// sitio (Navbar), así que no lleva barra propia como /auth/accion.
 const ProgramDownload = () => {
   const { token } = useParams();
   const { courses } = useCourseOfferings();
@@ -39,9 +39,6 @@ const ProgramDownload = () => {
 
   return (
     <div className="view active auth-action">
-      <div className="checkout-topbar">
-        <img src={logoNetwise} alt="Netwise Academy" />
-      </div>
       <div className="checkout-body">
         <div className="auth-action-card">
           {stage === 'checking' && (
