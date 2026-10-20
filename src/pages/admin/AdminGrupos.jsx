@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw, Users, Video, Loader2 } from 'lucide-react';
+import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Ban, RotateCcw, Users, Video, Loader2, ExternalLink } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
@@ -325,6 +325,9 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
                 {creatingMeet ? <Loader2 size={14} className="spin" /> : <Video size={14} />} Crear sala de Meet
               </button>
             )}
+            {/^https?:\/\//.test(classLink.trim()) && (
+              <a className="admin-btn-edit" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }} href={classLink.trim()} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Ir a la sala</a>
+            )}
           </div>
           <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>Todas las clases del aula se abren en este enlace. Nombra al docente coanfitrión la primera vez: el rol se mantiene.</p>
         </div>
@@ -615,7 +618,6 @@ const AdminGrupos = () => {
               <td>
                 <div className="admin-cell-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {g.name}
-                  {g.classLink && <a href={g.classLink} target="_blank" rel="noreferrer" title="Enlace de clase" onClick={(e) => e.stopPropagation()}><Link2 size={13} color="var(--accent)" /></a>}
                 </div>
                 <div className="admin-cell-sub">{g.courseTitle}</div>
               </td>
@@ -626,6 +628,7 @@ const AdminGrupos = () => {
               <td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button className="admin-icon-btn" onClick={() => setModal({ mode: 'edit', group: g })} title="Editar"><Pencil size={14} /></button>
+                  {g.classLink && <a className="admin-btn-edit" style={{ padding: '6px 10px', fontSize: '.78rem', whiteSpace: 'nowrap', textDecoration: 'none' }} href={g.classLink} target="_blank" rel="noreferrer" title="Abre la sala de Google Meet del aula"><ExternalLink size={13} /> Ir a la sala</a>}
                   <button className="admin-btn-ghost" style={{ padding: '6px 10px', fontSize: '.78rem' }} onClick={() => setViewingStudents(g.id)}><Users size={13} /> Ver alumnos</button>
                   <button className="admin-icon-btn" onClick={() => toggleClosed(g)} title={g.status === 'closed' ? 'Reactivar' : 'Desactivar'} style={g.status === 'closed' ? undefined : { color: '#BE123C' }}>
                     {g.status === 'closed' ? <RotateCcw size={14} /> : <Ban size={14} />}
