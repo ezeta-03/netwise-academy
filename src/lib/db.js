@@ -901,6 +901,22 @@ export const updateGroup = async (groupId, patch) => {
   await updateDoc(doc(db, 'groups', groupId), patch);
 };
 
+// Sala fija de Google Meet del aula (Cloud Function createMeetSpace): queda en
+// `classLink` y la usan todas sus clases. Devuelve { classLink, created }.
+export const createMeetSpace = async (groupId, { replace = false } = {}) => {
+  if (!isConfigValid) throw new Error('app/needs-firebase');
+  const { data } = await httpsCallable(functions, 'createMeetSpace', { timeout: 60000 })({ groupId, replace });
+  return data;
+};
+
+// Enlace de clase del aula de una sesión, o null. Lo usa la sala en vivo para
+// abrir Google Meet en vez de la sala embebida.
+export const fetchGroupClassLink = async (groupId) => {
+  if (!isConfigValid || !groupId) return null;
+  const snap = await getDoc(doc(db, 'groups', groupId));
+  return snap.exists() ? snap.data().classLink || null : null;
+};
+
 export const deleteGroup = async (groupId) => {
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_groups');

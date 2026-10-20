@@ -714,3 +714,76 @@ export const confirmProgramEmail = onCall({ region: 'us-central1', maxInstances:
     marketingConsent: !!lead.marketingConsent, createdAt: lead.createdAt, verifiedAt: lead.verifiedAt, firstTime: lead.firstTime,
   };
 });
+
+// createMeetSpace: sala fija de Google Meet de un aula (`groups/{id}.classLink`).
+// La crea a nombre de la cuenta admin de Workspace (MEET_ORGANIZER en
+// functions/.env), que es la que tiene grabación e informe de asistencia; todas
+// las clases del aula usan ese enlace y el docente se nombra coanfitrión una
+// sola vez. Acceso "de confianza": las cuentas @netwiseacademy.pe entran
+// directo y el resto pide permiso.
+//
+// La función actúa como esa cuenta por delegación de dominio, sin claves: firma
+// un JWT con la API IAM Credentials (su cuenta de servicio tiene "Creador de
+// tokens de cuenta de servicio" sobre sí misma) y lo canjea por un token con el
+// permiso meetings.space.created, autorizado en admin.google.com.
+const MEET_SCOPE = 'https://www.googleapis.com/auth/meetings.space.created';
+const METADATA_BASE = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default';
+
+const meetAccessToken = async (organizer) => {
+  const meta = (path) => fetch(`${METADATA_BASE}/${path}`, { headers: { 'Metadata-Flavor': 'Google' } });
+  const serviceAccount = await (await meta('email')).text();
+  const { access_token: ownToken } = await (await meta('token')).json();
+  const now = Math.floor(Date.now() / 1000);
+  const signRes = await fetch(`https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${encodeURIComponent(serviceAccount)}:signJwt`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${ownToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload: JSON.stringify({ iss: serviceAccount, sub: organizer, scope: MEET_SCOPE, aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 600 }) }),
+  });
+  const signed = await signRes.json().catch(() => null);
+  if (!signRes.ok || !signed?.signedJwt) {
+    console.error('meet signJwt', signRes.status, signed?.error?.message);
+    throw new HttpsError('failed-precondition', 'La plataforma todavía no puede firmar en nombre de la cuenta de servicio (rol "Creador de tokens de cuenta de servicio" o API IAM Credentials).');
+  }
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: signed.signedJwt }),
+  });
+  const token = await tokenRes.json().catch(() => null);
+  if (!tokenRes.ok || !token?.access_token) {
+    console.error('meet token', tokenRes.status, token?.error, token?.error_description);
+    throw new HttpsError('failed-precondition', 'Google Workspace todavía no autoriza a la plataforma a crear reuniones (delegación de dominio).');
+  }
+  return token.access_token;
+};
+
+export const createMeetSpace = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, async (request) => {
+  await assertAdmin(request);
+  const groupId = str(request.data?.groupId).trim();
+  if (!groupId) throw new HttpsError('invalid-argument', 'Falta el aula.');
+  const groupRef = db.collection('groups').doc(groupId);
+  const group = (await groupRef.get()).data();
+  if (!group) throw new HttpsError('not-found', 'Esa aula no existe.');
+  if (group.meetSpace && request.data?.replace !== true) return { classLink: group.classLink, created: false };
+
+  let space;
+  if (IS_EMULATOR) {
+    space = { name: `spaces/emulador-${groupId}`, meetingUri: `https://meet.google.com/emu-${groupId.slice(0, 4).toLowerCase()}-lador`, meetingCode: 'emulador' };
+  } else {
+    const organizer = str(process.env.MEET_ORGANIZER).trim();
+    if (!organizer) throw new HttpsError('failed-precondition', 'Falta configurar la cuenta organizadora de Meet (MEET_ORGANIZER).');
+    const token = await meetAccessToken(organizer);
+    const res = await fetch('https://meet.googleapis.com/v2/spaces', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: { accessType: 'TRUSTED', entryPointAccess: 'ALL' } }),
+    });
+    space = await res.json().catch(() => null);
+    if (!res.ok || !space?.meetingUri) {
+      console.error('meet create', res.status, space?.error?.message);
+      throw new HttpsError(res.status === 403 ? 'failed-precondition' : 'internal', res.status === 403 ? 'Google Meet rechazó crear la reunión (revisa la API de Meet y la delegación de dominio).' : 'No se pudo crear la sala de Meet.');
+    }
+  }
+  await groupRef.update({ classLink: space.meetingUri, meetSpace: space.name, meetCode: space.meetingCode || null, meetCreatedAt: new Date().toISOString() });
+  return { classLink: space.meetingUri, created: true };
+});

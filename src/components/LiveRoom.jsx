@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Mic, MicOff, Video, VideoOff, ScreenShare, PhoneOff, MoreHorizontal, ChevronRight, Send, Plus, Clock3, SmilePlus, Circle, Square, Download, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, ExternalLink, ScreenShare, PhoneOff, MoreHorizontal, ChevronRight, Send, Plus, Clock3, SmilePlus, Circle, Square, Download, Trash2 } from 'lucide-react';
 import { canJoinLiveSession, LIVE_JOIN_WINDOW_MIN } from '../lib/liveSessionStatus';
 import { isRecordingSupported, startRecording, buildRecordingName, downloadBlob, listPendingRecordings, deletePendingRecording } from '../lib/sessionRecorder';
 import { useUI } from '../context/UIContext';
+import { fetchGroupClassLink } from '../lib/db';
 
 const fmtElapsed = (ms) => {
   const s = Math.floor(ms / 1000);
@@ -64,6 +65,17 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
   const [othersRecordingAt, setOthersRecordingAt] = useState(0);
   const [pendingRecs, setPendingRecs] = useState([]);
   const recordingAllowed = canRecord && isRecordingSupported();
+  // Clase de un aula con sala de Google Meet: el botón abre Meet en otra
+  // pestaña (Meet no se puede incrustar) en vez de la sala embebida.
+  const [meetLink, setMeetLink] = useState(null);
+  useEffect(() => {
+    if (!session?.groupId) return undefined;
+    let cancelled = false;
+    fetchGroupClassLink(session.groupId)
+      .then((link) => { if (!cancelled && /^https:\/\/meet\.google\.com\//.test(link || '')) setMeetLink(link); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [session?.groupId]);
   const displayName = currentUser?.displayName || currentUser?.email || 'Invitado';
 
   // Solo las clases programadas (con startsAt) tienen ventana de entrada; una
@@ -273,6 +285,21 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
             ))}
           </div>
         )}
+        {meetLink ? (
+          <div className="live-lobby-controls">
+            <a
+              className={`btn btn-primary btn-lg ${joinable ? '' : 'disabled'}`}
+              href={joinable ? meetLink : undefined}
+              target="_blank" rel="noreferrer"
+              aria-disabled={!joinable}
+              onClick={(e) => { if (!joinable) e.preventDefault(); }}
+              title={joinable ? 'Se abre en una pestaña nueva' : `Disponible ${LIVE_JOIN_WINDOW_MIN} min antes de la clase`}
+            >
+              {joinable ? <><ExternalLink size={16} /> Entrar a la clase en Google Meet</> : 'Todavía no disponible'}
+            </a>
+            {secondaryAction && <button className="btn btn-ghost btn-lg" onClick={secondaryAction.onClick}><Plus size={16} /> {secondaryAction.label}</button>}
+          </div>
+        ) : (
         <div className="live-lobby-controls">
           <button className={`live-round-btn ${micOn ? '' : 'off'}`} onClick={() => setMicOn((v) => !v)} title={micOn ? 'Silenciar micrófono' : 'Activar micrófono'}>
             {micOn ? <Mic size={18} /> : <MicOff size={18} />}
@@ -285,6 +312,8 @@ const LiveRoom = ({ session, currentUser, roleLabel, scheduleLine, onExit, lobby
           </button>
           {secondaryAction && <button className="btn btn-ghost btn-lg" onClick={secondaryAction.onClick}><Plus size={16} /> {secondaryAction.label}</button>}
         </div>
+        )}
+        {meetLink && joinable && <p className="live-lobby-schedule">Entra con tu correo de la academia (@netwiseacademy.pe).</p>}
       </div>
     );
   }

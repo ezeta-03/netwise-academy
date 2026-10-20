@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw, Users } from 'lucide-react';
+import { Search, Plus, X, Pencil, Radio, LogIn, XCircle, Trash2, Check, Link2, Ban, RotateCcw, Users, Video, Loader2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
@@ -8,7 +8,7 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import AdminAsignarAlumnos from './AdminAsignarAlumnos';
 import AulaStudentsModal from './AulaStudentsModal';
 import { countByGroup, freeSeats, unassignedEnrollments } from '../../lib/groupAssignment';
-import { fetchOrders, fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers } from '../../lib/db';
+import { fetchOrders, fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers, createMeetSpace } from '../../lib/db';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
@@ -78,6 +78,23 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
   const [capacity, setCapacity] = useState(group?.capacity ?? 30);
   const [status, setStatus] = useState(group?.status || 'to-open');
   const [classLink, setClassLink] = useState(group?.classLink || '');
+  const [creatingMeet, setCreatingMeet] = useState(false);
+
+  // Aula ya creada sin sala de Meet: se crea desde aquí (ver createMeetSpace).
+  const handleCreateMeet = async () => {
+    setCreatingMeet(true);
+    try {
+      const { classLink: link } = await createMeetSpace(group.id);
+      setClassLink(link);
+      await logChange(adminName, `Creó la sala de Google Meet del aula "${group.name}".`).catch(() => {});
+      addToast('Sala de Google Meet creada. Se guarda junto con el aula.', 'success');
+      onSaved();
+    } catch (err) {
+      addToast(err?.code === 'functions/failed-precondition' ? err.message : 'No se pudo crear la sala de Google Meet.', 'error');
+    } finally {
+      setCreatingMeet(false);
+    }
+  };
   const [saving, setSaving] = useState(false);
 
   // Solo al EDITAR: qué clases tiene ya el aula, cuántas aulas tiene el curso y
@@ -174,6 +191,12 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
       } else {
         const created = await createGroup(payload);
         await logChange(adminName, `Creó el aula "${payload.name}".`);
+        // Sala fija de Google Meet para todas sus clases, salvo que ya traiga un enlace.
+        if (!payload.classLink) {
+          await createMeetSpace(created.id).catch((err) => {
+            addToast(`El aula se creó, pero no su sala de Google Meet: ${err?.code === 'functions/failed-precondition' ? err.message : 'inténtalo desde Editar aula.'}`, 'warning');
+          });
+        }
 
         // Genera el calendario completo de una vez -- para que el docente ya
         // tenga todo listo al entrar, en vez de tener que armarlo él mismo.
@@ -294,8 +317,16 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
           </div>
         </div>
         <div className="admin-field">
-          <label>Enlace de clase · opcional</label>
-          <input value={classLink} onChange={(e) => setClassLink(e.target.value)} placeholder="https://..." />
+          <label>Sala de Google Meet</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input value={classLink} onChange={(e) => setClassLink(e.target.value)} placeholder={group ? 'https://meet.google.com/...' : 'Se crea sola al guardar el aula'} />
+            {group && !group.meetSpace && !/^https:\/\/meet\.google\.com\//.test(classLink) && (
+              <button type="button" className="admin-btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={handleCreateMeet} disabled={creatingMeet}>
+                {creatingMeet ? <Loader2 size={14} className="spin" /> : <Video size={14} />} Crear sala de Meet
+              </button>
+            )}
+          </div>
+          <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>Todas las clases del aula se abren en este enlace. Nombra al docente coanfitrión la primera vez: el rol se mantiene.</p>
         </div>
 
         {group && plan && (
