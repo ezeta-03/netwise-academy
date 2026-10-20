@@ -146,3 +146,18 @@ describe('planScheduleSync: señales para decidir "editar" vs "crear otra aula"'
     assert.ok(p.hasChanges);
   });
 });
+
+describe('planScheduleSync: mover la fecha de inicio renumera las semanas', () => {
+  test('inicio 2 nov -> 9 nov (lun/mié): el 9 pasa a "Semana 1", sin semanas repetidas', () => {
+    const MON_WED = [{ day: 'Lunes', start: '19:00', end: '21:00' }, { day: 'Miércoles', start: '19:00', end: '21:00' }];
+    const now = Date.parse('2026-10-20T12:00:00-05:00');
+    const existing = asSessions(desiredFor(MON_WED, '2026-11-02', 4));
+    const p = planScheduleSync({ desired: desiredFor(MON_WED, '2026-11-09', 4), existing, groupId: 'g1', now, instructor: 'Ana', instructorUid: 'u-ana' });
+    assert.equal(p.toDelete.length, 2); // 2 y 4 nov
+    assert.equal(p.toCreate.length, 2); // 30 nov y 2 dic
+    assert.equal(p.toUpdate.length, 6);
+    const nov9 = p.toUpdate.find((s) => s.startsAt.startsWith('2026-11-09'));
+    assert.deepEqual(nov9.patch, { title: 'Semana 1 · Lunes' });
+    assert.ok(p.toCreate.every((e) => e.title.startsWith('Semana 4')));
+  });
+});

@@ -62,7 +62,19 @@ export const planScheduleSync = ({
     return !futureByKey.has(k) && !cancelledKeys.has(k);
   });
   const toKeep = future.filter((s) => wantedKeys.has(keyOf(s.startsAt, s.durationMin)));
-  const toUpdate = toKeep.filter((s) => (instructorUid && s.instructorUid !== instructorUid) || (instructor && s.instructor !== instructor));
+  // Una clase que se conserva puede cambiar de docente o de número de semana
+  // (al mover la fecha de inicio, el lunes que era "Semana 2" pasa a ser
+  // "Semana 1"): `patch` lleva solo los campos que cambian.
+  const wantedByKey = new Map(wanted.map((e) => [keyOf(e.startsAt, e.durationMin), e]));
+  const toUpdate = toKeep.map((s) => {
+    const patch = {};
+    if ((instructorUid && s.instructorUid !== instructorUid) || (instructor && s.instructor !== instructor)) {
+      Object.assign(patch, { instructor, instructorUid });
+    }
+    const title = wantedByKey.get(keyOf(s.startsAt, s.durationMin))?.title;
+    if (title && s.title !== title) patch.title = title;
+    return { ...s, patch };
+  }).filter((s) => Object.keys(s.patch).length > 0);
 
   return {
     toCreate, toDelete, toUpdate,

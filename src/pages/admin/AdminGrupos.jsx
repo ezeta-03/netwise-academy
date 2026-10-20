@@ -183,8 +183,8 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
               });
             }
           }
-          for (const s of plan.toUpdate) await updateLiveSession(s.id, { instructor: instructor.trim(), instructorUid });
-          addToast(`Aula actualizada. Calendario: ${canCreate ? plan.toCreate.length : 0} nuevas, ${plan.toDelete.length} eliminadas, ${plan.toUpdate.length} con nuevo docente.`, 'success');
+          for (const s of plan.toUpdate) await updateLiveSession(s.id, s.patch);
+          addToast(`Aula actualizada. Calendario: ${canCreate ? plan.toCreate.length : 0} nuevas, ${plan.toDelete.length} eliminadas, ${plan.toUpdate.length} actualizadas.`, 'success');
         } else {
           addToast('Aula actualizada.', 'success');
         }
@@ -346,7 +346,7 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
               <span>Todas las clases de esta aula ya pasaron. Para un nuevo grupo o una nueva edición, crea otra aula en vez de editar esta.</span>
             ) : plan.hasChanges ? (
               <span>
-                Con estos cambios: {plan.toCreate.length} clase(s) nueva(s), {plan.toDelete.length} eliminada(s), {plan.toUpdate.length} con otro docente y {plan.unchanged} sin cambios.
+                Con estos cambios: {plan.toCreate.length} clase(s) nueva(s), {plan.toDelete.length} eliminada(s), {plan.toUpdate.length} actualizada(s) (docente o número de semana) y {plan.unchanged} sin cambios.
                 Las {plan.pastCount} ya realizadas o canceladas no se tocan, ni las clases sueltas del docente.
               </span>
             ) : (
