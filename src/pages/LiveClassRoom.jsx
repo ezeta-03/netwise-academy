@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import LiveRoom from '../components/LiveRoom';
 
 // Agenda de cada rol: a donde se vuelve si la sala se abrió directo (sin historial).
-const AGENDA_BY_ROLE = { admin: '/admin/grupos', teacher: '/teacher/agenda', student: '/student/agenda' };
+const AGENDA_BY_ROLE = { admin: '/admin/agenda', teacher: '/teacher/agenda', student: '/student/agenda' };
 
 const ROLE_LABELS = { admin: 'Administrador', teacher: 'Docente', student: 'Estudiante' };
 

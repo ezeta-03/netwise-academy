@@ -63,6 +63,7 @@ import AdminResumen from './pages/admin/AdminResumen';
 import AdminCursos from './pages/admin/AdminCursos';
 import AdminPromociones from './pages/admin/AdminPromociones';
 import AdminGrupos from './pages/admin/AdminGrupos';
+import AdminAgenda from './pages/admin/AdminAgenda';
 import AdminAlumnos from './pages/admin/AdminAlumnos';
 import AdminDocentes from './pages/admin/AdminDocentes';
 import AdminVentas from './pages/admin/AdminVentas';
@@ -163,6 +164,7 @@ function App() {
             <Route path="cursos" element={<AdminCursos />} />
             <Route path="promociones" element={<AdminPromociones />} />
             <Route path="grupos" element={<AdminGrupos />} />
+            <Route path="agenda" element={<AdminAgenda />} />
             <Route path="alumnos" element={<AdminAlumnos />} />
             <Route path="docentes" element={<AdminDocentes />} />
             <Route path="ventas" element={<AdminVentas />} />
@@ -188,14 +190,16 @@ function App() {
             <Route path="grupos" element={<TeacherCourseGrupos />} />
             <Route path="ia" element={<TeacherCourseIA />} />
           </Route>
-          <Route path="/teacher" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherLayout /></RoleRoute>}>
+          {/* El panel del docente es solo del docente: el admin tiene su propia
+              Agenda (/admin/agenda) y edita cursos en /admin/curso/:id. */}
+          <Route path="/teacher" element={<RoleRoute allowedRoles={['teacher']}><TeacherLayout /></RoleRoute>}>
             <Route index element={<Navigate to="inicio" replace />} />
             <Route path="inicio" element={<TeacherInicio />} />
             <Route path="agenda" element={<TeacherAgenda />} />
             <Route path="cursos" element={<TeacherCursos />} />
             <Route path="soporte" element={<TeacherSoporte />} />
           </Route>
-          <Route path="/teacher/curso/:courseId" element={<RoleRoute allowedRoles={['admin', 'teacher']}><TeacherCourseLayout /></RoleRoute>}>
+          <Route path="/teacher/curso/:courseId" element={<RoleRoute allowedRoles={['teacher']}><TeacherCourseLayout /></RoleRoute>}>
             <Route index element={<Navigate to="contenido" replace />} />
             <Route path="contenido" element={<TeacherCourseContenido />} />
             <Route path="rubrica" element={<TeacherCourseRubrica />} />

@@ -14,6 +14,7 @@ const PAGE_LABELS = {
   '/admin/cursos': 'Cursos y precios',
   '/admin/promociones': 'Promociones',
   '/admin/grupos': 'Aulas y horarios',
+  '/admin/agenda': 'Agenda',
   '/admin/alumnos': 'Alumnos y accesos',
   '/admin/docentes': 'Docentes',
   '/admin/ventas': 'Ventas e inscripciones',
