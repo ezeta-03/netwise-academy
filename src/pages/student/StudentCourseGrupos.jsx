@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Lock, Video, UserPlus, X } from 'lucide-react';
+import { Plus, UserPlus, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { fetchCourseClassmates, fetchWorkGroups, createWorkGroup, updateWorkGroup, fetchPrivateRooms, createPrivateRoom } from '../../lib/db';
-import LiveRoom from '../../components/LiveRoom';
+import { fetchCourseClassmates, fetchWorkGroups, createWorkGroup, updateWorkGroup } from '../../lib/db';
+import WorkRoomCard from '../../components/WorkRoomCard';
 import ModalPortal from '../../components/ModalPortal';
 
 const getInitials = (name) => {
@@ -105,74 +105,21 @@ const InviteModal = ({ group, classmates, onClose, onInvited }) => {
   );
 };
 
-const NewRoomModal = ({ course, currentUser, classmates, onClose, onCreated }) => {
-  const { addToast } = useUI();
-  const [name, setName] = useState('');
-  const [selected, setSelected] = useState([]);
-  const [saving, setSaving] = useState(false);
-
-  const toggle = (uid) => setSelected((prev) => (prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]));
-
-  const handleCreate = async () => {
-    if (!name.trim()) { addToast('Ponle un nombre a tu sala.', 'error'); return; }
-    setSaving(true);
-    try {
-      const members = classmates.filter((c) => selected.includes(c.uid));
-      const room = await createPrivateRoom({
-        courseId: course.id, courseTitle: course.title, name: name.trim(),
-        createdByUid: currentUser.uid, createdByName: currentUser.displayName || currentUser.email,
-        memberUids: [currentUser.uid, ...members.map((m) => m.uid)], memberNames: [currentUser.displayName || currentUser.email, ...members.map((m) => m.name)],
-      });
-      onCreated(room);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <ModalPortal>
-      <div className="admin-modal-overlay">
-        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="admin-modal-head"><div><div className="admin-modal-title">Crear sala privada</div><div className="admin-modal-sub">Prepara un espacio para conversar y trabajar con tu grupo.</div></div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
-          <div className="admin-field"><label>Nombre de la sala</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Equipo 02 · Proyecto de contenidos" /></div>
-          <label style={{ fontSize: '.82rem', fontWeight: 600, color: '#4A4860' }}>Selecciona a tus compañeros</label>
-          {classmates.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 4 }}>No hay más compañeros matriculados todavía.</p> : classmates.map((c) => (
-            <label key={c.uid} className="room-member-row">
-              <input type="checkbox" checked={selected.includes(c.uid)} onChange={() => toggle(c.uid)} />
-              <div className="dash-post-avatar">{getInitials(c.name)}</div>
-              <span>{c.name}</span>
-            </label>
-          ))}
-          <div className="admin-modal-actions">
-            <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
-            <button className="admin-btn-edit" onClick={handleCreate} disabled={saving}><Plus size={13} /> {saving ? 'Creando...' : 'Crear sala y continuar'}</button>
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-};
-
 const StudentCourseGrupos = () => {
-  const { course } = useOutletContext();
+  const { course, group: aula } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast } = useUI();
   const [classmates, setClassmates] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [groupModalOpen, setGroupModalOpen] = useState(false);
-  const [roomModalOpen, setRoomModalOpen] = useState(false);
   const [invitingGroup, setInvitingGroup] = useState(null);
-  const [activeRoom, setActiveRoom] = useState(null);
 
   const load = useCallback(() => {
     if (!currentUser) return;
-    Promise.all([fetchCourseClassmates(course.id), fetchWorkGroups(course.id), fetchPrivateRooms(course.id)]).then(([enrollments, wg, rms]) => {
+    Promise.all([fetchCourseClassmates(course.id), fetchWorkGroups(course.id)]).then(([enrollments, wg]) => {
       setClassmates(enrollments.filter((e) => e.uid !== currentUser.uid).map((e) => ({ uid: e.uid, name: e.studentName || e.uid })));
       setGroups(wg);
-      setRooms(rms.filter((r) => (r.memberUids || []).includes(currentUser.uid)));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [course.id, currentUser]);
@@ -180,19 +127,6 @@ const StudentCourseGrupos = () => {
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="admin-empty-hint">Cargando grupos de trabajo...</div>;
-
-  if (activeRoom) {
-    return (
-      <div className="anim-fade-up d1">
-        <LiveRoom
-          session={{ courseTitle: activeRoom.name, roomName: activeRoom.roomName }}
-          currentUser={currentUser} roleLabel="Estudiante" lobbyHeadline={activeRoom.name}
-          lobbyMeta="Reúnete con tu grupo sin salir de Netwise Academy." joinLabel="Entrar a la reunión"
-          onExit={() => { setActiveRoom(null); load(); }}
-        />
-      </div>
-    );
-  }
 
   const invitations = groups.filter((g) => (g.pendingUids || []).includes(currentUser.uid));
   const misGrupos = groups.filter((g) => (g.memberUids || []).includes(currentUser.uid));
@@ -221,12 +155,13 @@ const StudentCourseGrupos = () => {
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Grupos de trabajo</h1><p className="admin-page-sub">{course.title} · forma tu equipo y reúnanse en una sala privada.</p></div>
+        <div><h1 className="admin-page-title">Grupos de trabajo</h1><p className="admin-page-sub">{course.title} · forma tu equipo y reúnanse en la sala de trabajo del aula.</p></div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="admin-btn-ghost" onClick={() => setRoomModalOpen(true)}><Lock size={14} /> Crear sala privada</button>
           <button className="admin-btn-edit" onClick={() => setGroupModalOpen(true)}><Plus size={14} /> Crear grupo</button>
         </div>
       </div>
+
+      <WorkRoomCard group={aula} />
 
       <div className="admin-panel" style={{ marginBottom: 20 }}>
         <div className="admin-panel-head"><span className="admin-panel-title">Invitaciones</span></div>
@@ -273,18 +208,7 @@ const StudentCourseGrupos = () => {
         )}
       </div>
 
-      <div className="admin-panel">
-        <div className="admin-panel-head"><span className="admin-panel-title">Próximas reuniones privadas</span></div>
-        {rooms.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>No tienes reuniones privadas programadas.</p> : rooms.map((r) => (
-          <div key={r.id} className="dash-list-row">
-            <div><div className="dash-list-row-title">{r.name}</div><div className="dash-list-row-sub">{(r.memberNames || []).length} integrantes</div></div>
-            <button className="admin-btn-edit" onClick={() => setActiveRoom(r)}><Video size={13} /> Entrar</button>
-          </div>
-        ))}
-      </div>
-
       {groupModalOpen && <NewGroupModal course={course} currentUser={currentUser} onClose={() => setGroupModalOpen(false)} onCreated={(g) => setGroups((prev) => [...prev, g])} />}
-      {roomModalOpen && <NewRoomModal course={course} currentUser={currentUser} classmates={classmates} onClose={() => setRoomModalOpen(false)} onCreated={(r) => { setRoomModalOpen(false); setActiveRoom(r); }} />}
       {invitingGroup && <InviteModal group={invitingGroup} classmates={classmates} onClose={() => setInvitingGroup(null)} onInvited={load} />}
     </div>
   );

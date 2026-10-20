@@ -94,7 +94,7 @@ export const buildDemoPlan = ({ courses, contentByCourse = {}, teacherNames = {}
         buildRecurringSessions({ slots, weeksLabel: '8' }, start).forEach((e, n) => {
           docs.liveSessions.push({ id: `${id}-clase-${n + 1}`, data: {
             courseId: course.id, courseTitle: course.title, title: e.title, instructor: teacher.name, instructorUid: teacher.uid,
-            startsAt: e.startsAt, durationMin: e.durationMin, roomName: `netwise-academy-${course.id}-${id}-${n + 1}`, status: 'upcoming', groupId: id, generated: true, demo: true,
+            startsAt: e.startsAt, durationMin: e.durationMin, status: 'upcoming', groupId: id, generated: true, demo: true,
           } });
         });
       }

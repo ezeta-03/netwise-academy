@@ -25,13 +25,11 @@ const as = async (acc) => (await signInWithEmailAndPassword(auth, acc.email, acc
 let uid = await as(QA_ACCOUNTS.student);
 await attempt('Matriculada: clases de su curso', 'permitir', () => byCourse('liveSessions', 1));
 await attempt('Matriculada: aulas de su curso', 'permitir', () => byCourse('groups', 1));
-await attempt('Matriculada: salas privadas de su curso', 'permitir', () => getDocs(query(collection(db, 'privateRooms'), where('courseId', '==', 1), orderBy('createdAt', 'desc'))).then((s) => s.size));
 await attempt('Matriculada: comunidad de su curso', 'permitir', () => getDocs(query(collection(db, 'communityPosts'), where('courseId', '==', 1), orderBy('createdAt', 'desc'))).then((s) => s.size));
 await attempt('Matriculada: equipos de su curso', 'permitir', () => byCourse('workGroups', 1));
 await attempt('Matriculada: TODAS las clases (sin filtro)', 'bloquear', () => getDocs(collection(db, 'liveSessions')).then((s) => s.size));
 await attempt('Matriculada: clases de OTRO curso (2)', 'bloquear', () => byCourse('liveSessions', 2));
 await attempt('Matriculada: aulas de OTRO curso (2)', 'bloquear', () => byCourse('groups', 2));
-await attempt('Matriculada: crea sala privada en su curso', 'permitir', async () => { await addDoc(collection(db, 'privateRooms'), { courseId: 1, name: 'Sala QA', roomName: 'qa', createdByUid: uid, createdAt: new Date().toISOString() }); });
 await attempt('Matriculada: crea equipo en su curso', 'permitir', async () => { await addDoc(collection(db, 'workGroups'), { courseId: 1, name: 'Equipo QA', leaderUid: uid, memberUids: [uid], memberNames: ['QA'], pendingUids: [], pendingNames: [] }); });
 await attempt('Matriculada: avance directo a 100% sin lecciones', 'bloquear', () => updateDoc(doc(db, 'enrollments', `${uid}_1`), { completedLessonIds: [], progress: 100 }));
 await attempt('Matriculada: marca 5 lecciones de golpe', 'bloquear', () => updateDoc(doc(db, 'enrollments', `${uid}_1`), { completedLessonIds: ['a', 'b', 'c', 'd', 'e'], progress: 100 }));

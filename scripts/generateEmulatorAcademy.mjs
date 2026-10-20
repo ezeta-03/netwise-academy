@@ -155,7 +155,7 @@ const phase1 = async () => {
     for (const e of buildRecurringSessions({ slots: schedule, weeksLabel: '8' }, isoDay(a.start))) {
       await addDoc(collection(db, 'liveSessions'), {
         courseId: course.id, courseTitle: course.title, title: e.title, instructor: a.teacher.displayName, instructorUid: a.teacher.uid,
-        startsAt: e.startsAt, durationMin: e.durationMin, roomName: `netwise-academy-${course.id}-${a.id}-${sessionCount}`, status: 'upcoming', groupId: a.id, generated: true,
+        startsAt: e.startsAt, durationMin: e.durationMin, status: 'upcoming', groupId: a.id, generated: true,
       });
       sessionCount += 1;
     }

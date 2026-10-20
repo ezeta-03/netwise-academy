@@ -78,21 +78,23 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
   const [capacity, setCapacity] = useState(group?.capacity ?? 30);
   const [status, setStatus] = useState(group?.status || 'to-open');
   const [classLink, setClassLink] = useState(group?.classLink || '');
-  const [creatingMeet, setCreatingMeet] = useState(false);
+  const [workLink, setWorkLink] = useState(group?.workLink || '');
+  const [creatingMeet, setCreatingMeet] = useState(null); // 'class' | 'work'
 
-  // Aula ya creada sin sala de Meet: se crea desde aquí (ver createMeetSpace).
-  const handleCreateMeet = async () => {
-    setCreatingMeet(true);
+  // Aula ya creada sin una de sus salas de Meet: se crea desde aquí (ver createMeetSpace).
+  const handleCreateMeet = async (kind) => {
+    setCreatingMeet(kind);
+    const what = kind === 'work' ? 'sala de trabajo' : 'sala de clase';
     try {
-      const { classLink: link } = await createMeetSpace(group.id);
-      setClassLink(link);
-      await logChange(adminName, `Creó la sala de Google Meet del aula "${group.name}".`).catch(() => {});
-      addToast('Sala de Google Meet creada. Se guarda junto con el aula.', 'success');
+      const { link } = await createMeetSpace(group.id, { kind });
+      if (kind === 'work') setWorkLink(link); else setClassLink(link);
+      await logChange(adminName, `Creó la ${what} de Google Meet del aula "${group.name}".`).catch(() => {});
+      addToast(`${what.charAt(0).toUpperCase()}${what.slice(1)} de Google Meet creada.`, 'success');
       onSaved();
     } catch (err) {
-      addToast(err?.code === 'functions/failed-precondition' ? err.message : 'No se pudo crear la sala de Google Meet.', 'error');
+      addToast(err?.code === 'functions/failed-precondition' ? err.message : `No se pudo crear la ${what} de Google Meet.`, 'error');
     } finally {
-      setCreatingMeet(false);
+      setCreatingMeet(null);
     }
   };
   const [saving, setSaving] = useState(false);
@@ -166,7 +168,7 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
         name: name.trim(), courseId: course?.id ?? courseId, courseTitle: course?.title || '',
         startDate: startDate || null, endDate: endDate || null,
         schedule: cleanSlots, scheduleTime: buildScheduleLabel(cleanSlots), instructor: instructor.trim(), instructorUid: instructorUid || null,
-        capacity: Number(capacity) || 0, status, classLink: classLink.trim() || null,
+        capacity: Number(capacity) || 0, status, classLink: classLink.trim() || null, workLink: workLink.trim() || null,
       };
       if (group) {
         await updateGroup(group.id, payload);
@@ -191,10 +193,12 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
       } else {
         const created = await createGroup(payload);
         await logChange(adminName, `Creó el aula "${payload.name}".`);
-        // Sala fija de Google Meet para todas sus clases, salvo que ya traiga un enlace.
-        if (!payload.classLink) {
-          await createMeetSpace(created.id).catch((err) => {
-            addToast(`El aula se creó, pero no su sala de Google Meet: ${err?.code === 'functions/failed-precondition' ? err.message : 'inténtalo desde Editar aula.'}`, 'warning');
+        // Salas fijas de Google Meet: la de clase (todas sus clases) y la de
+        // trabajo (alumnos y docente, fuera de clase), salvo que ya traigan enlace.
+        for (const [kind, what] of [['class', 'sala de clase'], ['work', 'sala de trabajo']]) {
+          if (payload[kind === 'work' ? 'workLink' : 'classLink']) continue;
+          await createMeetSpace(created.id, { kind }).catch((err) => {
+            addToast(`El aula se creó, pero no su ${what} de Google Meet: ${err?.code === 'functions/failed-precondition' ? err.message : 'inténtalo desde Editar aula.'}`, 'warning');
           });
         }
 
@@ -317,12 +321,12 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
           </div>
         </div>
         <div className="admin-field">
-          <label>Sala de Google Meet</label>
+          <label>Sala de clase · Google Meet</label>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input value={classLink} onChange={(e) => setClassLink(e.target.value)} placeholder={group ? 'https://meet.google.com/...' : 'Se crea sola al guardar el aula'} />
             {group && !group.meetSpace && !/^https:\/\/meet\.google\.com\//.test(classLink) && (
-              <button type="button" className="admin-btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={handleCreateMeet} disabled={creatingMeet}>
-                {creatingMeet ? <Loader2 size={14} className="spin" /> : <Video size={14} />} Crear sala de Meet
+              <button type="button" className="admin-btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => handleCreateMeet('class')} disabled={!!creatingMeet}>
+                {creatingMeet === 'class' ? <Loader2 size={14} className="spin" /> : <Video size={14} />} Crear sala de Meet
               </button>
             )}
             {/^https?:\/\//.test(classLink.trim()) && (
@@ -330,6 +334,21 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
             )}
           </div>
           <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>Todas las clases del aula se abren en este enlace. Nombra al docente coanfitrión la primera vez: el rol se mantiene.</p>
+        </div>
+        <div className="admin-field">
+          <label>Sala de trabajo · Google Meet</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input value={workLink} onChange={(e) => setWorkLink(e.target.value)} placeholder={group ? 'https://meet.google.com/...' : 'Se crea sola al guardar el aula'} />
+            {group && !group.workMeetSpace && !/^https:\/\/meet\.google\.com\//.test(workLink) && (
+              <button type="button" className="admin-btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => handleCreateMeet('work')} disabled={!!creatingMeet}>
+                {creatingMeet === 'work' ? <Loader2 size={14} className="spin" /> : <Video size={14} />} Crear sala de trabajo
+              </button>
+            )}
+            {/^https?:\/\//.test(workLink.trim()) && (
+              <a className="admin-btn-edit" style={{ whiteSpace: 'nowrap', textDecoration: 'none' }} href={workLink.trim()} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Ir a la sala</a>
+            )}
+          </div>
+          <p className="admin-panel-caption" style={{ marginTop: 4, marginBottom: 0 }}>Abierta siempre para que alumnos y docente se reúnan fuera de clase (grupos de trabajo, asesorías).</p>
         </div>
 
         {group && plan && (

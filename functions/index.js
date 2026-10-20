@@ -715,7 +715,10 @@ export const confirmProgramEmail = onCall({ region: 'us-central1', maxInstances:
   };
 });
 
-// createMeetSpace: sala fija de Google Meet de un aula (`groups/{id}.classLink`).
+// createMeetSpace: salas fijas de Google Meet de un aula. `kind: 'class'` (por
+// defecto) es la sala de clase (`groups/{id}.classLink`); `kind: 'work'` es la
+// sala de trabajo (`groups/{id}.workLink`), abierta siempre para que alumnos y
+// docente se reúnan fuera de clase.
 // La crea a nombre de la cuenta admin de Workspace (MEET_ORGANIZER en
 // functions/.env), que es la que tiene grabación e informe de asistencia; todas
 // las clases del aula usan ese enlace y el docente se nombra coanfitrión una
@@ -764,11 +767,16 @@ export const createMeetSpace = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, asy
   const groupRef = db.collection('groups').doc(groupId);
   const group = (await groupRef.get()).data();
   if (!group) throw new HttpsError('not-found', 'Esa aula no existe.');
-  if (group.meetSpace && request.data?.replace !== true) return { classLink: group.classLink, created: false };
+  const work = request.data?.kind === 'work';
+  const [linkField, spaceField, codeField, dateField] = work
+    ? ['workLink', 'workMeetSpace', 'workMeetCode', 'workMeetCreatedAt']
+    : ['classLink', 'meetSpace', 'meetCode', 'meetCreatedAt'];
+  if (group[spaceField] && request.data?.replace !== true) return { link: group[linkField], classLink: group[linkField], created: false };
 
   let space;
   if (IS_EMULATOR) {
-    space = { name: `spaces/emulador-${groupId}`, meetingUri: `https://meet.google.com/emu-${groupId.slice(0, 4).toLowerCase()}-lador`, meetingCode: 'emulador' };
+    const tag = work ? 'trab' : 'emu';
+    space = { name: `spaces/${tag}-${groupId}`, meetingUri: `https://meet.google.com/${tag}-${groupId.slice(0, 4).toLowerCase()}-lador`, meetingCode: 'emulador' };
   } else {
     const organizer = str(process.env.MEET_ORGANIZER).trim();
     if (!organizer) throw new HttpsError('failed-precondition', 'Falta configurar la cuenta organizadora de Meet (MEET_ORGANIZER).');
@@ -784,6 +792,6 @@ export const createMeetSpace = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, asy
       throw new HttpsError(res.status === 403 ? 'failed-precondition' : 'internal', res.status === 403 ? 'Google Meet rechazó crear la reunión (revisa la API de Meet y la delegación de dominio).' : 'No se pudo crear la sala de Meet.');
     }
   }
-  await groupRef.update({ classLink: space.meetingUri, meetSpace: space.name, meetCode: space.meetingCode || null, meetCreatedAt: new Date().toISOString() });
-  return { classLink: space.meetingUri, created: true };
+  await groupRef.update({ [linkField]: space.meetingUri, [spaceField]: space.name, [codeField]: space.meetingCode || null, [dateField]: new Date().toISOString() });
+  return { link: space.meetingUri, classLink: space.meetingUri, created: true };
 });

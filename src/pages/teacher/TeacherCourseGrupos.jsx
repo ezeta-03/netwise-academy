@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Video, X, Lock } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { Plus, X } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
-import { fetchAllEnrollments, fetchWorkGroups, createWorkGroup, fetchPrivateRooms, createPrivateRoom } from '../../lib/db';
+import { fetchAllEnrollments, fetchWorkGroups, createWorkGroup } from '../../lib/db';
 import { aulaRoster } from '../../lib/roster';
-import LiveRoom from '../../components/LiveRoom';
+import WorkRoomCard from '../../components/WorkRoomCard';
 import ModalPortal from '../../components/ModalPortal';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
@@ -106,19 +105,15 @@ const ViewGroupModal = ({ group, onClose }) => (
 );
 
 const TeacherCourseGrupos = () => {
-  const { course, groups: aulas, aulaId } = useOutletContext();
-  const { currentUser } = useAuth();
-  const { addToast } = useUI();
+  const { course, group: aula, groups: aulas, aulaId } = useOutletContext();
   const [roster, setRoster] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [viewingGroup, setViewingGroup] = useState(null);
-  const [activeRoom, setActiveRoom] = useState(null);
 
   const load = useCallback(() => {
-    Promise.all([fetchAllEnrollments(course.id), fetchWorkGroups(course.id), fetchPrivateRooms(course.id)]).then(([enrollments, wg, rms]) => {
+    Promise.all([fetchAllEnrollments(course.id), fetchWorkGroups(course.id)]).then(([enrollments, wg]) => {
       // Con varias aulas, se ve el aula elegida: sus alumnos y los equipos donde participan.
       const members = aulaRoster(enrollments, course.id, aulas, aulaId);
       const uids = new Set(members.map((m) => m.uid));
@@ -127,7 +122,6 @@ const TeacherCourseGrupos = () => {
         const people = [g.leaderUid, ...(g.memberUids || []), ...(g.pendingUids || [])].filter(Boolean);
         return people.length === 0 || people.some((u) => uids.has(u));
       }));
-      setRooms(rms);
       setLoading(false);
     }).catch(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,52 +133,22 @@ const TeacherCourseGrupos = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando grupos de trabajo...</div>;
 
-  if (activeRoom) {
-    return (
-      <div className="anim-fade-up d1">
-        <LiveRoom
-          session={{ courseTitle: activeRoom.name, roomName: activeRoom.roomName }}
-          currentUser={currentUser}
-          roleLabel="Docente"
-          lobbyHeadline={activeRoom.name}
-          lobbyMeta="Asesoría del grupo de trabajo."
-          joinLabel="Entrar a la asesoría"
-          onExit={() => { setActiveRoom(null); load(); }}
-          canRecord
-        />
-      </div>
-    );
-  }
-
   const memberUidSet = new Set(groups.flatMap((g) => g.memberUids || []));
   const sinGrupo = roster.filter((r) => !memberUidSet.has(r.uid));
-  const groupRooms = rooms.filter((r) => r.groupId);
-
-  const programarAsesoria = async (group) => {
-    const existing = rooms.find((r) => r.groupId === group.id);
-    if (existing) { setActiveRoom(existing); return; }
-    const room = await createPrivateRoom({
-      courseId: course.id, courseTitle: course.title, groupId: group.id,
-      name: `Asesoría · ${group.name}`, createdByUid: currentUser.uid, createdByName: currentUser.displayName || currentUser.email,
-      memberUids: [currentUser.uid, ...(group.memberUids || [])], memberNames: [currentUser.displayName || currentUser.email, ...(group.memberNames || [])],
-    });
-    addToast('Asesoría creada.', 'success');
-    setRooms((prev) => [room, ...prev]);
-    setActiveRoom(room);
-  };
 
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Grupos de trabajo</h1><p className="admin-page-sub">{course.title} · cómo se organizan tus alumnos, quién falta por agruparse y sus reuniones.</p></div>
+        <div><h1 className="admin-page-title">Grupos de trabajo</h1><p className="admin-page-sub">{course.title} · cómo se organizan tus alumnos y quién falta por agruparse.</p></div>
         <button className="admin-btn-edit" onClick={() => setModalOpen(true)}><Plus size={14} /> Crear grupo</button>
       </div>
 
-      <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
+      <WorkRoomCard group={aula} sub="Abierta siempre: úsala para asesorías y para que los grupos trabajen fuera de clase." />
+
+      <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}>
         <div className="admin-stat-card"><div className="admin-stat-label">Grupos formados</div><div className="admin-stat-value">{groups.length}</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Alumnos en un grupo</div><div className="admin-stat-value">{memberUidSet.size}</div><div className="admin-cell-sub">de {roster.length} alumnos</div></div>
         <div className="admin-stat-card"><div className="admin-stat-label">Sin grupo</div><div className="admin-stat-value">{sinGrupo.length}</div></div>
-        <div className="admin-stat-card"><div className="admin-stat-label">Reuniones próximas</div><div className="admin-stat-value">{groupRooms.length}</div></div>
       </div>
 
       <div className="admin-table-wrap" style={{ marginBottom: 20 }}>
@@ -192,10 +156,9 @@ const TeacherCourseGrupos = () => {
           <div className="admin-empty-hint">Todavía no hay grupos en este curso. Los alumnos pueden armar los suyos desde su panel, o crea uno tú.</div>
         ) : (
           <><table ref={tableRef} className="admin-table table-cards">
-            <thead><tr><th>Grupo</th><th>Integrantes</th><th>Coordina</th><th>Próxima reunión</th><th></th></tr></thead>
+            <thead><tr><th>Grupo</th><th>Integrantes</th><th>Coordina</th><th></th></tr></thead>
             <tbody>
               {pageRows.map((g) => {
-                const room = rooms.find((r) => r.groupId === g.id);
                 return (
                   <tr key={g.id}>
                     <td><div className="dash-list-row-title">{g.name}</div><div className="admin-cell-sub">{g.description}</div></td>
@@ -206,11 +169,9 @@ const TeacherCourseGrupos = () => {
                       </div>
                     </td>
                     <td>{g.leaderName || '—'}</td>
-                    <td>{room ? room.name : 'Sin reuniones'}</td>
                     <td>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button className="admin-btn-ghost" onClick={() => setViewingGroup(g)}>Ver grupo</button>
-                        <button className="admin-btn-edit" onClick={() => programarAsesoria(g)}><Video size={13} /> Programar asesoría</button>
                       </div>
                     </td>
                   </tr>
@@ -222,26 +183,12 @@ const TeacherCourseGrupos = () => {
       </div>
       <p className="admin-panel-caption" style={{ marginTop: -12, marginBottom: 20 }}>Los alumnos forman sus grupos desde su panel · también puedes crearlos tú.</p>
 
-      <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'flex-start' }}>
+      <div>
         <div className="admin-panel">
           <div className="admin-panel-head"><span className="admin-panel-title">Alumnos sin grupo · {sinGrupo.length}</span></div>
           {sinGrupo.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todos los alumnos tienen equipo.</p> : sinGrupo.map((r) => (
             <div key={r.uid} className="dash-list-row">
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="dash-post-avatar">{getInitials(r.studentName)}</div><div className="dash-list-row-title">{r.studentName}</div></div>
-            </div>
-          ))}
-        </div>
-        <div className="admin-panel">
-          <div className="admin-panel-head"><span className="admin-panel-title">Reuniones de los grupos</span></div>
-          {groupRooms.length === 0 ? (
-            <>
-              <p className="admin-panel-caption" style={{ marginTop: 0, marginBottom: 4 }}>No hay reuniones programadas.</p>
-              <p className="admin-panel-caption" style={{ marginTop: 0, display: 'flex', gap: 6, alignItems: 'flex-start' }}><Lock size={12} style={{ marginTop: 2, flexShrink: 0 }} /> Solo ves las reuniones de los grupos. Las salas personales entre compañeros se mantienen privadas.</p>
-            </>
-          ) : groupRooms.map((r) => (
-            <div key={r.id} className="dash-list-row">
-              <div><div className="dash-list-row-title">{r.name}</div><div className="dash-list-row-sub">{(r.memberNames || []).length} integrantes</div></div>
-              <button className="admin-btn-edit" onClick={() => setActiveRoom(r)}><Video size={13} /> Entrar</button>
             </div>
           ))}
         </div>

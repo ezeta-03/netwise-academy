@@ -8,8 +8,6 @@ import LiveRoom from '../components/LiveRoom';
 // Agenda de cada rol: a donde se vuelve si la sala se abrió directo (sin historial).
 const AGENDA_BY_ROLE = { admin: '/admin/agenda', teacher: '/teacher/agenda', student: '/student/agenda' };
 
-const ROLE_LABELS = { admin: 'Administrador', teacher: 'Docente', student: 'Estudiante' };
-
 const scheduleLineFor = (s) => {
   const start = new Date(s.startsAt);
   const end = new Date(start.getTime() + s.durationMin * 60000);
@@ -71,10 +69,7 @@ const LiveClassRoom = () => {
       <div className="live-room-stage" style={{ padding: '0 20px 20px', background: 'var(--bg)' }}>
         <LiveRoom
           session={session}
-          currentUser={currentUser}
-          roleLabel={ROLE_LABELS[currentUser?.role] || 'Invitado'}
           scheduleLine={scheduleLineFor(session)}
-          onExit={() => exitRoom()}
           canRecord={currentUser?.role === 'teacher' || currentUser?.role === 'admin'}
         />
       </div>

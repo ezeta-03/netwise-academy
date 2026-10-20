@@ -19,7 +19,7 @@ const scheduleLineFor = (s) => {
 };
 
 const TeacherCourseSala = () => {
-  const { course } = useOutletContext();
+  const { course, group } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast, confirmDialog } = useUI();
   const [title, setTitle] = useState('');
@@ -48,6 +48,8 @@ const TeacherCourseSala = () => {
         courseId: course.id, courseTitle: course.title, title,
         instructor: currentUser?.displayName || 'Docente', instructorUid: currentUser?.uid,
         startsAt: toPeruIso(startsAt), durationMin: Number(durationMin),
+        // Ligada al aula con la que trabaja el docente: usa su sala de Meet.
+        groupId: group?.id || null,
       });
       setTitle(''); setStartsAt('');
       addToast('Clase en vivo programada.', 'success');
@@ -122,14 +124,8 @@ const TeacherCourseSala = () => {
   if (activeSession) {
     return (
       <div className="anim-fade-up d1">
-        <LiveRoom
-          session={activeSession}
-          currentUser={currentUser}
-          roleLabel="Docente"
-          scheduleLine={scheduleLineFor(activeSession)}
-          onExit={() => { setActiveSession(null); load(); }}
-          canRecord
-        />
+        <button className="admin-btn-ghost" style={{ marginBottom: 12 }} onClick={() => { setActiveSession(null); load(); }}>← Volver a las clases</button>
+        <LiveRoom session={activeSession} scheduleLine={scheduleLineFor(activeSession)} canRecord />
       </div>
     );
   }
@@ -140,7 +136,7 @@ const TeacherCourseSala = () => {
         <div><h1 className="admin-page-title">Sala de reuniones</h1><p className="admin-page-sub">{course.title}</p></div>
       </div>
 
-      <p className="admin-panel-caption" style={{ marginTop: -8, marginBottom: 20 }}>El calendario completo del curso lo genera el Admin al crear el aula. Usa esto para una clase suelta -- recuperación, Q&A extra, etc.</p>
+      <p className="admin-panel-caption" style={{ marginTop: -8, marginBottom: 20 }}>El calendario completo del curso lo genera el Admin al crear el aula. Usa esto para una clase suelta -- recuperación, Q&A extra, etc. Se dicta en la sala de Meet del aula{group?.name ? ` ${group.name}` : ''}.</p>
 
       {canSchedule && <div className="admin-panel" style={{ maxWidth: 520, marginBottom: 24 }}>
         <div className="admin-panel-head"><span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Programar clase suelta</span></div>

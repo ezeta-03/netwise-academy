@@ -124,8 +124,7 @@ export const fetchLiveSessionById = async (sessionId) => {
 // (ver lib/scheduleSync.js): así, al editar el aula solo se ajustan ESAS clases
 // y nunca las que el docente programó a mano.
 export const scheduleLiveSession = async ({ courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin, groupId, generated }) => {
-  const roomName = `netwise-academy-${courseId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const payload = { courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin, roomName, status: 'upcoming' };
+  const payload = { courseId, courseTitle, title, instructor, instructorUid, startsAt, durationMin, status: 'upcoming' };
   if (groupId) payload.groupId = groupId;
   if (generated) payload.generated = true;
 
@@ -901,16 +900,18 @@ export const updateGroup = async (groupId, patch) => {
   await updateDoc(doc(db, 'groups', groupId), patch);
 };
 
-// Sala fija de Google Meet del aula (Cloud Function createMeetSpace): queda en
-// `classLink` y la usan todas sus clases. Devuelve { classLink, created }.
-export const createMeetSpace = async (groupId, { replace = false } = {}) => {
+// Salas fijas de Google Meet del aula (Cloud Function createMeetSpace).
+// kind 'class': sala de clase, en `classLink`, la usan todas sus clases.
+// kind 'work': sala de trabajo, en `workLink`, para reunirse fuera de clase.
+// Devuelve { link, created }.
+export const createMeetSpace = async (groupId, { replace = false, kind = 'class' } = {}) => {
   if (!isConfigValid) throw new Error('app/needs-firebase');
-  const { data } = await httpsCallable(functions, 'createMeetSpace', { timeout: 60000 })({ groupId, replace });
+  const { data } = await httpsCallable(functions, 'createMeetSpace', { timeout: 60000 })({ groupId, replace, kind });
   return data;
 };
 
 // Enlace de clase del aula de una sesión, o null. Lo usa la sala en vivo para
-// abrir Google Meet en vez de la sala embebida.
+// abrir Google Meet.
 export const fetchGroupClassLink = async (groupId) => {
   if (!isConfigValid || !groupId) return null;
   const snap = await getDoc(doc(db, 'groups', groupId));
@@ -1623,43 +1624,6 @@ export const toggleProjectAdvance = async (uid, courseId, moduleId, bulletIndex)
   const checkedIndexes = current.includes(bulletIndex) ? current.filter((i) => i !== bulletIndex) : [...current, bulletIndex];
   await setDoc(ref, { uid, courseId, moduleId, checkedIndexes }, { merge: true });
   return checkedIndexes;
-};
-
-// --- Salas privadas de estudio (colección `privateRooms`) ---
-// Espacios de videollamada ad-hoc que un alumno arma con compañeros de su
-// mismo curso/grupo -- misma sala real de Jitsi que las clases en vivo, pero
-// sin necesitar programación del docente.
-
-export const fetchPrivateRooms = async (courseId) => {
-  if (!isConfigValid) {
-    const raw = localStorage.getItem(`mock_private_rooms_${courseId}`);
-    return raw ? JSON.parse(raw) : [];
-  }
-  const q = query(collection(db, 'privateRooms'), where('courseId', '==', courseId), orderBy('createdAt', 'desc'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-};
-
-export const createPrivateRoom = async ({ courseId, courseTitle, groupName, name, createdByUid, createdByName, memberUids, memberNames, groupId }) => {
-  const roomName = `netwise-academy-private-${courseId}-${Date.now()}`;
-  const payload = {
-    courseId, courseTitle, groupName: groupName || null, name, roomName,
-    createdByUid, createdByName, memberUids: memberUids || [], memberNames: memberNames || [],
-    groupId: groupId || null,
-    createdAt: new Date().toISOString(),
-  };
-
-  if (!isConfigValid) {
-    const key = `mock_private_rooms_${courseId}`;
-    const list = JSON.parse(localStorage.getItem(key) || '[]');
-    const withId = { id: `mock-${Date.now()}`, ...payload };
-    list.unshift(withId);
-    localStorage.setItem(key, JSON.stringify(list));
-    return withId;
-  }
-
-  const ref = await addDoc(collection(db, 'privateRooms'), payload);
-  return { id: ref.id, ...payload };
 };
 
 // --- Asistencia por sesión (colección Firestore `attendance`) ---

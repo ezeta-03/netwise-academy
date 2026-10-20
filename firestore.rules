@@ -472,14 +472,8 @@ service cloud.firestore {
       allow update: if isSignedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
     }
 
-    // Salas privadas de estudio armadas por un alumno. Cualquier usuario
-    // logueado las ve (para unirse); solo quien la crea puede registrarla.
-    match /privateRooms/{roomId} {
-      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
-      allow create: if request.resource.data.createdByUid == request.auth.uid
-        && (canManageCourse(string(request.resource.data.courseId)) || isEnrolledIn(string(request.resource.data.courseId)));
-      allow update, delete: if false;
-    }
+    // privateRooms: salas privadas de Jitsi, ya retiradas (ahora cada aula
+    // tiene su sala de trabajo en Meet). Sin regla: nadie lee ni escribe.
 
     // Configuración general de la academia (doc único `settings/academy`),
     // incluye qué métodos de pago están activos. Lectura pública porque el

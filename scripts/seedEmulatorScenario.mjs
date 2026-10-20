@@ -64,7 +64,7 @@ for (let i = 0; i < 4; i++) {
   await db.doc(`liveSessions/qa-class-${i + 1}`).set({
     courseId: COURSE.id, courseTitle: COURSE.title, title: `Semana ${Math.floor(i / 2) + 1} · ${i % 2 ? 'Miércoles' : 'Lunes'}`,
     instructor: QA_ACCOUNTS.teacher.displayName, instructorUid: teacherUid, startsAt: `${iso(day)}T19:00:00-05:00`, durationMin: 120,
-    roomName: `netwise-academy-1-qa-${i + 1}`, status: 'upcoming', groupId: 'qa-aula-01', generated: true,
+    status: 'upcoming', groupId: 'qa-aula-01', generated: true,
   });
 }
 
