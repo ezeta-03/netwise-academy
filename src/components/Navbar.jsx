@@ -4,6 +4,7 @@ import { Bell, Menu, X } from 'lucide-react';
 import UserMenu from './UserMenu';
 import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
+import { fetchAcademySettings } from '../lib/db';
 import logoNetwise from '../assets/NETWISE ACADEMY WEB/logo_netwise.webp';
 
 const Navbar = () => {
@@ -25,6 +26,11 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Texto de la franja superior: lo edita el admin en Configuración.
+  const [promoBanner, setPromoBanner] = useState('');
+  useEffect(() => {
+    fetchAcademySettings().then((s) => setPromoBanner(s.promoBanner || '')).catch(() => {});
+  }, []);
 
   // Hide Navbar on Player and active live-class room pages (similar to original design behavior)
   if (location.pathname.startsWith('/player') || location.pathname.startsWith('/live/') || location.pathname.startsWith('/admin') || location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student') || location.pathname.startsWith('/checkout') || location.pathname.startsWith('/auth/') || location.pathname === '/masterclass') {
@@ -66,8 +72,8 @@ const Navbar = () => {
 
   return (
     <>
-      {(location.pathname === '/' || location.pathname === '/metodologia') && (
-        <div className="home-promo">Promociones y descuentos disponibles hasta el 16/10</div>
+      {(location.pathname === '/' || location.pathname === '/metodologia') && promoBanner.trim() && (
+        <div className="home-promo">{promoBanner}</div>
       )}
       <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`} id="navbar">
         <Link to="/" className="nav-logo">

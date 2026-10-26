@@ -1190,6 +1190,8 @@ const DEFAULT_ACADEMY_SETTINGS = {
   supportEmail: 'hola@netwiseacademy.com',
   currency: 'PEN',
   timezone: 'America/Lima',
+  // Franja superior del Inicio y Nuestra Metodología (Navbar). Vacía = no se muestra.
+  promoBanner: 'Inicio de clases - 9 de Noviembre',
   // Métodos de pago del checkout -- "yape" y "transfer" son manuales (el
   // comprador paga afuera y el equipo confirma), por eso llevan el número y
   // nombre de cuenta donde debe pagar (con eso el checkout arma el mensaje

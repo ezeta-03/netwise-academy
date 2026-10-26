@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { useUI } from '../context/UIContext';
 import DownloadProgramModal from '../components/DownloadProgramModal';
 import { getProgramPdf } from '../lib/programDownloads';
+import { formatStartDate } from '../lib/courseDates';
 
 const OUTCOME_ICONS = { sparkles: Sparkles, fingerprint: Fingerprint, 'trending-up': TrendingUp, rocket: Rocket };
 
@@ -216,6 +217,7 @@ const CourseDetail = () => {
                 <>
                   <div className="cd-sidebar-title">Tu siguiente paso empieza aquí.</div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Modalidad</span><span className="cd-detail-value">Online en vivo</span></div>
+                  {formatStartDate(course.startDate) && <div className="cd-detail-row"><span className="cd-detail-label">Inicio</span><span className="cd-detail-value">{formatStartDate(course.startDate)}</span></div>}
                   <div className="cd-detail-row"><span className="cd-detail-label">Duración</span><span className="cd-detail-value">{course.duration}</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Horario</span><span className="cd-detail-value">{course.scheduleLabel}</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Carga semanal</span><span className="cd-detail-value">{weeklyHours} horas · {course.scheduleSlots.length} sesiones</span></div>

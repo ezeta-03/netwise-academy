@@ -7,12 +7,13 @@ export const CATEGORIES = [
   { id:'emprendimiento', label:'🚀 Emprendimiento Digital' },
 ];
 
-// Los 4 talleres reales del Pitch Deck, ya con precio, descuento y horario de
-// clase confirmados (antes quedaban en null "hasta que se confirme").
+// Los 4 talleres reales con su nombre, horario (hora de Perú), fecha de inicio
+// y duración oficiales. Precio, inicio y horario los puede pisar el admin desde
+// Firestore (`courseOfferings`, ver CourseOfferingsContext).
 export const COURSES = [
   {
     id: 1,
-    title: 'Redes Sociales & IA',
+    title: 'Estrategias de Redes Sociales',
     cat: 'redes-ia',
     emoji: '📱',
     color: '#1a1035,#0d1628',
@@ -30,19 +31,20 @@ export const COURSES = [
     outcomeHeadline: 'Crear una estrategia de redes que conecte con tu audiencia y medir qué contenido funciona.',
     longDescription: [
       'Descubre como darle dirección a la presencia digital de tu marca. En este curso recorrerás la auditoría de tus canales, la creación de contenidos con apoyo de IA y las estrategias de social selling, con clases online en vivo y trabajo sobre tu propio proyecto.',
-      'A lo largo de ocho semanas, conectarás lo que publicas con una audiencia y un objetivo. Desarrollarás un plan de contenidos, organizarás un recorrido de conversión y aprenderás a interpretar métricas para decidir qué mantener, probar o mejorar.',
+      'A lo largo de cuatro semanas, conectarás lo que publicas con una audiencia y un objetivo. Desarrollarás un plan de contenidos, organizarás un recorrido de conversión y aprenderás a interpretar métricas para decidir qué mantener, probar o mejorar.',
     ],
     doableList: [
       'Analizar tus canales y tu competencia para identificar oportunidades de comunicación.',
       'Planificar contenidos y desarrollar guiones y piezas con apoyo de IA.',
       'Organizar un embudo en WhatsApp Business y medir el desempeño de tu estrategia.',
     ],
-    scheduleDays: ['Lunes', 'Miércoles'],
-    scheduleTime: '19:00-21:00',
+    scheduleDays: ['Martes', 'Jueves'],
+    scheduleTime: '20:00-22:00',
+    startDate: '2026-11-10',
     projectFinal: 'Plan de contenidos, funnel y dashboard social',
     price: 300,
     promoPercent: 25,
-    duration: '8 semanas',
+    duration: '4 semanas',
     level: 'Nivel básico',
     cardTag: 'Contenido & IA',
     cardTitle: ['Estrategias de', 'Redes Sociales'],
@@ -50,7 +52,7 @@ export const COURSES = [
   },
   {
     id: 2,
-    title: 'Branding & Marca',
+    title: 'Branding y Gestión de Marcas',
     cat: 'branding',
     emoji: '🎨',
     color: '#1a0d28,#28103a',
@@ -75,8 +77,9 @@ export const COURSES = [
       'Organizar su identidad visual y tono de voz en un manual de marca.',
       'Diseñar sus puntos de contacto y preparar una estrategia de lanzamiento.',
     ],
-    scheduleDays: ['Martes', 'Jueves'],
-    scheduleTime: '19:00-21:00',
+    scheduleDays: ['Lunes', 'Miércoles'],
+    scheduleTime: '20:00-22:00',
+    startDate: '2026-11-09',
     projectFinal: 'Plataforma, manual y plan de lanzamiento de marca',
     price: 360,
     promoPercent: 25,
@@ -88,7 +91,7 @@ export const COURSES = [
   },
   {
     id: 3,
-    title: 'Marketing Digital',
+    title: 'Marketing Digital desde 0',
     cat: 'marketing',
     emoji: '📈',
     color: '#0d1a10,#102015',
@@ -112,8 +115,9 @@ export const COURSES = [
       'Plantear acciones de SEO y campañas de búsqueda, conectadas con una página de captación.',
       'Construir un tablero de métricas para evaluar y optimizar tus campañas.',
     ],
-    scheduleDays: ['Lunes', 'Miércoles'],
-    scheduleTime: '21:00-23:00',
+    scheduleDays: ['Viernes', 'Sábado'],
+    scheduleTime: '20:00-22:00',
+    startDate: '2026-11-13',
     projectFinal: 'Embudo, campañas y dashboard de marketing',
     price: 450,
     promoPercent: 25,
@@ -125,7 +129,7 @@ export const COURSES = [
   },
   {
     id: 4,
-    title: 'Emprendimiento Digital',
+    title: 'Creación de Negocios Digitales',
     cat: 'emprendimiento',
     emoji: '🚀',
     color: '#28100d,#3a1a10',
@@ -150,7 +154,8 @@ export const COURSES = [
       'Preparar un plan de lanzamiento y un pitch con proyección financiera.',
     ],
     scheduleDays: ['Martes', 'Jueves'],
-    scheduleTime: '21:00-23:00',
+    scheduleTime: '18:00-20:00',
+    startDate: '2026-11-10',
     projectFinal: 'MVP y pitch deck con proyección financiera',
     price: 480,
     promoPercent: 25,

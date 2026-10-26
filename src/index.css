@@ -533,6 +533,7 @@ body::before {
   color: var(--accent2); font-weight: 600; font-size: .72rem; letter-spacing: .03em; text-transform: uppercase;
 }
 .home-course-title {
+  color: #fff; /* el cuerpo de la tarjeta siempre es oscuro, también en el campus claro */
   font-family: var(--ff-display); font-weight: 900; font-size: 29px; line-height: 29.6px; letter-spacing: -1.01px;
 }
 .home-course-title span { display: block; }

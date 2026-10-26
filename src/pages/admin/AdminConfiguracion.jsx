@@ -154,6 +154,11 @@ const AdminConfiguracion = () => {
             </select>
           </div>
         </div>
+        <div className="admin-field">
+          <label htmlFor="promo-banner">Mensaje del banner superior</label>
+          <input id="promo-banner" maxLength={120} value={settings.promoBanner || ''} placeholder="Ej. Inicio de clases - 9 de Noviembre" onChange={(e) => setSettings({ ...settings, promoBanner: e.target.value })} />
+          <span className="admin-cell-sub">Se muestra arriba del Inicio y de Nuestra Metodología. Déjalo vacío para ocultarlo.</span>
+        </div>
 
         <div className="admin-modal-actions" style={{ justifyContent: 'flex-start', marginTop: 8 }}>
           <button className="admin-btn-edit" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</button>
