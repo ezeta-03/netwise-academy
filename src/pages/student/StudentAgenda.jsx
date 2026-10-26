@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchLiveSessions, fetchMyActiveEnrollments } from '../../lib/db';
 import { sessionsForStudent } from '../../lib/groupAssignment';
+import { useClassLinks } from '../../hooks/useClassLinks';
+import { meetLinkFor } from '../../lib/classLinks';
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -20,6 +22,7 @@ const StudentAgenda = () => {
   const [courseFilter, setCourseFilter] = useState('all');
   const [cursor, setCursor] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(new Date());
+  const classLinks = useClassLinks(sessions);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -129,7 +132,11 @@ const StudentAgenda = () => {
               {isSafeLink(s.recordingUrl) && (
                 <a className="admin-btn-ghost" href={s.recordingUrl} target="_blank" rel="noreferrer"><Film size={13} /> Ver grabación</a>
               )}
-              <button className="admin-btn-edit" onClick={() => navigate(`/live/${s.id}`)}><Video size={13} /> Ver sala</button>
+              {meetLinkFor(s, classLinks) ? (
+                <a className="admin-btn-edit" href={meetLinkFor(s, classLinks)} target="_blank" rel="noreferrer" title="Abre la sala de Google Meet de tu aula. Entra con tu correo @netwiseacademy.pe"><Video size={13} /> Entrar a Meet</a>
+              ) : (
+                <button className="admin-btn-edit" onClick={() => navigate(`/live/${s.id}`)}><Video size={13} /> Ver sala</button>
+              )}
             </div>
           </div>
         ))}

@@ -15,6 +15,8 @@ import { courseWeeksFromModules } from '../../lib/deliveryDates';
 import { planScheduleSync } from '../../lib/scheduleSync';
 import { isPendingUrl } from '../../lib/placeholders';
 import { usePagedTable } from '../../hooks/usePagedTable';
+import { useClassLinks } from '../../hooks/useClassLinks';
+import { meetLinkFor } from '../../lib/classLinks';
 
 // Resumen del contenido cargado de un curso. Un módulo cuenta si ya tiene
 // objetivo o sesiones (no solo el título); las grabaciones "Pendiente de
@@ -478,6 +480,8 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
     }
   };
 
+  const classLinks = useClassLinks(sessions);
+
   if (loading) return <div className="admin-empty-hint">Cargando actividad en vivo...</div>;
   const sortedSessions = [...sessions].sort((a, b) => new Date(b.startsAt) - new Date(a.startsAt));
   const cancelableIds = sortedSessions.filter((s) => { const st = getLiveSessionStatus(s); return st === 'upcoming' || st === 'live'; }).map((s) => s.id);
@@ -551,7 +555,9 @@ const LiveClassesPanel = ({ courses, refreshKey }) => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {joinable && <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><LogIn size={13} /> Ver sala</button>}
+                    {joinable && (meetLinkFor(s, classLinks)
+                      ? <a className="admin-btn-ghost" style={{ textDecoration: 'none' }} href={meetLinkFor(s, classLinks)} target="_blank" rel="noreferrer" title="Abre la sala de Google Meet del aula"><ExternalLink size={13} /> Entrar a Meet</a>
+                      : <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><LogIn size={13} /> Ver sala</button>)}
                     {canCancel && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>}
                     <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>
                   </div>

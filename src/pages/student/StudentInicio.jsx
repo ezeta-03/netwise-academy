@@ -9,6 +9,8 @@ import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { sessionsForStudent } from '../../lib/groupAssignment';
 import InstitutionalEmailCard from './InstitutionalEmailCard';
+import { useClassLinks } from '../../hooks/useClassLinks';
+import { meetLinkFor } from '../../lib/classLinks';
 
 const StudentInicio = () => {
   const navigate = useNavigate();
@@ -54,6 +56,8 @@ const StudentInicio = () => {
       }).catch(() => setLoading(false));
     }).catch(() => setLoading(false));
   }, [currentUser, courses, reloadKey]);
+
+  const classLinks = useClassLinks(sessions);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
 
@@ -141,7 +145,11 @@ const StudentInicio = () => {
                 <div className="dash-list-row-title">{s.title}</div>
                 <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })} · {new Date(s.startsAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })} · Clase en vivo</div>
               </div>
-              <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><Video size={13} /> Ver sala</button>
+              {meetLinkFor(s, classLinks) ? (
+                <a className="admin-btn-ghost" href={meetLinkFor(s, classLinks)} target="_blank" rel="noreferrer" title="Abre la sala de Google Meet de tu aula. Entra con tu correo @netwiseacademy.pe"><Video size={13} /> Entrar a Meet</a>
+              ) : (
+                <button className="admin-btn-ghost" onClick={() => navigate(`/live/${s.id}`)}><Video size={13} /> Ver sala</button>
+              )}
             </div>
           ))}
         </div>
