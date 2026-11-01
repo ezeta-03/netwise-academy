@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { BookOpen, CheckCircle2, FileText, Pencil, Plus, Send, Sparkles, Video, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import {
-  fetchCourseContent, fetchProjectProfile, saveProjectProfile,
-  fetchProjectAdvances, toggleProjectAdvance, fetchSubmissions,
-} from '../../lib/db';
+import { saveProjectProfile } from '../../lib/db';
+import { getGradingModel } from '../../lib/gradingScheme';
+import { submissionFor } from '../../lib/workItems';
+import { useStudentCourse } from '../../hooks/useStudentCourse';
+import { useNow } from '../../hooks/useNow';
 import ModalPortal from '../../components/ModalPortal';
-import SubmitDeliverableModal, { SubmissionContent } from '../../components/SubmitDeliverableModal';
+import SubmitWorkModal from '../../components/SubmitWorkModal';
+import WorkRow from '../../components/WorkRow';
 
 const ProfileModal = ({ course, initial, onClose, onSaved }) => {
   const { currentUser } = useAuth();
@@ -56,7 +58,7 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
         <div className="admin-field"><label>Descripción de lo que hace el negocio</label><textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
         <div className="admin-modal-actions">
           <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="admin-btn-edit" onClick={handleSave} disabled={saving}><Plus size={13} /> {saving ? 'Guardando...' : 'Crear mi proyecto'}</button>
+          <button className="admin-btn-edit" onClick={handleSave} disabled={saving}><Plus size={13} /> {saving ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear mi proyecto'}</button>
         </div>
       </div>
     </div>
@@ -64,216 +66,113 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
   );
 };
 
+const pct = (n) => `${String(n).replace('.', ',')}%`;
+const joinNames = (names) => (names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`);
 
+// Mi proyecto (E7): todo lo que el alumno entrega en el curso. Arriba su
+// empresa (o el "Primer paso" para definirla); luego un bloque por módulo con
+// su peso en la nota y, dentro, la entrega del módulo y las prácticas de sus
+// clases, ordenadas por fecha. Al final, juntos, los módulos que aún no empiezan.
 const StudentCourseProyecto = () => {
-  const { course } = useOutletContext();
+  const { course, group } = useOutletContext();
   const { currentUser } = useAuth();
-  const { addToast } = useUI();
   const navigate = useNavigate();
-  const [modules, setModules] = useState([]);
-  const [profile, setProfile] = useState(null);
-  const [advances, setAdvances] = useState({});
-  const [submissions, setSubmissions] = useState({});
-  const [selectedId, setSelectedId] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { data, reload } = useStudentCourse(course, group, currentUser?.uid);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [submitModule, setSubmitModule] = useState(null);
+  const [submitItem, setSubmitItem] = useState(null);
+  const now = useNow(60000);
 
-  const load = useCallback(() => {
-    if (!currentUser) return;
-    Promise.all([fetchCourseContent(course.id), fetchProjectProfile(currentUser.uid, course.id), fetchProjectAdvances(currentUser.uid, course.id)]).then(async ([content, prof, adv]) => {
-      const mods = content.modules || [];
-      const subsByModule = {};
-      for (const m of mods) {
-        const subs = await fetchSubmissions(course.id, m.id, currentUser.uid);
-        subsByModule[m.id] = subs.find((s) => s.uid === currentUser.uid) || null;
-      }
-      setModules(mods);
-      setProfile(prof);
-      setAdvances(adv);
-      setSubmissions(subsByModule);
-      setSelectedId((prev) => (prev && mods.some((m) => m.id === prev)) ? prev : (mods.find((m) => m.deliverable?.open !== false)?.id || mods[0]?.id || null));
-      setLoading(false);
-    }).catch(() => {
-      addToast('No se pudo cargar tu proyecto. Intenta de nuevo.', 'error');
-      setLoading(false);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course.id, currentUser]);
+  if (!data) return <div className="admin-empty-hint">Cargando tu proyecto...</div>;
+  if (data.error) return <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>No se pudo cargar tu proyecto. Recarga la página.</div>;
 
-  useEffect(() => { load(); }, [load]);
+  const { modules, items, submissions, profile, classList } = data;
+  const model = getGradingModel(course.id, modules);
+  const weightOf = Object.fromEntries(model.components.filter((c) => c.kind === 'module').map((c) => [c.moduleId, c.weight]));
+  const manual = model.components.filter((c) => c.kind === 'manual');
+  const blocked = !profile;
+  const view = (item) => navigate(`../entrega/${item.kind === 'practice' ? 'practica' : 'modulo'}/${item.kind === 'practice' ? item.practiceId : item.moduleId}`);
 
-  if (loading) return <div className="admin-empty-hint">Cargando tu proyecto...</div>;
-
-  if (modules.length === 0) {
-    return (
-      <div className="anim-fade-up d1">
-        <div className="admin-page-head"><div><h1 className="admin-page-title">Mi proyecto</h1><p className="admin-page-sub">{course.title}</p></div></div>
-        <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Este curso todavía no tiene módulos publicados.</div>
-      </div>
-    );
-  }
-
-  const selected = modules.find((m) => m.id === selectedId) || modules[0];
-  const selectedIndex = modules.findIndex((m) => m.id === selected.id);
-  const currentModuleIndex = modules.findIndex((m) => m.deliverable?.open !== false);
-  const totalAdvances = modules.reduce((sum, m) => sum + (m.practiceBullets?.length || 0), 0);
-  const doneAdvances = modules.reduce((sum, m) => sum + (advances[m.id]?.length || 0), 0);
-  const submittedCount = Object.values(submissions).filter(Boolean).length;
-
-  const toggleBullet = async (moduleId, idx) => {
-    try {
-      const next = await toggleProjectAdvance(currentUser.uid, course.id, moduleId, idx);
-      setAdvances((prev) => ({ ...prev, [moduleId]: next }));
-    } catch {
-      addToast('No se pudo guardar tu avance. Intenta de nuevo.', 'error');
-    }
-  };
-
-  const mySubmissions = modules
-    .map((m) => ({ module: m, submission: submissions[m.id] }))
-    .filter((x) => x.submission);
+  // Un módulo "empezó" cuando es el primero, ya tuvo su primera clase, tiene
+  // prácticas o ya hay algo entregado.
+  const started = (m, i) => i === 0
+    || items.some((it) => it.kind === 'practice' && it.moduleId === m.id)
+    || classList.some((c) => c.moduleId === m.id && c.startsAt && new Date(c.startsAt).getTime() <= now)
+    || submissions.some((s) => s.moduleId === m.id);
+  const startedModules = modules.filter((m, i) => started(m, i) && items.some((it) => it.moduleId === m.id));
+  const laterModules = modules.filter((m, i) => !started(m, i) && m.deliverable?.description);
+  const orphanPractices = items.filter((it) => it.kind === 'practice' && !modules.some((m) => m.id === it.moduleId));
+  const laterWeights = [...new Set(laterModules.map((m) => weightOf[m.id]).filter((w) => w !== undefined))];
 
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Mi proyecto</h1><p className="admin-page-sub">{course.title}</p></div>
-        <button className="admin-btn-edit" onClick={() => setSubmitModule(selected)}><Send size={14} /> {submissions[selected.id] ? 'Reemplazar avance' : 'Presentar avance'}</button>
+        <div><h1 className="admin-page-title">Mi proyecto</h1><p className="admin-page-sub">{course.title} · Tu empresa, la entrega de cada módulo y tus prácticas de clase.</p></div>
       </div>
 
-      <div className="admin-stats-grid">
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Módulo en curso <BookOpen size={16} /></div>
-          <div className="admin-stat-value">{String(Math.max(currentModuleIndex, 0) + 1).padStart(2, '0')}</div>
-          <div className="admin-cell-sub">de {modules.length} · {modules[Math.max(currentModuleIndex, 0)]?.weeksLabel || ''}</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Avances del proyecto <CheckCircle2 size={16} /></div>
-          <div className="admin-stat-value">{doneAdvances}/{totalAdvances}</div>
-          <div className="admin-cell-sub">Tareas aplicadas a tu proyecto</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-label">Entregas enviadas <FileText size={16} /></div>
-          <div className="admin-stat-value">{submittedCount}</div>
-          <div className="admin-cell-sub">{Object.values(submissions).filter((s) => s?.status === 'reviewed').length} con evaluación</div>
-        </div>
-      </div>
-
-      <div className="admin-two-col" style={{ gridTemplateColumns: '1fr 280px', alignItems: 'flex-start' }}>
-        <div>
-          {profile ? (
-            <div className="admin-panel" style={{ marginBottom: 20 }}>
-              <div className="admin-panel-head">
-                <span className="admin-panel-title" style={{ textTransform: 'uppercase', fontSize: '.72rem', letterSpacing: '.04em', color: 'var(--accent)' }}>Tu marca/empresa</span>
-                <button className="admin-btn-ghost" onClick={() => setProfileModalOpen(true)}><Pencil size={13} /> Editar ficha</button>
-              </div>
-              <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#14141F', marginBottom: 6 }}>{profile.name}</div>
-              {profile.description && <p style={{ fontSize: '.88rem', color: '#4A4860' }}>{profile.description}</p>}
-              <div className="dash-profile-stats">
-                <div><div className="dash-profile-stat-label">Sector</div><div className="dash-profile-stat-value">{profile.sector || '—'}</div></div>
-                <div><div className="dash-profile-stat-label">Público objetivo</div><div className="dash-profile-stat-value">{profile.audience || '—'}</div></div>
-                <div><div className="dash-profile-stat-label">Meta del curso</div><div className="dash-profile-stat-value">{profile.activity || '—'}</div></div>
-              </div>
-            </div>
-          ) : (
-            <div className="admin-banner" style={{ marginBottom: 20 }}>
-              <div className="admin-banner-badge">Primer paso</div>
-              <div className="admin-banner-title">Define tu marca/empresa</div>
-              <p className="admin-banner-desc">Elige la empresa, marca o idea sobre la que vas a trabajar. Se define una sola vez y todos los avances del curso se construyen sobre ella.</p>
-              <button className="admin-btn-edit" style={{ marginTop: 14 }} onClick={() => setProfileModalOpen(true)}><Plus size={14} /> Crear mi proyecto</button>
-            </div>
-          )}
-
-          <div className="admin-panel" style={{ marginBottom: 20 }}>
-            <span className="dash-eyebrow">{selected.title.toUpperCase()}</span>
-            <h2 style={{ fontSize: '1.1rem', margin: '4px 0 14px', color: '#14141F' }}>{selected.title}</h2>
-            {selected.objective && (
-              <div className="dash-callout" style={{ marginBottom: 16 }}>
-                <div className="dash-callout-label">Objetivo de este módulo</div>
-                <div className="dash-callout-text">{selected.objective}</div>
-              </div>
-            )}
-            {selected.deliverable?.description && (
-              <p className="admin-cell-sub" style={{ marginBottom: 14 }}><strong>Entregable:</strong> {selected.deliverable.description}</p>
-            )}
-
-            {selected.practiceBullets?.length > 0 && (
-              <>
-                <div className="dash-eyebrow" style={{ marginBottom: 4 }}>Avances de esta clase</div>
-                {selected.practiceBullets.map((b, i) => {
-                  const checked = (advances[selected.id] || []).includes(i);
-                  return (
-                    <label key={i} className={`dash-check-row ${checked ? 'checked' : ''}`}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleBullet(selected.id, i)} />
-                      <span>{b}</span>
-                    </label>
-                  );
-                })}
-              </>
-            )}
-
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-              {selected.lessons?.length > 0 && (
-                <button className="admin-btn-edit" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-1`)}><Video size={14} /> Ver la clase</button>
-              )}
-              <button className="admin-btn-ghost" onClick={() => navigate(`/student/curso/${course.id}/materiales`)}><FileText size={14} /> Consultar materiales</button>
-              <button className="admin-btn-ghost" onClick={() => setSubmitModule(selected)}><Send size={14} /> {submissions[selected.id] ? 'Reemplazar avance' : 'Presentar avance'}</button>
-            </div>
+      {profile ? (
+        <div className="admin-panel" style={{ marginBottom: 20 }}>
+          <div className="admin-panel-head" style={{ marginBottom: 2 }}>
+            <span className="admin-panel-title">Mi empresa</span>
+            <button className="admin-btn-ghost" onClick={() => setProfileModalOpen(true)}>Editar</button>
           </div>
+          <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todas tus prácticas se trabajan sobre ella.</p>
+          <div className="dash-list-row-title">{profile.name}</div>
+          <div className="admin-cell-sub">{[profile.description || profile.activity, profile.updatedAt ? `Definida el ${new Date(profile.updatedAt).toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')}` : ''].filter(Boolean).join(' · ')}</div>
+        </div>
+      ) : (
+        <div className="dark-card" style={{ margin: '14px 0 20px' }}>
+          <span className="dark-card-badge">Primer paso</span>
+          <h3>Define tu marca/empresa</h3>
+          <p>Elige la empresa, marca o idea sobre la que vas a trabajar. Se define una sola vez y todos los avances del curso se construyen sobre ella.</p>
+          <button className="admin-btn-edit" style={{ marginTop: 14 }} onClick={() => setProfileModalOpen(true)}><Plus size={14} /> Crear mi proyecto</button>
+        </div>
+      )}
 
-          <div className="admin-panel" style={{ marginBottom: 20 }}>
-            <div className="admin-panel-head">
-              <span className="admin-panel-title">Ruta de tu proyecto</span>
-              <span className="admin-status admin-status-gray">{doneAdvances} de {totalAdvances} avances</span>
-            </div>
-            {modules.map((m, i) => {
-              const done = m.deliverable?.open === false;
-              const bulletsTotal = m.practiceBullets?.length || 0;
-              const bulletsDone = advances[m.id]?.length || 0;
-              return (
-                <div key={m.id} className="dash-list-row">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div className="dash-module-num" style={done ? { background: '#E3F9EE', color: '#15803D' } : undefined}>{done ? <CheckCircle2 size={13} /> : String(i + 1).padStart(2, '0')}</div>
-                    <div>
-                      <div className="dash-list-row-title" style={{ color: m.id === selected.id ? 'var(--accent)' : undefined }}>{m.title}</div>
-                      <div className="dash-list-row-sub">{done ? 'Validado por tu docente' : 'Por empezar'} · {bulletsDone} de {bulletsTotal} avances</div>
-                    </div>
-                  </div>
-                  <button className="admin-btn-ghost" onClick={() => setSelectedId(m.id)}>{m.id === selected.id ? 'Viendo' : done ? 'Abrir' : 'Continuar'}</button>
-                </div>
-              );
-            })}
-          </div>
+      {items.length === 0 && (
+        <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Este curso todavía no tiene entregas publicadas.</div>
+      )}
 
-          <div className="admin-panel">
-            <div className="admin-panel-head"><span className="admin-panel-title">Mis entregas de este curso</span></div>
-            {mySubmissions.length === 0 ? (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>Aún no hay avances enviados en este curso. Adjunta tu trabajo cuando esté listo.</p>
-            ) : mySubmissions.map(({ module, submission }) => (
-              <div key={module.id} className="dash-list-row">
-                <div>
-                  <div className="dash-list-row-title">{module.deliverable?.description || module.title}</div>
-                  <SubmissionContent submission={submission} emptyText="Avance presentado." />
-                </div>
-                <span className={`admin-status ${submission.status === 'reviewed' ? 'admin-status-green' : 'admin-status-gray'}`}>{submission.status === 'reviewed' ? 'Revisado' : 'En revisión'}</span>
+      {startedModules.map((m) => {
+        const index = modules.indexOf(m);
+        return (
+          <div key={m.id} className="admin-panel module-block">
+            <div className="module-block-head">
+              <div>
+                <div className="module-block-eyebrow">Módulo {index + 1}</div>
+                <div className="module-block-title">{m.title}</div>
               </div>
+              {weightOf[m.id] !== undefined && <span className="admin-status admin-status-violet">{pct(weightOf[m.id])} de tu nota</span>}
+            </div>
+            {items.filter((it) => it.moduleId === m.id).map((it) => (
+              <WorkRow key={it.key} item={it} sub={submissionFor(it, submissions)} blocked={blocked} onSubmit={setSubmitItem} onView={view} />
             ))}
           </div>
-        </div>
+        );
+      })}
 
-        <div className="admin-panel" style={{ background: 'var(--accent-bg)' }}>
-          <div className="admin-panel-head"><span className="admin-panel-title"><Sparkles size={15} style={{ verticalAlign: -2, marginRight: 4 }} color="var(--accent)" /> Asistente IA</span></div>
-          <p className="admin-cell-sub" style={{ marginBottom: 14 }}>Resuelve dudas sobre este curso.</p>
-          <button className="admin-btn-edit" onClick={() => navigate(`/student/curso/${course.id}/ia`)}>Abrir asistente</button>
+      {orphanPractices.length > 0 && (
+        <div className="admin-panel module-block">
+          <div className="module-block-head"><div className="module-block-title">Otras prácticas</div></div>
+          {orphanPractices.map((it) => <WorkRow key={it.key} item={it} sub={submissionFor(it, submissions)} blocked={blocked} onSubmit={setSubmitItem} onView={view} />)}
         </div>
-      </div>
-
-      {profileModalOpen && <ProfileModal course={course} initial={profile} onClose={() => setProfileModalOpen(false)} onSaved={load} />}
-      {submitModule && (
-        <SubmitDeliverableModal course={course} module={submitModule} existing={submissions[submitModule.id] || null} onClose={() => setSubmitModule(null)} onSaved={load}
-          title={submissions[submitModule.id] ? 'Reemplazar avance' : 'Presentar avance'} noteLabel="Cuéntanos qué avanzaste o pega el link (opcional si adjuntas archivo)"
-          submitLabel="Enviar avance" successMsg="Avance presentado. Tu docente lo revisará pronto." />
       )}
+
+      {laterModules.length > 0 && (
+        <div className="admin-panel module-block">
+          <div className="module-block-head">
+            <div>
+              <div className="dash-list-row-title">{joinNames(laterModules.map((m) => `Módulo ${modules.indexOf(m) + 1}`))}</div>
+              <div className="admin-cell-sub">
+                Se abren cuando empiecen.{manual.length > 0 ? ` Al final va ${manual.map((c) => `${c.label.toLowerCase()} (${pct(c.weight)} de tu nota)`).join(' y ')}.` : ''}
+              </div>
+            </div>
+            {laterWeights.length === 1 && <span className="admin-status admin-status-violet">{pct(laterWeights[0])}{laterModules.length > 1 ? ' cada uno' : ' de tu nota'}</span>}
+          </div>
+        </div>
+      )}
+
+      {profileModalOpen && <ProfileModal course={course} initial={profile} onClose={() => setProfileModalOpen(false)} onSaved={reload} />}
+      {submitItem && <SubmitWorkModal course={course} item={submitItem} existing={submissionFor(submitItem, submissions)} onClose={() => setSubmitItem(null)} onSaved={reload} />}
     </div>
   );
 };

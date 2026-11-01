@@ -72,11 +72,11 @@ const Navbar = () => {
 
   return (
     <>
-      {(location.pathname === '/' || location.pathname === '/metodologia') && promoBanner.trim() && (
+      {(location.pathname === '/' || location.pathname === '/inicio' || location.pathname === '/metodologia') && promoBanner.trim() && (
         <div className="home-promo">{promoBanner}</div>
       )}
       <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`} id="navbar">
-        <Link to="/" className="nav-logo">
+        <Link to={currentUser ? '/inicio' : '/'} className="nav-logo">
           <img src={logoNetwise} alt="Netwise Academy" className="nav-logo-img" />
         </Link>
 

@@ -4,7 +4,7 @@
 // el instante y la cadena, así que son independientes de la TZ de la máquina.
 import { test, describe, mock, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { getLiveSessionStatus, canJoinLiveSession, LIVE_JOIN_WINDOW_MIN } from '../src/lib/liveSessionStatus.js';
+import { getLiveSessionStatus, canJoinLiveSession, LIVE_JOIN_WINDOW_MIN, getClassCardState, relativeClassLabel } from '../src/lib/liveSessionStatus.js';
 
 const STARTS = '2026-03-10T19:00';
 const startMs = new Date(STARTS).getTime();
@@ -114,5 +114,28 @@ describe('canJoinLiveSession', () => {
     at(startMs);
     assert.equal(canJoinLiveSession({ startsAt: null }), false);
     assert.equal(canJoinLiveSession({ startsAt: '' }), false);
+  });
+});
+
+describe('getClassCardState (tarjeta de clase C1)', () => {
+  const s = { startsAt: STARTS, durationMin: 120, status: 'upcoming' };
+
+  test('más de 10 min antes -> scheduled; desde 10 min antes -> soon', () => {
+    assert.equal(getClassCardState(s, startMs - 10 * MIN - 1), 'scheduled');
+    assert.equal(getClassCardState(s, startMs - 10 * MIN), 'soon');
+  });
+  test('en la hora de inicio y hasta el fin -> live; luego ended', () => {
+    assert.equal(getClassCardState(s, startMs), 'live');
+    assert.equal(getClassCardState(s, startMs + 120 * MIN), 'live');
+    assert.equal(getClassCardState(s, startMs + 120 * MIN + 1), 'ended');
+  });
+  test('cancelada manda siempre', () => {
+    assert.equal(getClassCardState({ ...s, status: 'cancelled' }, startMs), 'cancelled');
+  });
+  test('etiquetas relativas', () => {
+    assert.equal(relativeClassLabel(s, startMs - 8 * MIN), 'Hoy · empieza en 8 min');
+    assert.equal(relativeClassLabel(s, startMs + 5 * MIN), 'En vivo ahora');
+    assert.equal(relativeClassLabel(s, startMs + 120 * MIN + 2 * 60 * MIN), 'Terminada · hace 2 h');
+    assert.equal(relativeClassLabel(s, startMs - 3 * 24 * 60 * MIN), 'En 3 días');
   });
 });

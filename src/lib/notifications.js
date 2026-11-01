@@ -16,7 +16,7 @@ const ACCESS_NOTICE_MS = 14 * 24 * 3600 * 1000;
 
 // `enrollments`: matrículas activas del alumno ({ [courseId]: matrícula }).
 // `submissions`: sus entregas (para avisar cuando el docente las califica).
-export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledCourseIds, liveSessions, enrollments = {}, submissions = [], now = Date.now() }) => {
+export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledCourseIds, liveSessions, enrollments = {}, submissions = [], practices = [], now = Date.now() }) => {
   const notifications = [];
 
   Object.values(enrollments).forEach((e) => {
@@ -37,7 +37,18 @@ export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledC
       id: `graded_${s.id}_${s.updatedAt}`,
       title: `✅ Tu docente ${graded ? 'calificó' : 'revisó'} "${s.deliverableTitle || s.moduleTitle || 'tu entrega'}"`,
       detail: graded ? `Nota: ${s.grade}/20${s.feedback ? ' · con comentarios' : ''}` : 'Revisa sus comentarios.',
-      to: `/student/curso/${s.courseId}/evaluacion`,
+      to: s.practiceId ? `/student/curso/${s.courseId}/entrega/practica/${s.practiceId}` : `/student/curso/${s.courseId}/entrega/modulo/${s.moduleId}`,
+    });
+  });
+  // Una práctica nueva del docente se avisa durante una semana.
+  practices.forEach((p) => {
+    const since = new Date(p.createdAt || 0).getTime();
+    if (!since || now - since > UPCOMING_WINDOW_MS) return;
+    notifications.push({
+      id: `practice_${p.id}`,
+      title: `📝 Nueva práctica: "${p.title}"`,
+      detail: p.dueAt ? `Vence el ${new Date(p.dueAt).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : 'Entrégala desde Mi proyecto.',
+      to: `/student/curso/${p.courseId}/proyecto`,
     });
   });
   const relevantCourseIds = new Set([...preregisteredIds, ...enrolledCourseIds]);
@@ -65,6 +76,17 @@ export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledC
       });
     } else if (status === 'upcoming') {
       if (new Date(s.startsAt).getTime() - now > UPCOMING_WINDOW_MS) return;
+      // El docente cambió fecha, hora o tema: aviso aparte (con la fecha del
+      // cambio en el id, cada cambio vuelve a avisar).
+      if (s.rescheduledAt) {
+        notifications.push({
+          id: `live_changed_${s.id}_${s.rescheduledAt}`,
+          title: `🗓️ Cambió la clase "${s.title}"`,
+          detail: `${s.courseTitle} · Ahora: ${new Date(s.startsAt).toLocaleString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`,
+          to: `/student/curso/${s.courseId}/sala`,
+        });
+        return;
+      }
       notifications.push({
         id: `live_soon_${s.id}`,
         title: `📅 Próxima clase en vivo: "${s.title}"`,
@@ -109,6 +131,6 @@ export const buildTeacherNotifications = ({ pendingByCourse }) => (
       id: `to_review_${b.course.id}_${b.pending}`,
       title: `📥 ${b.pending} entrega${b.pending === 1 ? '' : 's'} por revisar`,
       detail: b.course.title,
-      to: `/teacher/curso/${b.course.id}/evaluacion`,
+      to: `/teacher/curso/${b.course.id}/entregas`,
     }))
 );

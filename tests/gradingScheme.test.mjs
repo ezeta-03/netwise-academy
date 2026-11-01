@@ -17,7 +17,7 @@ const weightsOf = (model) => model.components.map((c) => c.weight);
 
 describe('GRADING_SCHEMES: datos', () => {
   test('existen los esquemas de los cursos 1 a 4 y sólo esos', () => {
-    assert.deepEqual(Object.keys(GRADING_SCHEMES), ['1', '2', '3', '4']);
+    assert.deepEqual(Object.keys(GRADING_SCHEMES).filter((k) => k !== SOLO_MODULOS), ['1', '2', '3', '4']);
   });
   for (const [id, scheme] of Object.entries(GRADING_SCHEMES)) {
     test(`curso ${id}: los bloques suman 100`, () => {
@@ -44,8 +44,8 @@ describe('GRADING_SCHEMES: datos', () => {
     });
   }
   test('pesos por bloque de cada curso (spec)', () => {
-    // Redes: un solo bloque de módulos del 100% (pesos del sílabo), sin componente manual.
-    assert.deepEqual(GRADING_SCHEMES[1].blocks.map((b) => [b.key, b.weight]), [['modules', 100]]);
+    // Redes (sílabo): 70% módulos (20, 25, 25 y 30) + 30% sustentación final.
+    assert.deepEqual(GRADING_SCHEMES[1].blocks.map((b) => [b.key, b.weight]), [['modules', 70], ['sustentacion', 30]]);
     assert.deepEqual(GRADING_SCHEMES[1].blocks[0].moduleWeights, [20, 25, 25, 30]);
     assert.deepEqual(GRADING_SCHEMES[2].blocks[0].moduleWeights, [25, 25, 25, 25]);
     assert.deepEqual(GRADING_SCHEMES[2].blocks.map((b) => [b.key, b.weight]), [['modules', 70], ['sustentacion', 30]]);
@@ -53,6 +53,18 @@ describe('GRADING_SCHEMES: datos', () => {
     assert.deepEqual(GRADING_SCHEMES[4].blocks.map((b) => [b.key, b.weight]), [['modules', 40], ['participacion', 30], ['sustentacion', 30]]);
   });
 });
+
+
+// Esquema "solo módulos" (un bloque del 100%, sin componente manual): era el de
+// Redes Sociales hasta que el sílabo pidió 70% módulos + 30% sustentación. Se
+// registra DESPUÉS de los tests de datos (que recorren los esquemas reales) y
+// cubre ese caso en el resto del archivo.
+const SOLO_MODULOS = 'solo-modulos';
+GRADING_SCHEMES[SOLO_MODULOS] = {
+  subtitle: 'Notas por entregable y promedio final.',
+  footer: 'Pesos del sílabo EDRRSS · 20% + 25% + 25% + 30%',
+  blocks: [{ key: 'modules', label: 'Entregables del curso', weight: 100, moduleWeights: [20, 25, 25, 30] }],
+};
 
 describe('getGradingScheme', () => {
   test('id numérico o texto devuelve el mismo esquema', () => {
@@ -73,8 +85,8 @@ describe('getGradingScheme', () => {
 });
 
 describe('getGradingModel con esquema', () => {
-  test('Redes (1): pesos efectivos 20 / 25 / 25 / 30, un solo bloque del 100% y sin componente manual', () => {
-    const m = getGradingModel(1, mods(4));
+  test('Solo módulos: pesos efectivos 20 / 25 / 25 / 30, un solo bloque del 100% y sin componente manual', () => {
+    const m = getGradingModel(SOLO_MODULOS, mods(4));
     assert.deepEqual(weightsOf(m), [20, 25, 25, 30]);
     assert.equal(m.total, 100);
     assert.equal(m.hasScheme, true);
@@ -105,8 +117,8 @@ describe('getGradingModel con esquema', () => {
     const s = m.components[4];
     assert.deepEqual([s.key, s.kind, s.moduleId, s.label, s.blockKey, s.weightInBlock, s.weight], ['sustentacion', 'manual', undefined, 'Sustentación del Brand Deck', 'sustentacion', 100, 30]);
   });
-  test('forma de cada componente de Redes: sólo módulos, con peso interno igual al efectivo', () => {
-    const m = getGradingModel(1, mods(4));
+  test('forma de cada componente de Solo módulos: sólo módulos, con peso interno igual al efectivo', () => {
+    const m = getGradingModel(SOLO_MODULOS, mods(4));
     const c = m.components[3];
     assert.deepEqual([c.key, c.kind, c.moduleId, c.index, c.label, c.blockKey, c.blockLabel, c.weightInBlock, c.weight],
       ['m:m4', 'module', 'm4', 3, 'M4', 'modules', 'Entregables del curso', 30, 30]);
@@ -137,8 +149,8 @@ describe('getGradingModel con esquema', () => {
   describe('deliverable.weight se IGNORA cuando hay esquema', () => {
     test('pesos manuales absurdos en los módulos no cambian nada', () => {
       const crazy = [dm('m1', { weight: 90 }), dm('m2', { weight: 5 }), dm('m3', { weight: 3 }), dm('m4', { weight: 2 })];
-      assert.deepEqual(weightsOf(getGradingModel(1, crazy)), [20, 25, 25, 30]);
-      assert.deepEqual(weightsOf(getGradingModel(1, crazy)), weightsOf(getGradingModel(1, mods(4))));
+      assert.deepEqual(weightsOf(getGradingModel(SOLO_MODULOS, crazy)), [20, 25, 25, 30]);
+      assert.deepEqual(weightsOf(getGradingModel(SOLO_MODULOS, crazy)), weightsOf(getGradingModel(SOLO_MODULOS, mods(4))));
       assert.deepEqual(weightsOf(getGradingModel(2, crazy)), [17.5, 17.5, 17.5, 17.5, 30]);
       assert.deepEqual(effectiveModuleWeights(2, crazy), { m1: 17.5, m2: 17.5, m3: 17.5, m4: 17.5 });
     });
@@ -166,9 +178,9 @@ describe('getGradingModel con esquema', () => {
       assert.ok(Math.abs(m.total - 100) <= 0.05);
       assert.deepEqual(m.moduleCountMismatch, { expected: 4, actual: 3 });
     });
-    test('Redes, 4 módulos pero sólo 3 con entregable: el 100% se reparte en partes iguales (no [20,25,25])', () => {
+    test('Solo módulos, 4 módulos pero sólo 3 con entregable: el 100% se reparte en partes iguales (no [20,25,25])', () => {
       const three = [dm('a'), { id: 'z', title: 'sin entregable' }, dm('b'), dm('c')];
-      const m = getGradingModel(1, three);
+      const m = getGradingModel(SOLO_MODULOS, three);
       assert.deepEqual(m.components.map((c) => c.moduleId), ['a', 'b', 'c']);
       assert.deepEqual(m.components.map((c) => c.weightInBlock), [33.33, 33.33, 33.33]);
       assert.deepEqual(weightsOf(m), [33.33, 33.33, 33.33]);
@@ -181,8 +193,8 @@ describe('getGradingModel con esquema', () => {
       assert.deepEqual(m.components.filter((c) => c.kind === 'module').map((c) => c.moduleId), ['a', 'b']);
       assert.deepEqual(effectiveModuleWeights(2, [dm('a'), { id: 'z' }, dm('b')]), { a: 35, b: 35 });
     });
-    test('5 módulos: 20% del bloque cada uno; Redes 20 c/u (sin manual), Branding 14 c/u (70/5) y el total sigue en 100', () => {
-      const m = getGradingModel(1, mods(5));
+    test('5 módulos: 20% del bloque cada uno; Solo módulos 20 c/u (sin manual), Branding 14 c/u (70/5) y el total sigue en 100', () => {
+      const m = getGradingModel(SOLO_MODULOS, mods(5));
       assert.deepEqual(m.components.filter((c) => c.kind === 'module').map((c) => c.weightInBlock), [20, 20, 20, 20, 20]);
       assert.deepEqual(weightsOf(m), [20, 20, 20, 20, 20]);
       assert.equal(m.total, 100);
@@ -196,14 +208,14 @@ describe('getGradingModel con esquema', () => {
     test('1 módulo: recibe todo el bloque', () => {
       assert.deepEqual(weightsOf(getGradingModel(2, mods(1))), [70, 30]);
     });
-    test('cero módulos / null / undefined: el bloque queda vacío y el total es sólo lo manual (Branding: 30; Redes: 0)', () => {
+    test('cero módulos / null / undefined: el bloque queda vacío y el total es sólo lo manual (Branding: 30; Solo módulos: 0)', () => {
       for (const list of [[], null, undefined, [{ id: 'z' }]]) {
         const m = getGradingModel(2, list);
         assert.deepEqual(m.blocks[0].components, []);
         assert.equal(m.blocks[0].weight, 70);
         assert.deepEqual(m.components.map((c) => c.key), ['sustentacion']);
         assert.equal(m.total, 30);
-        const r = getGradingModel(1, list);
+        const r = getGradingModel(SOLO_MODULOS, list);
         assert.deepEqual(r.blocks[0].components, []);
         assert.equal(r.blocks[0].weight, 100);
         assert.deepEqual(r.components, []);
@@ -227,12 +239,12 @@ describe('getGradingModel con esquema', () => {
     });
     test('el reparto entre módulos debería sumar 100 exacto (sin residuo por redondeo)', { todo: 'BAJO gradingScheme.js:81-84 - round2(100/n) y round2 del peso efectivo acumulan error: p. ej. Marketing con 3 módulos suma 100.01, Redes con 3 suma 99.99' }, () => {
       assert.equal(getGradingModel(3, mods(3)).total, 100);
-      assert.equal(getGradingModel(1, mods(3)).total, 100);
+      assert.equal(getGradingModel(SOLO_MODULOS, mods(3)).total, 100);
     });
   });
 
   test('modules null/undefined sin esquema y con esquema no lanzan', () => {
-    assert.doesNotThrow(() => getGradingModel(1, undefined));
+    assert.doesNotThrow(() => getGradingModel(SOLO_MODULOS, undefined));
     assert.doesNotThrow(() => getGradingModel(99, undefined));
   });
   test('las claves de componentes son únicas en todos los esquemas', () => {
@@ -308,8 +320,8 @@ describe('buildStudentRows', () => {
     assert.deepEqual(rows[4], { key: 'sustentacion', kind: 'manual', title: 'Sustentación del Brand Deck', weight: 30, grade: 17, status: 'reviewed' });
     assert.deepEqual(rows[1], { key: 'm:m2', moduleId: 'm2', kind: 'module', title: 'M2', weight: 17.5, grade: null, status: 'pending' });
   });
-  test('Redes: 4 filas (todas de módulo, pesos 20/25/25/30); una clave "sustentacion" en scores se ignora', () => {
-    const redes = getGradingModel(1, mods(4));
+  test('Solo módulos: 4 filas (todas de módulo, pesos 20/25/25/30); una clave "sustentacion" en scores se ignora', () => {
+    const redes = getGradingModel(SOLO_MODULOS, mods(4));
     const rows = buildStudentRows(redes, [rev('m1', 18), rev('m4', 16)], { sustentacion: 20 });
     assert.equal(rows.length, 4);
     assert.deepEqual(rows.map((r) => [r.key, r.kind, r.weight, r.grade]), [['m:m1', 'module', 20, 18], ['m:m2', 'module', 25, null], ['m:m3', 'module', 25, null], ['m:m4', 'module', 30, 16]]);
@@ -373,11 +385,11 @@ describe('buildStudentRows', () => {
 });
 
 describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', () => {
-  const redes = getGradingModel(1, mods(4)); // 20/25/25/30, sin componente manual
+  const redes = getGradingModel(SOLO_MODULOS, mods(4)); // 20/25/25/30, sin componente manual
   const brand = getGradingModel(2, mods(4)); // 17.5 x4 + sustentación 30
   const summary = (model, subs, scores) => computeGradeSummary(buildStudentRows(model, subs, scores));
 
-  test('Redes: M1..M4 = 18, 19, 17, 16 -> (20*18+25*19+25*17+30*16)/100 = 17.4, todo calificado sin componente manual', () => {
+  test('Solo módulos: M1..M4 = 18, 19, 17, 16 -> (20*18+25*19+25*17+30*16)/100 = 17.4, todo calificado sin componente manual', () => {
     const s = summary(redes, [rev('m1', 18), rev('m2', 19), rev('m3', 17), rev('m4', 16)], {});
     assert.equal(s.promedioParcial, 17.4); // 360 + 475 + 425 + 480 = 1740
     assert.equal(s.allGraded, true);
@@ -386,14 +398,14 @@ describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', ()
     assert.equal(s.rendimientoPct, 87);
     assert.ok(close(s.rendimientoRaw, 87));
   });
-  test('Redes: allGraded es true sólo con las 4 notas de módulo; una nota "sustentacion" en scores no cambia nada', () => {
+  test('Solo módulos: allGraded es true sólo con las 4 notas de módulo; una nota "sustentacion" en scores no cambia nada', () => {
     const subs = [rev('m1', 18), rev('m2', 19), rev('m3', 17), rev('m4', 16)];
     assert.deepEqual(summary(redes, subs, { sustentacion: 0 }), summary(redes, subs, {}));
     assert.deepEqual(summary(redes, subs, null), summary(redes, subs, {}));
     const three = summary(redes, subs.slice(0, 3), {});
     assert.deepEqual([three.allGraded, three.gradedCount, three.totalCount], [false, 3, 4]);
   });
-  test('Redes: promedio parcial renormalizado con 2 de 4 calificados (M1 18 y M2 19 -> (360+475)/45 = 18.56)', () => {
+  test('Solo módulos: promedio parcial renormalizado con 2 de 4 calificados (M1 18 y M2 19 -> (360+475)/45 = 18.56)', () => {
     const s = summary(redes, [rev('m1', 18), rev('m2', 19)], {});
     assert.equal(s.promedioParcial, 18.56); // 835 / 45 = 18.5556
     assert.deepEqual([s.allGraded, s.gradedCount, s.totalCount], [false, 2, 4]);
@@ -401,18 +413,18 @@ describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', ()
     // los dos últimos: (25*17 + 30*16) / 55 = 905 / 55 = 16.4545
     assert.equal(summary(redes, [rev('m3', 17), rev('m4', 16)], {}).promedioParcial, 16.45);
   });
-  test('Redes: M1 = 0 cuenta con su peso; M1 sin calificar no', () => {
+  test('Solo módulos: M1 = 0 cuenta con su peso; M1 sin calificar no', () => {
     const withZero = summary(redes, [rev('m1', 0), rev('m2', 20)], {});
     assert.equal(withZero.promedioParcial, 11.11); // (20*0 + 25*20) / 45 = 11.1111
     assert.equal(withZero.gradedCount, 2);
     assert.equal(summary(redes, [rev('m2', 20)], {}).promedioParcial, 20);
   });
-  test('Redes: M4 (30%) pesa más que cada uno de los otros: M1..M3 = 20 y M4 = 10 -> 17', () => {
+  test('Solo módulos: M4 (30%) pesa más que cada uno de los otros: M1..M3 = 20 y M4 = 10 -> 17', () => {
     const s = summary(redes, [rev('m1', 20), rev('m2', 20), rev('m3', 20), rev('m4', 10)], {});
     assert.equal(s.promedioParcial, 17); // (400 + 500 + 500 + 300) / 100
     assert.equal(evaluateApproval(s, null).overall, 'regular');
   });
-  test('Redes: reentrega quita la nota vieja hasta que el docente califica de nuevo', () => {
+  test('Solo módulos: reentrega quita la nota vieja hasta que el docente califica de nuevo', () => {
     // M2 reentregado (status "submitted") conserva grade 20 en el documento pero ya no cuenta
     const stale = summary(redes, [rev('m1', 18), rev('m2', 20, 'submitted')], {});
     assert.equal(stale.promedioParcial, 18);
@@ -469,13 +481,13 @@ describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', ()
     const withNull = summary(brand, [], { sustentacion: 17 });
     assert.equal(withNull.promedioParcial, 17);
   });
-  test('todo 0 con todo calificado: promedio 0, rendimiento 0 (no null), allGraded true (Redes y Branding)', () => {
+  test('todo 0 con todo calificado: promedio 0, rendimiento 0 (no null), allGraded true (Solo módulos y Branding)', () => {
     const s = summary(redes, [0, 1, 2, 3].map((i) => rev(`m${i + 1}`, 0)), {});
     assert.deepEqual([s.promedioParcial, s.rendimientoPct, s.allGraded], [0, 0, true]);
     const b = summary(brand, [0, 1, 2, 3].map((i) => rev(`m${i + 1}`, 0)), { sustentacion: 0 });
     assert.deepEqual([b.promedioParcial, b.rendimientoPct, b.allGraded], [0, 0, true]);
   });
-  test('todo 20: promedio 20, rendimiento 100 (Redes y Branding)', () => {
+  test('todo 20: promedio 20, rendimiento 100 (Solo módulos y Branding)', () => {
     const s = summary(redes, [0, 1, 2, 3].map((i) => rev(`m${i + 1}`, 20)), {});
     assert.deepEqual([s.promedioParcial, s.rendimientoPct], [20, 100]);
     const b = summary(brand, [0, 1, 2, 3].map((i) => rev(`m${i + 1}`, 20)), { sustentacion: 20 });
@@ -526,7 +538,7 @@ describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', ()
     assert.equal(low.promedioParcial, 10);
     assert.equal(evaluateApproval(low, null).overall, 'substitute');
   });
-  test('Redes: el veredicto global sale en cuanto hay las 4 notas de módulo (sin componente manual)', () => {
+  test('Solo módulos: el veredicto global sale en cuanto hay las 4 notas de módulo (sin componente manual)', () => {
     const regular = summary(redes, [0, 1, 2, 3].map((i) => rev(`m${i + 1}`, 20)), {});
     assert.equal(evaluateApproval(regular, null).overall, 'regular');
     const low = summary(redes, [0, 1, 2, 3].map((i) => rev(`m${i + 1}`, 10)), {});
@@ -545,8 +557,8 @@ describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', ()
     // pesos 23.33 x3 + 30 -> (23.33*(10+14+18) + 30*20) / 99.99
     assert.equal(s.promedioParcial, Math.round(((23.33 * 42 + 600) / 99.99) * 100) / 100);
   });
-  test('con 3 entregables Redes reparte el 100% en partes iguales: 33.33 c/u y promedio = media simple', () => {
-    const three = getGradingModel(1, [dm('a'), dm('b'), dm('c')]);
+  test('con 3 entregables Solo módulos reparte el 100% en partes iguales: 33.33 c/u y promedio = media simple', () => {
+    const three = getGradingModel(SOLO_MODULOS, [dm('a'), dm('b'), dm('c')]);
     const s = summary(three, [rev('a', 10), rev('b', 14), rev('c', 18)], {});
     assert.equal(s.promedioParcial, 14); // 33.33*42 / 99.99
     assert.deepEqual([s.allGraded, s.gradedCount, s.totalCount], [true, 3, 3]);
@@ -555,7 +567,8 @@ describe('promedio ponderado con computeGradeSummary(buildStudentRows(...))', ()
 
 describe('effectiveModuleWeights', () => {
   test('moduleId -> peso efectivo, sólo módulos (sin componentes manuales)', () => {
-    assert.deepEqual(effectiveModuleWeights(1, mods(4)), { m1: 20, m2: 25, m3: 25, m4: 30 });
+    assert.deepEqual(effectiveModuleWeights(1, mods(4)), { m1: 14, m2: 17.5, m3: 17.5, m4: 21 });
+    assert.deepEqual(effectiveModuleWeights(SOLO_MODULOS, mods(4)), { m1: 20, m2: 25, m3: 25, m4: 30 });
     assert.deepEqual(effectiveModuleWeights(2, mods(4)), { m1: 17.5, m2: 17.5, m3: 17.5, m4: 17.5 });
     assert.deepEqual(effectiveModuleWeights('3', mods(4)), { m1: 5, m2: 5, m3: 5, m4: 5 });
   });

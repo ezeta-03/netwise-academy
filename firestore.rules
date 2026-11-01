@@ -330,6 +330,7 @@ service cloud.firestore {
         && request.resource.data.status == 'submitted'
         && !('grade' in request.resource.data)
         && !('feedback' in request.resource.data)
+        && !('feedbackParts' in request.resource.data)
       );
       allow update: if (canManageCourse(string(resource.data.courseId)) && canManageCourse(string(request.resource.data.courseId))) || (
         isSignedIn()
@@ -339,7 +340,19 @@ service cloud.firestore {
         && request.resource.data.status == 'submitted'
         && request.resource.data.get('grade', null) == resource.data.get('grade', null)
         && request.resource.data.get('feedback', null) == resource.data.get('feedback', null)
+        && request.resource.data.get('feedbackParts', null) == resource.data.get('feedbackParts', null)
       );
+      allow delete: if canManageCourse(string(resource.data.courseId));
+    }
+
+    // Prácticas de clase que crea el docente (Prácticas y avances): las lee la
+    // gente del curso; las crea, edita o borra el docente del curso o el admin.
+    // `countsInRecord` ("Pasa a registro") no se muestra al alumno, pero lo
+    // necesita su página para calcular su nota.
+    match /practices/{practiceId} {
+      allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
+      allow create: if canManageCourse(string(request.resource.data.courseId));
+      allow update: if canManageCourse(string(resource.data.courseId)) && canManageCourse(string(request.resource.data.courseId));
       allow delete: if canManageCourse(string(resource.data.courseId));
     }
 

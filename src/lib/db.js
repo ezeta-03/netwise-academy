@@ -1276,9 +1276,12 @@ export const fetchCourseSubmissions = async (courseId, uid) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note, grade, feedback, file }) => {
+// `extra`: campos de la entrega nueva (E6): files [{ url, name, size }], links,
+// comment, versions (las anteriores), practiceId/parentModuleId (prácticas) y
+// feedbackParts del docente ({ good, improve, next }).
+export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, note, grade, feedback, file, extra }) => {
   const docId = `${uid}_${courseId}_${moduleId}`;
-  const payload = { courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, updatedAt: new Date().toISOString() };
+  const payload = { ...(extra || {}), courseId, moduleId, moduleTitle, uid, studentName, deliverableTitle, status, updatedAt: new Date().toISOString() };
   if (note !== undefined) payload.note = note || '';
   if (grade !== undefined) payload.grade = grade === null || grade === '' ? null : Number(grade);
   if (feedback !== undefined) payload.feedback = feedback || '';
@@ -1300,6 +1303,51 @@ export const upsertSubmission = async ({ courseId, moduleId, moduleTitle, uid, s
 
   await setDoc(doc(db, 'submissions', docId), payload, { merge: true });
   return payload;
+};
+
+// --- Prácticas de clase (colección Firestore `practices`) ---
+// Las crea el docente para una clase de su aula (D6). El alumno las entrega
+// como una entrega más (`submissions`, moduleId `p-{id}`, ver practiceSubmissionKey).
+
+export const practiceSubmissionKey = (practiceId) => `p-${practiceId}`;
+
+export const fetchPractices = async (courseIds) => {
+  if (!isConfigValid) {
+    const list = JSON.parse(localStorage.getItem('mock_practices') || '[]');
+    const wanted = asCourseList(courseIds);
+    return list.filter((p) => wanted.some((c) => sameCourseId(c, p.courseId)));
+  }
+  const list = await fetchByCourses('practices', courseIds);
+  return list.sort((a, b) => String(a.dueAt || '').localeCompare(String(b.dueAt || '')));
+};
+
+export const savePractice = async (practice) => {
+  const now = new Date().toISOString();
+  const { id, ...data } = practice;
+  if (!isConfigValid) {
+    const list = JSON.parse(localStorage.getItem('mock_practices') || '[]');
+    const pid = id || `prac-${Date.now()}`;
+    const idx = list.findIndex((p) => p.id === pid);
+    const next = { ...(idx >= 0 ? list[idx] : { createdAt: now }), ...data, id: pid, updatedAt: now };
+    if (idx >= 0) list[idx] = next; else list.push(next);
+    localStorage.setItem('mock_practices', JSON.stringify(list));
+    return next;
+  }
+  if (id) {
+    await updateDoc(doc(db, 'practices', id), { ...data, updatedAt: now });
+    return { id, ...data };
+  }
+  const ref = await addDoc(collection(db, 'practices'), { countsInRecord: false, ...data, createdAt: now, updatedAt: now });
+  return { id: ref.id, countsInRecord: false, ...data, createdAt: now };
+};
+
+export const deletePractice = async (practiceId) => {
+  if (!isConfigValid) {
+    const list = JSON.parse(localStorage.getItem('mock_practices') || '[]');
+    localStorage.setItem('mock_practices', JSON.stringify(list.filter((p) => p.id !== practiceId)));
+    return;
+  }
+  await deleteDoc(doc(db, 'practices', practiceId));
 };
 
 // --- Seguimiento de un alumno en un curso (extiende `enrollments`) ---

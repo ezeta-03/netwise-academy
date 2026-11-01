@@ -200,3 +200,12 @@ export const lastClassDate = (startDate, dayNames, week) => {
   const maxOffset = Math.max(...offsets.map((o) => o.offset));
   return fmtDate(baseMs + (first + maxOffset + (week - 1) * 7) * DAY_MS);
 };
+
+// Fecha y hora de Perú ('YYYY-MM-DD', 'HH:MM') de un instante ISO, para
+// rellenar el formulario al editar una clase.
+export const peruDateTimeParts = (iso) => {
+  const ms = new Date(iso).getTime();
+  if (Number.isNaN(ms)) return { date: '', time: '' };
+  const shifted = new Date(ms - 5 * 3600000).toISOString();
+  return { date: shifted.slice(0, 10), time: shifted.slice(11, 16) };
+};

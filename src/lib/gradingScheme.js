@@ -14,24 +14,23 @@ const moduleBlock = (label, weight, moduleWeights) => ({ key: 'modules', label, 
 const manualBlock = (key, label, weight) => ({ key, label, weight });
 
 export const GRADING_SCHEMES = {
-  // Redes Sociales & IA
-  // Pesos del sílabo EDRRSS: cada entregable pesa directo sobre la nota final
-  // (M4 es el trabajo final). No hay componente manual.
+  // Estrategias de Redes Sociales (sílabo): 70% módulos (20, 25, 25 y 30) + 30% sustentación final.
   1: {
-    subtitle: 'Notas por entregable y promedio final.',
-    footer: 'Pesos del sílabo EDRRSS · 20% + 25% + 25% + 30%',
-    blocks: [moduleBlock('Entregables del curso', 100, [20, 25, 25, 30])],
+    subtitle: 'Notas por módulo, sustentación final y promedio.',
+    footer: 'Según el sílabo · 70% módulos (20%, 25%, 25% y 30%) + 30% sustentación final',
+    blocks: [moduleBlock('Tareas prácticas por módulo', 70, [20, 25, 25, 30]), manualBlock('sustentacion', 'Sustentación final', 30)],
   },
-  // Branding & Marca
+  // Branding y Gestión de Marca (sílabo): 70% módulos (25% cada uno) + 30% sustentación final.
   2: {
-    subtitle: 'Notas por módulo, sustentación y promedio final.',
-    footer: 'Esquema propuesto · 70% módulos + 30% sustentación',
+    subtitle: 'Notas por módulo, sustentación final y promedio.',
+    footer: 'Según el sílabo · 70% módulos (25% cada uno) + 30% sustentación final',
     blocks: [moduleBlock('Tareas prácticas por módulo', 70, [25, 25, 25, 25]), manualBlock('sustentacion', 'Sustentación del Brand Deck', 30)],
   },
-  // Marketing Digital
+  // Marketing Digital (sílabo): 40% proyecto y sustentación + 20% participación
+  // + 20% prácticas (las entregas por módulo) + 20% caso 1.
   3: {
     subtitle: 'Notas por módulo, caso, participación y sustentación.',
-    footer: 'Pesos del sílabo · distribución interna por módulo propuesta',
+    footer: 'Según el sílabo · 40% proyecto y sustentación + 20% participación + 20% prácticas + 20% caso 1',
     blocks: [
       moduleBlock('Laboratorios y tareas por módulo', 20, [25, 25, 25, 25]),
       manualBlock('participacion', 'Participación y análisis de casos', 20),
@@ -39,10 +38,11 @@ export const GRADING_SCHEMES = {
       manualBlock('proyecto', 'Proyecto final y sustentación', 40),
     ],
   },
-  // Emprendimiento / Creación de Negocios Digitales
+  // Creación de Negocios Digitales (sílabo): 40% proyecto (las entregas por
+  // módulo) + 30% participación y experimentos + 30% sustentación.
   4: {
-    subtitle: 'Notas por módulo, participación, sustentación y promedio final.',
-    footer: 'Esquema propuesto · 40% módulos + 30% participación + 30% sustentación',
+    subtitle: 'Notas del proyecto por módulo, participación, sustentación y promedio.',
+    footer: 'Según el sílabo · 40% proyecto + 30% participación y experimentos + 30% sustentación',
     blocks: [
       moduleBlock('Tareas prácticas por módulo', 40, [25, 25, 25, 25]),
       manualBlock('participacion', 'Participación, casos y experimentos', 30),
@@ -108,10 +108,18 @@ export const getGradingModel = (courseId, modules) => {
 // Filas de notas de UN estudiante (misma forma que buildGradebookRows, para
 // usar computeGradeSummary): módulos desde sus entregas revisadas y
 // componentes manuales desde `scores` ({ [key]: nota }).
-export const buildStudentRows = (model, studentSubmissions, scores) => model.components.map((c) => {
+// `inRecordPracticeIds`: prácticas con "Pasa a registro" encendido. Su nota se
+// promedia dentro de su módulo junto con la entrega del módulo (D4); el resto
+// de prácticas es solo referencial y no suma.
+export const buildStudentRows = (model, studentSubmissions, scores, inRecordPracticeIds = null) => model.components.map((c) => {
   if (c.kind === 'module') {
     const sub = (studentSubmissions || []).find((s) => s.moduleId === c.moduleId) || null;
-    return { key: c.key, moduleId: c.moduleId, kind: 'module', title: c.label, weight: c.weight, grade: usableGrade(sub), status: sub?.status || 'pending' };
+    const practiceGrades = inRecordPracticeIds
+      ? (studentSubmissions || []).filter((s) => s.practiceId && s.parentModuleId === c.moduleId && inRecordPracticeIds.has(s.practiceId)).map(usableGrade).filter((g) => g !== null)
+      : [];
+    const grades = [usableGrade(sub), ...practiceGrades].filter((g) => g !== null);
+    const grade = grades.length ? Math.round((grades.reduce((a, b) => a + b, 0) / grades.length) * 100) / 100 : null;
+    return { key: c.key, moduleId: c.moduleId, kind: 'module', title: c.label, weight: c.weight, grade, status: sub?.status || 'pending' };
   }
   const raw = scores?.[c.key];
   const n = Number(raw);

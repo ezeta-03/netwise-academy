@@ -10,8 +10,8 @@ import { formatStartDate } from '../src/lib/courseDates.js';
 // Calendario oficial de los 4 talleres (hora de Perú, 4 semanas cada uno).
 const OFFICIAL = {
   1: { title: 'Estrategias de Redes Sociales', start: '2026-11-10', days: ['Martes', 'Jueves'], time: '20:00-22:00', first: '2026-11-10T20:00-05:00', last: '2026-12-03T20:00-05:00', label: 'Martes 10 de noviembre' },
-  2: { title: 'Branding y Gestión de Marcas', start: '2026-11-09', days: ['Lunes', 'Miércoles'], time: '20:00-22:00', first: '2026-11-09T20:00-05:00', last: '2026-12-02T20:00-05:00', label: 'Lunes 9 de noviembre' },
-  3: { title: 'Marketing Digital desde 0', start: '2026-11-13', days: ['Viernes', 'Sábado'], time: '20:00-22:00', first: '2026-11-13T20:00-05:00', last: '2026-12-05T20:00-05:00', label: 'Viernes 13 de noviembre' },
+  2: { title: 'Branding y Gestión de Marca', start: '2026-11-09', days: ['Lunes', 'Miércoles'], time: '20:00-22:00', first: '2026-11-09T20:00-05:00', last: '2026-12-02T20:00-05:00', label: 'Lunes 9 de noviembre' },
+  3: { title: 'Marketing Digital Aplicado', start: '2026-11-13', days: ['Viernes', 'Sábado'], time: '20:00-22:00', first: '2026-11-13T20:00-05:00', last: '2026-12-05T20:00-05:00', label: 'Viernes 13 de noviembre' },
   4: { title: 'Creación de Negocios Digitales', start: '2026-11-10', days: ['Martes', 'Jueves'], time: '18:00-20:00', first: '2026-11-10T18:00-05:00', last: '2026-12-03T18:00-05:00', label: 'Martes 10 de noviembre' },
 };
 

@@ -1,23 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
-import {
-  ClipboardCheck, BarChart3, UsersRound, ChevronLeft, ChevronRight, ArrowLeft,
-  Download, Check, ExternalLink,
-} from 'lucide-react';
+import { Download, ExternalLink } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../lib/permissions';
-import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore, fetchGroupProgress, setGroupSessionDone } from '../../lib/db';
+import { fetchCourseContent, fetchAllEnrollments, fetchCourseSubmissions, upsertSubmission, fetchCourseAttendance, setAttendance, deleteAttendance, fetchCourseGrades, setCourseScore, fetchGroupProgress, setGroupSessionDone, fetchLiveSessions, fetchPractices } from '../../lib/db';
 import { computeGradeSummary } from '../../lib/gradebook';
 import { getGradingModel, buildStudentRows, effectiveModuleWeights } from '../../lib/gradingScheme';
-import { allDeliverableModules } from '../../lib/weights';
 import { downloadCsv as downloadCsvFile } from '../../lib/csv';
 import { APPROVAL } from '../../lib/approval';
-import { getOrderedSessions, withAulaSessions } from '../../lib/courseSessions';
+import { getOrderedSessions } from '../../lib/courseSessions';
+import { buildClassList, normalizeAttendance } from '../../lib/classList';
+import { hasDelivered, practicesForGroup } from '../../lib/workItems';
 import { attendanceStats } from '../../lib/attendance';
 import { aulaRoster, NO_AULA } from '../../lib/roster';
-import SubmissionViewer from '../../components/SubmissionViewer';
-import { describeSubmission } from '../../lib/submissionPreview';
+import GradeReview from '../../components/GradeReview';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
 const getInitials = (name) => {
@@ -35,41 +32,16 @@ const formatDate = (iso) => {
 // Escapado, protección contra fórmulas y BOM viven en lib/csv.js.
 const downloadCsv = (filename, rows) => downloadCsvFile(filename, rows[0], rows.slice(1));
 
-const NAV_ITEMS = [
-  { key: 'entregas', label: 'Entregas y revisión', sub: 'Revisa y califica', icon: ClipboardCheck },
-  { key: 'notas', label: 'Registro de notas', sub: 'Notas por módulo y promedio', icon: BarChart3 },
-  { key: 'asistencia', label: 'Asistencia', sub: 'Resumen y registro por sesión', icon: UsersRound },
-];
-
-const EvalSidePanel = ({ vista, setVista, pendingCount, summary }) => (
-  <>
-    <div className="admin-panel" style={{ marginBottom: 20 }}>
-      <div className="admin-panel-head"><span className="admin-panel-title">Evaluación</span></div>
-      <div className="eval-nav-card">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <div key={item.key} className={`eval-nav-row ${vista === item.key ? 'active' : ''}`} onClick={() => setVista(item.key)}>
-              <div className="eval-nav-row-icon"><Icon size={15} /></div>
-              <div>
-                <div className="eval-nav-row-title">{item.label}</div>
-                <div className="eval-nav-row-sub">{item.key === 'entregas' && pendingCount > 0 ? `${pendingCount} por revisar` : item.sub}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+const ClassSummaryPanel = ({ summary }) => (
+  <div className="admin-panel">
+    <div className="admin-panel-head"><span className="admin-panel-title">Resumen del aula</span></div>
+    <div className="dash-profile-stats" style={{ gridTemplateColumns: '1fr', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia promedio</span><strong>{summary.asistenciaPromedio === null ? '—' : `${summary.asistenciaPromedio}%`}</strong></div>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estudiantes en riesgo</span><strong>{summary.enRiesgo}</strong></div>
     </div>
-    <div className="admin-panel">
-      <div className="admin-panel-head"><span className="admin-panel-title">Resumen del aula</span></div>
-      <div className="dash-profile-stats" style={{ gridTemplateColumns: '1fr', gap: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Promedio parcial</span><strong>{summary.promedioParcial ?? '—'}</strong></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Asistencia promedio</span><strong>{summary.asistenciaPromedio === null ? '—' : `${summary.asistenciaPromedio}%`}</strong></div>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}><span className="admin-cell-sub">Estudiantes en riesgo</span><strong>{summary.enRiesgo}</strong></div>
-      </div>
-      <p className="admin-panel-caption" style={{ marginTop: 12, marginBottom: 0 }}>Muestra de {summary.total} estudiante{summary.total === 1 ? '' : 's'}.</p>
-    </div>
-  </>
+    <p className="admin-panel-caption" style={{ marginTop: 12, marginBottom: 0 }}>Muestra de {summary.total} estudiante{summary.total === 1 ? '' : 's'}.</p>
+  </div>
 );
 
 // --- Subvista: Entregas y revisión ---
@@ -79,8 +51,6 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
   const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState('all');
   const [reviewingUid, setReviewingUid] = useState(null);
-  const [gradeDraft, setGradeDraft] = useState('');
-  const [feedbackDraft, setFeedbackDraft] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Mientras se revisa una entrega, la pantalla usa todo el ancho (el visor
@@ -95,15 +65,17 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
     ? searchParams.get('modulo') : withDeliverable[0]?.id;
   const module = withDeliverable.find((m) => m.id === moduleId);
 
-  const setModuleId = (id) => { setReviewingUid(null); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('vista', 'entregas'); next.set('modulo', id); return next; }); };
+  const setModuleId = (id) => { setReviewingUid(null); setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('modulo', id); return next; }); };
 
   const rows = roster.map((r) => ({ ...r, submission: submissions.find((s) => s.uid === r.uid && s.moduleId === module?.id) || null }));
-  const entregados = rows.filter((r) => r.submission).length;
+  // El docente puede calificar a quien no entregó: "entregó" se mira por lo que mandó el alumno.
+  const delivered = hasDelivered;
+  const entregados = rows.filter((r) => delivered(r.submission)).length;
   const porRevisar = rows.filter((r) => r.submission?.status === 'submitted').length;
 
   const statusOf = (row) => {
-    if (!row.submission) return { key: 'sin_entrega', label: 'Sin entrega', cls: 'admin-status-gray' };
-    if (row.submission.status === 'reviewed') return { key: 'revisado', label: 'Revisado', cls: 'admin-status-green' };
+    if (row.submission?.status === 'reviewed') return { key: 'revisado', label: delivered(row.submission) ? 'Revisado' : 'Calificado sin entrega', cls: 'admin-status-green' };
+    if (!delivered(row.submission)) return { key: 'sin_entrega', label: 'Sin entrega', cls: 'admin-status-gray' };
     return { key: 'por_revisar', label: 'Por revisar', cls: 'admin-status-amber' };
   };
 
@@ -123,15 +95,7 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
   const reviewingRow = rows.find((r) => r.uid === reviewingUid);
   const reviewIndex = filtered.findIndex((r) => r.uid === reviewingUid);
 
-  const openReview = (row) => {
-    setReviewingUid(row.uid);
-    // Una reentrega llega con la nota/comentario de la versión anterior (las
-    // reglas no dejan que el alumno los borre): el formulario arranca vacío
-    // para no volver a guardar la nota vieja sin revisar la nueva versión.
-    const isReviewed = row.submission?.status === 'reviewed';
-    setGradeDraft(isReviewed ? (row.submission?.grade ?? '') : '');
-    setFeedbackDraft(isReviewed ? (row.submission?.feedback || '') : '');
-  };
+  const openReview = (row) => setReviewingUid(row.uid);
 
   const goRelative = (dir) => {
     const next = filtered[reviewIndex + dir];
@@ -140,7 +104,7 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
 
   const isGraded = module.deliverable?.graded !== false;
 
-  const saveGrade = async () => {
+  const saveGrade = async ({ grade: gradeDraft, parts }) => {
     const grade = isGraded ? Number(gradeDraft) : null;
     if (isGraded && (gradeDraft === '' || !Number.isFinite(grade) || grade < 0 || grade > 20)) {
       addToast('Ingresa una nota entre 0 y 20 para dejar la entrega revisada.', 'error');
@@ -152,7 +116,8 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
         courseId: course.id, moduleId: module.id, moduleTitle: module.title,
         uid: reviewingRow.uid, studentName: reviewingRow.studentName,
         deliverableTitle: module.deliverable?.description || module.title,
-        status: 'reviewed', grade, feedback: feedbackDraft,
+        status: 'reviewed', grade, feedback: [parts.good, parts.improve, parts.next].filter((t) => t.trim()).join('\n\n'),
+        extra: { feedbackParts: { good: parts.good.trim(), improve: parts.improve.trim(), next: parts.next.trim() } },
       });
       addToast(isGraded ? `Calificación guardada para ${reviewingRow.studentName}.` : `Revisión guardada para ${reviewingRow.studentName}.`, 'success');
       await onReloadSubmissions();
@@ -179,68 +144,21 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
   );
 
   if (reviewingRow) {
-    const sub = reviewingRow.submission;
     const status = statusOf(reviewingRow);
-    const info = describeSubmission(sub);
-    const deliveredAt = sub?.submittedAt || sub?.updatedAt;
     return (
       <div className="anim-fade-up d1">
         {pageHead}
         {moduleTabs}
-        <div className="review-head">
-          <div>
-            <div className="review-student">
-              <h2>{reviewingRow.studentName}</h2>
-              <span className="admin-status admin-status-gray">{reviewIndex + 1} de {filtered.length}</span>
-            </div>
-            <p className="admin-page-sub">{module.deliverable?.description || module.title}</p>
-          </div>
-          <div className="review-head-meta">
-            <span className={`admin-status ${status.cls}`}>{status.label}</span>
-            {deliveredAt && <span className="admin-cell-sub">Entregado: {new Date(deliveredAt).toLocaleDateString('es-PE', { weekday: 'short', day: '2-digit', month: 'short' })}</span>}
-          </div>
-        </div>
-        <div className="review-nav">
-          <button className="admin-btn-ghost" onClick={() => setReviewingUid(null)}><ArrowLeft size={13} /> Volver a entregas</button>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="admin-icon-btn" aria-label="Entrega anterior" disabled={reviewIndex <= 0} onClick={() => goRelative(-1)}><ChevronLeft size={16} /></button>
-            <button className="admin-icon-btn" aria-label="Entrega siguiente" disabled={reviewIndex >= filtered.length - 1} onClick={() => goRelative(1)}><ChevronRight size={16} /></button>
-          </div>
-        </div>
-        <div className="review-grid">
-          <div className="admin-panel">
-            <div className="admin-panel-head">
-              <div>
-                <span className="admin-panel-title">Archivo entregado</span>
-                <div className="admin-cell-sub">{info.name || 'Sin entrega'}</div>
-              </div>
-              {info.src && info.kind !== 'embed' && <a className="admin-btn-ghost" href={info.src} target="_blank" rel="noreferrer" download={info.name}><Download size={13} /> Descargar</a>}
-              {info.link && <a className="admin-btn-ghost" href={info.link} target="_blank" rel="noreferrer"><ExternalLink size={13} /> Abrir enlace</a>}
-            </div>
-            <SubmissionViewer key={`${reviewingRow.uid}-${sub?.updatedAt || ''}`} submission={sub} />
-            {sub?.fileUrl && sub?.note && <p className="admin-cell-sub" style={{ margin: '12px 0 0' }}>Comentario del alumno: {sub.note}</p>}
-          </div>
-          <div className="admin-panel review-grade-panel">
-            {sub?.status === 'submitted' && sub?.grade != null && (
-              <p className="admin-panel-caption" style={{ marginTop: 0 }}>
-                Reentrega: la versión anterior tenía {sub.grade}/20{sub.feedback ? ` · "${sub.feedback}"` : ''}. Califica la nueva versión.
-              </p>
-            )}
-            {isGraded ? (
-              <div className="admin-field">
-                <label htmlFor="review-grade-input">Nota</label>
-                <div className="review-grade">
-                  <input id="review-grade-input" type="number" inputMode="decimal" min="0" max="20" step="0.5" placeholder="—" value={gradeDraft} onChange={(e) => setGradeDraft(e.target.value)} />
-                  <span>/ 20</span>
-                </div>
-              </div>
-            ) : (
-              <p className="dash-notice" style={{ marginTop: 0 }}>Este entregable no lleva nota: deja tu retroalimentación y márcalo como revisado.</p>
-            )}
-            <div className="admin-field"><label htmlFor="review-feedback-input">Retroalimentación</label><textarea id="review-feedback-input" rows={7} value={feedbackDraft} onChange={(e) => setFeedbackDraft(e.target.value)} placeholder="Qué hizo bien, qué debe mejorar y cuál es su siguiente paso." /></div>
-            <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={saveGrade} disabled={saving || !sub}><Check size={14} /> {saving ? 'Guardando...' : isGraded ? 'Guardar calificación' : 'Marcar como revisado'}</button>
-          </div>
-        </div>
+        <GradeReview
+          key={reviewingRow.uid}
+          student={reviewingRow} index={reviewIndex} total={filtered.length} sub={reviewingRow.submission}
+          subtitle={module.deliverable?.description || module.title} graded={isGraded}
+          statusLabel={status.label} statusCls={status.cls}
+          onBack={() => setReviewingUid(null)}
+          onPrev={reviewIndex > 0 ? () => goRelative(-1) : null}
+          onNext={reviewIndex < filtered.length - 1 ? () => goRelative(1) : null}
+          onSave={saveGrade} saving={saving}
+        />
       </div>
     );
   }
@@ -279,12 +197,14 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
                 <div className="dash-post-avatar">{getInitials(row.studentName)}</div>
                 <div>
                   <div className="dash-list-row-title">{row.studentName}</div>
-                  <div className="dash-list-row-sub">{row.submission ? `Entregado · ${new Date(row.submission.updatedAt).toLocaleDateString('es-PE')}` : 'Sin entrega'}</div>
+                  <div className="dash-list-row-sub">{delivered(row.submission) ? `Entregado · ${new Date(row.submission.submittedAt || row.submission.updatedAt).toLocaleDateString('es-PE')}` : 'Sin entrega'}</div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className={`admin-status ${status.cls}`}>{status.label}</span>
-                <button className="admin-btn-edit" disabled={!row.submission} onClick={() => openReview(row)}><ExternalLink size={13} /> Revisar</button>
+                {delivered(row.submission)
+                  ? <button className="admin-btn-edit" onClick={() => openReview(row)}><ExternalLink size={13} /> Revisar</button>
+                  : <button className="admin-btn-ghost" onClick={() => openReview(row)} title="No entregó: igual puedes ponerle nota y comentario"><ExternalLink size={13} /> Calificar</button>}
               </div>
             </div>
           );
@@ -297,14 +217,13 @@ const EntregasRevision = ({ course, aulaLabel, modules, roster, submissions, onR
 
 // --- Subvista: Registro de notas ---
 
-const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submissions, attendance, scores, onGradeSaved }) => {
+const RegistroNotas = ({ course, aulaLabel, fileTag, modules, sessions, inRecord, roster, submissions, attendance, scores, onGradeSaved }) => {
   const { addToast } = useUI();
   const model = getGradingModel(course.id, modules);
-  const sessions = getOrderedSessions(modules);
   const scoresByUid = Object.fromEntries((scores || []).map((g) => [g.uid, g.scores || {}]));
 
   const rowsByStudent = roster.map((r) => {
-    const gradeRows = buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid]);
+    const gradeRows = buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid], inRecord);
     return { ...r, gradeRows, summary: computeGradeSummary(gradeRows), att: attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)) };
   });
   const { rows: gradeRowsPage, pager: gradePager } = usePagedTable(rowsByStudent, { label: 'alumnos' });
@@ -413,7 +332,7 @@ const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submission
           </table>
         </div>
         {gradePager}
-        {model.footer && <p className="admin-panel-caption" style={{ marginBottom: 0 }}>{model.footer}</p>}
+        {model.footer && <p className="admin-panel-caption" style={{ marginBottom: 0 }}>{model.footer}{inRecord.size > 0 ? ` · La nota de cada módulo promedia su entrega con las ${inRecord.size === 1 ? 'práctica' : 'prácticas'} que pasan a registro.` : ''}</p>}
       </div>
     </div>
   );
@@ -423,10 +342,17 @@ const RegistroNotas = ({ course, aulaLabel, fileTag, modules, roster, submission
 
 // `doneIds`: sesiones que ESTA aula ya tuvo; `onToggleDone` las marca (null si
 // no hay un aula concreta elegida). `globalDone`: Realizadas desde Contenido.
-const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, onToggle, doneIds, globalDoneIds, onToggleDone }) => {
+const Asistencia = ({ course, aulaLabel, fileTag, sessions, roster, attendance, onToggle, doneIds, globalDoneIds, onToggleDone }) => {
   const { rows: rosterPage, pager: rosterPager } = usePagedTable(roster, { label: 'alumnos' });
-  const sessions = getOrderedSessions(modules);
-  const grouped = modules.filter((m) => m.sessions?.length).map((m) => ({ module: m, sessions: sessions.filter((s) => s.moduleId === m.id) }));
+  // Columnas agrupadas por módulo, en el orden de las clases.
+  const grouped = sessions.reduce((acc, s) => {
+    const last = acc[acc.length - 1];
+    if (last && last.moduleId === s.moduleId) last.sessions.push(s);
+    else acc.push({ moduleId: s.moduleId, title: s.moduleTitle || 'Sin módulo', sessions: [s] });
+    return acc;
+  }, []);
+  // Con la lista única, una clase cuenta como dictada cuando termina: ya no se marca a mano.
+  const manualDone = sessions.some((s) => s.fromModules);
 
   const attendanceFor = (uid, sessionId) => attendance.find((a) => a.uid === uid && a.sessionId === sessionId) || null;
 
@@ -488,14 +414,14 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
       )}
 
       {sessions.length === 0 ? (
-        <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Todavía no defines sesiones en "Contenido".</div>
+        <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B' }}>Todavía no hay clases programadas para esta aula. Prográmalas en Clases en vivo.</div>
       ) : (
         <div className="admin-table-wrap">
           <table className="admin-table">
             <thead>
               <tr>
                 <th rowSpan={2}>Estudiante</th>
-                {grouped.map((g) => <th key={g.module.id} colSpan={g.sessions.length} style={{ textAlign: 'center' }}>{g.module.title}</th>)}
+                {grouped.map((g, i) => <th key={`${g.moduleId}-${i}`} colSpan={g.sessions.length} style={{ textAlign: 'center' }}>{g.title}</th>)}
                 <th rowSpan={2}>Asist.</th>
                 <th rowSpan={2}>Faltas</th>
               </tr>
@@ -505,7 +431,7 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
                   return (
                     <th key={s.id} style={{ textAlign: 'center', fontSize: '.7rem' }}>
                       {s.label}<br />{s.dateLabel}
-                      {onToggleDone && (
+                      {onToggleDone && manualDone && (
                         <label style={{ display: 'block', marginTop: 4, cursor: fromContent ? 'default' : 'pointer' }} title={fromContent ? 'Marcada como Realizada en Contenido: vale para todas las aulas' : 'Esta aula ya tuvo la sesión'}>
                           <input type="checkbox" aria-label={`${s.label} realizada en esta aula`} checked={fromContent || doneIds.has(s.id)} disabled={fromContent} onChange={(e) => onToggleDone(s, e.target.checked)} />
                         </label>
@@ -540,17 +466,18 @@ const Asistencia = ({ course, aulaLabel, fileTag, modules, roster, attendance, o
           {rosterPager}
         </div>
       )}
-      <p className="admin-panel-caption">{onToggleDone ? 'La casilla bajo cada sesión marca que ESTA aula ya la tuvo (se marca sola al tomar lista); cada aula lleva su propio avance. ' : ''}Haz clic en una celda para alternar Presente / Tardanza / Falta / No aplica / Sin registrar. La tardanza cuenta como asistencia. «No aplica» (N/A) saca esa sesión del porcentaje del alumno: úsalo si se matriculó después o si la falta está justificada.</p>
+      <p className="admin-panel-caption">{onToggleDone && manualDone ? 'La casilla bajo cada sesión marca que ESTA aula ya la tuvo (se marca sola al tomar lista); cada aula lleva su propio avance. ' : 'Las clases son las mismas de Clases en vivo y la Agenda: cada una cuenta para el porcentaje cuando termina. '}Haz clic en una celda para alternar Presente / Tardanza / Falta / No aplica / Sin registrar. La tardanza cuenta como asistencia. «No aplica» (N/A) saca esa sesión del porcentaje del alumno: úsalo si se matriculó después o si la falta está justificada.</p>
     </div>
   );
 };
 
-const TeacherCourseEvaluacion = () => {
+const TeacherCourseEvaluacion = ({ vista = 'entregas' }) => {
   const { course, group, groups, aulaId } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast } = useUI();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [courseModules, setModules] = useState([]);
+  const [liveSessions, setLiveSessions] = useState([]);
+  const [practices, setPractices] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
   // Sesiones que ya tuvo el aula elegida (cada aula avanza por separado).
   const [doneIds, setDoneIds] = useState([]);
@@ -560,13 +487,13 @@ const TeacherCourseEvaluacion = () => {
   const [scores, setScores] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const vista = ['entregas', 'notas', 'asistencia'].includes(searchParams.get('vista')) ? searchParams.get('vista') : 'entregas';
-  const setVista = (v) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('vista', v); next.delete('modulo'); return next; });
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id), fetchCourseGrades(course.id)]).then(([content, enrollments, subs, att, grades]) => {
+    Promise.all([fetchCourseContent(course.id), fetchAllEnrollments(course.id), fetchCourseSubmissions(course.id), fetchCourseAttendance(course.id), fetchCourseGrades(course.id), fetchLiveSessions(course.id).catch(() => []), fetchPractices(course.id).catch(() => [])]).then(([content, enrollments, subs, att, grades, live, pracs]) => {
       setModules(content.modules || []);
+      setLiveSessions(live);
+      setPractices(pracs);
       setEnrollments(enrollments);
       setSubmissions(subs);
       setAttendanceRows(att);
@@ -588,8 +515,13 @@ const TeacherCourseEvaluacion = () => {
   // Todo lo que se muestra es del aula elegida: su lista de alumnos y, de
   // ellos, sus entregas, notas y asistencia; las sesiones con el avance de esa aula.
   const roster = useMemo(() => aulaRoster(enrollments, course.id, groups, aulaId), [enrollments, course.id, groups, aulaId]);
-  const rosterUids = useMemo(() => new Set(roster.map((r) => r.uid)), [roster]);
-  const modules = useMemo(() => withAulaSessions(courseModules, doneIds), [courseModules, doneIds]);
+  const modules = courseModules;
+  // Lista única de clases del aula (la de Clases en vivo y la Agenda) y la
+  // asistencia pasada a esas clases (los registros viejos de las sesiones de
+  // los módulos se leen en su clase, ver lib/classList.js).
+  const classList = useMemo(() => buildClassList({ liveSessions, modules: courseModules, groupId, doneIds }), [liveSessions, courseModules, groupId, doneIds]);
+  const classAttendance = useMemo(() => normalizeAttendance(attendance, classList), [attendance, classList]);
+  const inRecord = useMemo(() => new Set(practicesForGroup(practices, groupId).filter((pr) => pr.countsInRecord).map((pr) => pr.id)), [practices, groupId]);
   const globalDoneIds = useMemo(() => new Set(getOrderedSessions(courseModules).filter((s) => s.done).map((s) => s.id)), [courseModules]);
   const aulaDoneIds = useMemo(() => new Set(doneIds), [doneIds]);
   const aulaLabel = group ? `Aula ${group.name}` : (aulaId === NO_AULA ? 'Alumnos sin aula' : '');
@@ -624,18 +556,21 @@ const TeacherCourseEvaluacion = () => {
   // `next`: { present, excused } o null para borrar el registro.
   const toggleAttendance = async (row, session, next) => {
     const previous = attendance;
+    const legacy = classAttendance.find((a) => a.uid === row.uid && a.sessionId === session.id && a.fromLegacy)?.fromLegacy;
     setAttendanceRows((prev) => {
-      const others = prev.filter((a) => !(a.uid === row.uid && a.sessionId === session.id));
+      const others = prev.filter((a) => !(a.uid === row.uid && (a.sessionId === session.id || a.sessionId === legacy)));
       return next === null ? others : [...others, { uid: row.uid, sessionId: session.id, moduleId: session.moduleId, studentName: row.studentName, present: !!next.present, excused: !!next.excused, late: !!next.late }];
     });
     try {
+      // El registro viejo (sesión de un módulo) se reemplaza por el de la clase.
+      if (legacy) await deleteAttendance({ courseId: course.id, sessionId: legacy, uid: row.uid });
       if (next === null) {
-        await deleteAttendance({ courseId: course.id, sessionId: session.id, uid: row.uid });
+        if (!legacy) await deleteAttendance({ courseId: course.id, sessionId: session.id, uid: row.uid });
       } else {
         await setAttendance({ courseId: course.id, sessionId: session.id, moduleId: session.moduleId, uid: row.uid, studentName: row.studentName, present: !!next.present, excused: !!next.excused, late: !!next.late });
         // Tomar lista en una sesión la deja como dictada para TODA el aula: quien
         // quede sin marcar cuenta como falta, no desaparece del porcentaje.
-        if (groupId && !aulaDoneIds.has(session.id) && !globalDoneIds.has(session.id)) await toggleSessionDone(session, true, true);
+        if (groupId && session.fromModules && !aulaDoneIds.has(session.id) && !globalDoneIds.has(session.id)) await toggleSessionDone(session, true, true);
         addToast(`Asistencia de ${row.studentName} actualizada.`, 'success');
       }
     } catch {
@@ -644,19 +579,16 @@ const TeacherCourseEvaluacion = () => {
     }
   };
 
-  const deliverableIds = new Set(allDeliverableModules(modules).map((m) => m.id));
-  const pendingCount = submissions.filter((s) => s.status === 'submitted' && deliverableIds.has(s.moduleId) && rosterUids.has(s.uid)).length;
-
   const classSummary = useMemo(() => {
     const model = getGradingModel(course.id, modules);
     const scoresByUid = Object.fromEntries(scores.map((g) => [g.uid, g.scores || {}]));
-    const sessions = getOrderedSessions(modules);
+    const sessions = classList;
     let riskCount = 0;
     let gradeSum = 0; let gradeN = 0;
     let attSum = 0; let attN = 0;
     roster.forEach((r) => {
-      const summary = computeGradeSummary(buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid]));
-      const attPct = attendanceStats(sessions, attendance.filter((a) => a.uid === r.uid)).raw;
+      const summary = computeGradeSummary(buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid], inRecord));
+      const attPct = attendanceStats(sessions, classAttendance.filter((a) => a.uid === r.uid)).raw;
       if (attPct !== null) { attSum += attPct; attN += 1; }
       if (summary.promedioParcial !== null) { gradeSum += summary.promedioParcial; gradeN += 1; }
       if ((summary.promedioParcial !== null && summary.promedioParcial < APPROVAL.minFinalGrade) || (attPct !== null && attPct < APPROVAL.minAttendancePct)) riskCount += 1;
@@ -667,7 +599,7 @@ const TeacherCourseEvaluacion = () => {
       enRiesgo: riskCount,
       total: roster.length,
     };
-  }, [course.id, modules, roster, submissions, attendance, scores]);
+  }, [course.id, modules, classList, inRecord, roster, submissions, classAttendance, scores]);
 
   if (!can(currentUser, 'grade')) {
     return <div className="admin-panel" style={{ textAlign: 'center', color: '#6B6980' }}>Tu cuenta no tiene habilitado ver fichas ni calificar entregas. Pídele a un administrador que active esa función.</div>;
@@ -675,19 +607,16 @@ const TeacherCourseEvaluacion = () => {
   if (loading) return <div className="admin-empty-hint">Cargando evaluación...</div>;
 
   const focused = vista === 'entregas' && reviewFocus;
+  const showSummary = !focused && vista !== 'asistencia';
 
   return (
-    <div className="admin-two-col" style={{ gridTemplateColumns: focused ? '1fr' : '1fr 300px', alignItems: 'flex-start' }}>
+    <div className="admin-two-col" style={{ gridTemplateColumns: showSummary ? '1fr 300px' : '1fr', alignItems: 'flex-start' }}>
       <div style={{ minWidth: 0 }}>
         {vista === 'entregas' && <EntregasRevision course={course} aulaLabel={aulaLabel} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} onFocusChange={setReviewFocus} />}
-        {vista === 'notas' && <RegistroNotas course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} roster={roster} submissions={submissions} attendance={attendance} scores={scores} onGradeSaved={reloadGrades} />}
-        {vista === 'asistencia' && <Asistencia course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} roster={roster} attendance={attendance} onToggle={toggleAttendance} doneIds={aulaDoneIds} globalDoneIds={globalDoneIds} onToggleDone={groupId ? (session, done) => toggleSessionDone(session, done) : null} />}
+        {vista === 'notas' && <RegistroNotas course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} sessions={classList} inRecord={inRecord} roster={roster} submissions={submissions} attendance={classAttendance} scores={scores} onGradeSaved={reloadGrades} />}
+        {vista === 'asistencia' && <Asistencia course={course} aulaLabel={aulaLabel} fileTag={fileTag} sessions={classList} roster={roster} attendance={classAttendance} onToggle={toggleAttendance} doneIds={aulaDoneIds} globalDoneIds={globalDoneIds} onToggleDone={groupId ? (session, done) => toggleSessionDone(session, done) : null} />}
       </div>
-      {!focused && (
-        <div>
-          <EvalSidePanel vista={vista} setVista={setVista} pendingCount={pendingCount} summary={classSummary} />
-        </div>
-      )}
+      {showSummary && <div><ClassSummaryPanel summary={classSummary} /></div>}
     </div>
   );
 };

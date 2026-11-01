@@ -1,211 +1,212 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { Radio, LogIn, XCircle, Trash2, Film } from 'lucide-react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
+import { Plus, Pencil, Upload, CheckCircle2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { scheduleLiveSession, fetchLiveSessions, fetchGroups, cancelLiveSession, deleteLiveSession } from '../../lib/db';
+import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession, updateLiveSession } from '../../lib/db';
 import { can } from '../../lib/permissions';
-import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
-import { toPeruIso } from '../../lib/liveScheduleGenerator';
-import LiveRoom from '../../components/LiveRoom';
+import { getClassCardState } from '../../lib/liveSessionStatus';
+import { toPeruIso, peruDateTimeParts } from '../../lib/liveScheduleGenerator';
+import { isMeetLink } from '../../lib/classLinks';
+import { useNow } from '../../hooks/useNow';
+import ClassCard, { ClassRow, RecordingButton } from '../../components/ClassCard';
 import RecordingLinkModal from '../../components/RecordingLinkModal';
+import ModalPortal from '../../components/ModalPortal';
 
-const scheduleLineFor = (s) => {
-  const start = new Date(s.startsAt);
-  const end = new Date(start.getTime() + s.durationMin * 60000);
-  const day = start.toLocaleDateString('es-PE', { weekday: 'long', day: '2-digit', month: 'short' });
-  const fmt = (d) => d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-  return `${day} · ${fmt(start)} – ${fmt(end)}`;
+const minutesBetween = (start, end) => {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return eh * 60 + em - (sh * 60 + sm);
+};
+const addMinutes = (time, mins) => {
+  const [h, m] = time.split(':').map(Number);
+  const t = (h * 60 + m + mins) % (24 * 60);
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
 };
 
+// Programar o editar una clase: fecha (calendario), hora de inicio y de fin y
+// tema. No pide link: toda clase usa el Meet fijo del aula.
+const ClassFormModal = ({ session, onClose, onSubmit, onCancelClass, onDelete }) => {
+  const initial = session ? peruDateTimeParts(session.startsAt) : { date: '', time: '19:00' };
+  const [date, setDate] = useState(initial.date);
+  const [start, setStart] = useState(initial.time || '19:00');
+  const [end, setEnd] = useState(addMinutes(initial.time || '19:00', Number(session?.durationMin) > 0 ? Number(session.durationMin) : 120));
+  const [title, setTitle] = useState(session?.title || '');
+  const [saving, setSaving] = useState(false);
+  const duration = start && end ? minutesBetween(start, end) : 0;
+  const missing = !date ? 'Elige la fecha' : !title.trim() ? 'Escribe el tema' : duration <= 0 ? 'La hora de fin debe ser después del inicio' : '';
+
+  const submit = async () => {
+    setSaving(true);
+    try { await onSubmit({ title: title.trim(), startsAt: toPeruIso(`${date}T${start}`), durationMin: duration }); } finally { setSaving(false); }
+  };
+
+  return (
+    <ModalPortal>
+      <div className="admin-modal-overlay" onClick={onClose}>
+        <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="admin-modal-head">
+            <div><div className="admin-modal-title">{session ? 'Editar clase' : 'Programar clase'}</div><div className="admin-modal-sub">Usa el enlace de Meet del aula. Los alumnos reciben el aviso.</div></div>
+            <button className="admin-modal-close" onClick={onClose}><X size={18} /></button>
+          </div>
+          <div className="admin-field"><label>Tema</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Sesión 5 · Brand Resonance" autoFocus /></div>
+          <div className="admin-field"><label>Fecha (hora de Perú)</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div className="admin-field-row">
+            <div className="admin-field"><label>Hora de inicio</label><input type="time" value={start} onChange={(e) => setStart(e.target.value)} /></div>
+            <div className="admin-field"><label>Hora de fin</label><input type="time" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
+          </div>
+          <div className="admin-modal-actions">
+            {session && onCancelClass && <button className="admin-btn-ghost" style={{ color: '#BE123C', marginRight: 'auto' }} onClick={onCancelClass} disabled={saving}>Cancelar clase</button>}
+            {session && onDelete && <button className="admin-btn-ghost" style={{ color: '#BE123C', marginRight: 'auto' }} onClick={onDelete} disabled={saving}>Eliminar</button>}
+            {missing && <span className="admin-cell-sub" style={{ alignSelf: 'center', color: '#B45309' }}>{missing}</span>}
+            <button className="admin-btn-edit" onClick={submit} disabled={saving || !!missing}>{saving ? 'Guardando...' : session ? 'Guardar cambios' : 'Programar clase'}</button>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+};
+
+// Clases en vivo del docente (D2): la clase de hoy con "Iniciar clase en Meet"
+// (directo, sin sala intermedia), las próximas para editarlas o programar
+// otra, y las anteriores para subir la grabación. Lee la misma lista de clases
+// que la Agenda y el Inicio.
 const TeacherCourseSala = () => {
   const { course, group } = useOutletContext();
   const { currentUser } = useAuth();
   const { addToast, confirmDialog } = useUI();
-  const [title, setTitle] = useState('');
-  const [startsAt, setStartsAt] = useState('');
-  const [durationMin, setDurationMin] = useState(60);
+  const navigate = useNavigate();
+  const now = useNow();
   const [sessions, setSessions] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [activeSession, setActiveSession] = useState(null);
-  const [selected, setSelected] = useState([]);
-  const [bulkCancelling, setBulkCancelling] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [formFor, setFormFor] = useState(null); // null | 'new' | session
   const [recordingFor, setRecordingFor] = useState(null);
-  const [groupNames, setGroupNames] = useState({});
 
   const load = useCallback(() => {
-    fetchLiveSessions(course.id).then(setSessions).catch(() => {});
-    // Con varias aulas en paralelo, cada clase muestra de cuál es.
-    fetchGroups(course.id).then((list) => setGroupNames(Object.fromEntries(list.map((g) => [g.id, g.name])))).catch(() => {});
+    fetchLiveSessions(course.id).then(setSessions).catch(() => {}).finally(() => setLoading(false));
   }, [course.id]);
   useEffect(() => { load(); }, [load]);
 
-  const handleSchedule = async () => {
-    if (!title || !startsAt) { addToast('Completa el título y la fecha/hora.', 'error'); return; }
-    setSaving(true);
+  const canSchedule = can(currentUser, 'scheduleClasses');
+  // Con varias aulas, solo las clases del aula con la que trabaja el docente.
+  const mine = sessions.filter((s) => !group?.id || !s.groupId || s.groupId === group.id);
+  const byDate = [...mine].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+  const active = byDate.filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; });
+  const main = active[0] || null;
+  const upcoming = byDate.filter((s) => s !== main && getClassCardState(s, now) !== 'ended');
+  const past = byDate.filter((s) => getClassCardState(s, now) === 'ended').reverse();
+  const meetLink = isMeetLink(group?.classLink) ? group.classLink : null;
+
+  const handleCreate = async (data) => {
     try {
       await scheduleLiveSession({
-        courseId: course.id, courseTitle: course.title, title,
+        courseId: course.id, courseTitle: course.title, ...data,
         instructor: currentUser?.displayName || 'Docente', instructorUid: currentUser?.uid,
-        startsAt: toPeruIso(startsAt), durationMin: Number(durationMin),
-        // Ligada al aula con la que trabaja el docente: usa su sala de Meet.
         groupId: group?.id || null,
       });
-      setTitle(''); setStartsAt('');
-      addToast('Clase en vivo programada.', 'success');
+      addToast('Clase programada.', 'success');
+      setFormFor(null);
       load();
     } catch {
       addToast('No se pudo programar la clase. Intenta de nuevo.', 'error');
-    } finally {
-      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async (data) => {
+    try {
+      await updateLiveSession(formFor.id, { ...data, rescheduledAt: new Date().toISOString() });
+      addToast('Clase actualizada.', 'success');
+      setFormFor(null);
+      load();
+    } catch {
+      addToast('No se pudo guardar el cambio. Intenta de nuevo.', 'error');
     }
   };
 
   const handleCancel = async (s) => {
-    if (!(await confirmDialog({ title: 'Cancelar clase', message: `¿Cancelar "${s.title}"? Los estudiantes la verán marcada como cancelada.`, confirmLabel: 'Sí, cancelar', cancelLabel: 'Volver', danger: true }))) return;
+    if (!(await confirmDialog({ title: 'Cancelar clase', message: `¿Cancelar "${s.title}"? Tus alumnos la verán como cancelada.`, confirmLabel: 'Sí, cancelar', cancelLabel: 'Volver', danger: true }))) return;
     try {
       await cancelLiveSession(s.id);
       addToast('Clase cancelada.', 'success');
+      setFormFor(null);
       load();
     } catch {
       addToast('No se pudo cancelar la clase.', 'error');
     }
   };
+
   const handleDelete = async (s) => {
-    if (!(await confirmDialog({ title: 'Eliminar clase', message: `¿Eliminar "${s.title}" definitivamente? Desaparece de la agenda de docentes y alumnos. Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
+    if (!(await confirmDialog({ title: 'Eliminar clase', message: `¿Eliminar "${s.title}" definitivamente? Desaparece de la agenda de docentes y alumnos.`, confirmLabel: 'Eliminar', danger: true }))) return;
     try {
       await deleteLiveSession(s.id);
       addToast('Clase eliminada.', 'success');
+      setFormFor(null);
       load();
     } catch {
       addToast('No se pudo eliminar la clase.', 'error');
     }
   };
 
-  const toggleSelect = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-
-  const classCount = (n) => `${n} clase${n === 1 ? '' : 's'}`;
-
-  // De lo seleccionado solo se cancela lo que aún no terminó.
-  const handleBulkCancel = async () => {
-    const ids = selected.filter((id) => cancelableIds.includes(id));
-    if (!(await confirmDialog({ title: 'Cancelar clases', message: `¿Cancelar ${classCount(ids.length)}? Los estudiantes las verán marcadas como canceladas.`, confirmLabel: 'Sí, cancelar', cancelLabel: 'Volver', danger: true }))) return;
-    setBulkCancelling(true);
-    try {
-      await Promise.all(ids.map((id) => cancelLiveSession(id)));
-      addToast(`${classCount(ids.length)} cancelada${ids.length === 1 ? '' : 's'}.`, 'success');
-      setSelected([]);
-      load();
-    } catch {
-      addToast('No se pudieron cancelar todas las clases seleccionadas.', 'error');
-    } finally {
-      setBulkCancelling(false);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (!(await confirmDialog({ title: 'Eliminar clases', message: `¿Eliminar ${classCount(selected.length)} definitivamente? Desaparecen de la agenda de docentes y alumnos. Esta acción no se puede deshacer.`, confirmLabel: 'Eliminar', danger: true }))) return;
-    setBulkCancelling(true);
-    try {
-      await Promise.all(selected.map((id) => deleteLiveSession(id)));
-      addToast(`${classCount(selected.length)} eliminada${selected.length === 1 ? '' : 's'}.`, 'success');
-      setSelected([]);
-      load();
-    } catch {
-      addToast('No se pudieron eliminar todas las clases seleccionadas.', 'error');
-    } finally {
-      setBulkCancelling(false);
-    }
-  };
-
-  const canSchedule = can(currentUser, 'scheduleClasses');
-  const cancelableIds = sessions.filter((s) => { const st = getLiveSessionStatus(s); return st === 'upcoming' || st === 'live'; }).map((s) => s.id);
-
-  if (activeSession) {
-    return (
-      <div className="anim-fade-up d1">
-        <button className="admin-btn-ghost" style={{ marginBottom: 12 }} onClick={() => { setActiveSession(null); load(); }}>← Volver a las clases</button>
-        <LiveRoom session={activeSession} scheduleLine={scheduleLineFor(activeSession)} canRecord />
-      </div>
-    );
-  }
+  if (loading) return <div className="admin-empty-hint">Cargando clases en vivo...</div>;
 
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
-        <div><h1 className="admin-page-title">Sala de reuniones</h1><p className="admin-page-sub">{course.title}</p></div>
+        <div><h1 className="admin-page-title">Clases en vivo</h1><p className="admin-page-sub">El enlace de Meet de {group?.name || 'tu aula'} es siempre el mismo. Inicia la clase y deja la grabación.</p></div>
       </div>
 
-      <p className="admin-panel-caption" style={{ marginTop: -8, marginBottom: 20 }}>El calendario completo del curso lo genera el Admin al crear el aula. Usa esto para una clase suelta -- recuperación, Q&A extra, etc. Se dicta en la sala de Meet del aula{group?.name ? ` ${group.name}` : ''}.</p>
-
-      {canSchedule && <div className="admin-panel" style={{ maxWidth: 520, marginBottom: 24 }}>
-        <div className="admin-panel-head"><span className="admin-panel-title"><Radio size={15} style={{ verticalAlign: -2, marginRight: 6 }} />Programar clase suelta</span></div>
-        <div className="admin-field"><label>Título de la sesión</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Q&A: dudas del módulo 3" /></div>
-        <div className="admin-field-row">
-          <div className="admin-field"><label>Fecha y hora (hora de Perú)</label><input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} /></div>
-          <div className="admin-field"><label>Duración (min)</label><input type="number" min={15} step={15} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} /></div>
+      {main ? (
+        <ClassCard session={main} courseTitle={course.title} meetLink={meetLink} role="teacher" />
+      ) : (
+        <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B', marginBottom: 20 }}>
+          <p style={{ margin: 0 }}>No hay clases por delante en esta aula.</p>
         </div>
-        <button className="admin-btn-edit" style={{ width: '100%', justifyContent: 'center' }} onClick={handleSchedule} disabled={saving}>
-          <Radio size={14} /> {saving ? 'Programando...' : 'Programar clase en vivo'}
-        </button>
-      </div>}
+      )}
+
+      <div className="admin-panel" style={{ marginBottom: 20 }}>
+        <div className="admin-panel-head" style={{ marginBottom: 4 }}>
+          <span className="admin-panel-title">Próximas clases</span>
+          {canSchedule && <button className="admin-btn-edit" onClick={() => setFormFor('new')}><Plus size={14} /> Programar clase</button>}
+        </div>
+        <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todas usan el mismo enlace de Meet del aula.</p>
+        {upcoming.length === 0
+          ? <p className="admin-cell-sub" style={{ margin: 0 }}>No hay más clases programadas.</p>
+          : upcoming.map((s) => (
+            <ClassRow key={s.id} session={s} showRelative={false}
+              actions={canSchedule && getClassCardState(s, now) !== 'cancelled'
+                ? <button className="admin-btn-ghost" onClick={() => setFormFor(s)}><Pencil size={13} /> Editar</button>
+                : canSchedule && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}>Eliminar</button>} />
+          ))}
+      </div>
 
       <div className="admin-panel">
-        <div className="admin-panel-head">
-          <span className="admin-panel-title">Clases de este curso</span>
-          {canSchedule && selected.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {selected.some((id) => cancelableIds.includes(id)) && (
-                <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkCancel} disabled={bulkCancelling}>
-                  <XCircle size={13} /> Cancelar {selected.filter((id) => cancelableIds.includes(id)).length}
-                </button>
-              )}
-              <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={handleBulkDelete} disabled={bulkCancelling}>
-                <Trash2 size={13} /> {bulkCancelling ? 'Procesando...' : `Eliminar ${selected.length}`}
-              </button>
-            </div>
-          )}
-        </div>
-        {sessions.length === 0 ? <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todavía no programas clases para este curso.</p> : (
-          <>
-            {canSchedule && sessions.length > 0 && (
-              <label className="admin-field-checkbox" style={{ marginBottom: 8, fontSize: '.78rem' }}>
-                <input
-                  type="checkbox"
-                  checked={selected.length === sessions.length}
-                  onChange={(e) => setSelected(e.target.checked ? sessions.map((s) => s.id) : [])}
-                /> Seleccionar todas
-              </label>
-            )}
-            {sessions.map((s) => {
-              const status = getLiveSessionStatus(s);
-              const joinable = status === 'live' || status === 'upcoming';
-              const canCancel = status === 'upcoming' || status === 'live';
-              return (
-                <div key={s.id} className="dash-list-row">
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    {canSchedule && <input type="checkbox" aria-label={`Seleccionar ${s.title}`} style={{ marginTop: 4, width: 15, height: 15, accentColor: 'var(--accent)' }} checked={selected.includes(s.id)} onChange={() => toggleSelect(s.id)} />}
-                    <div>
-                      <div className="dash-list-row-title">{s.title}{groupNames[s.groupId] ? ` · ${groupNames[s.groupId]}` : ''}</div>
-                      <div className="dash-list-row-sub">{new Date(s.startsAt).toLocaleString('es-PE')} {status === 'cancelled' && '· Cancelada'} {status === 'ended' && '· Finalizada'}</div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    {joinable && <button className="admin-btn-edit" onClick={() => setActiveSession(s)}><LogIn size={13} /> Entrar</button>}
-                    {status !== 'cancelled' && (
-                      <button className="admin-btn-ghost" onClick={() => setRecordingFor(s)} title="Publicar el enlace de la grabación para los alumnos">
-                        <Film size={13} /> {s.recordingUrl ? 'Grabación ✓' : 'Grabación'}
-                      </button>
-                    )}
-                    {canSchedule && canCancel && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleCancel(s)}><XCircle size={13} /> Cancelar</button>}
-                    {canSchedule && <button className="admin-btn-ghost" style={{ color: '#BE123C' }} onClick={() => handleDelete(s)}><Trash2 size={13} /> Eliminar</button>}
-                  </div>
-                </div>
-              );
-            })}
-          </>
-        )}
+        <div className="admin-panel-head" style={{ marginBottom: 4 }}><span className="admin-panel-title">Clases anteriores</span></div>
+        <p className="admin-panel-caption" style={{ marginTop: 0 }}>Avances y grabación de cada sesión.</p>
+        {past.length === 0
+          ? <p className="admin-cell-sub" style={{ margin: 0 }}>Todavía no hay clases dictadas.</p>
+          : past.map((s, i) => (
+            <ClassRow key={s.id} session={s} past
+              actions={i === 0 ? (
+                <>
+                  <button className="admin-btn-ghost" onClick={() => setRecordingFor(s)}>{s.recordingUrl ? <><CheckCircle2 size={13} /> Grabación subida</> : <><Upload size={13} /> Subir grabación</>}</button>
+                  <button className="admin-btn-edit" onClick={() => navigate('../practicas')}><CheckCircle2 size={13} /> Revisar avances</button>
+                </>
+              ) : (
+                s.recordingUrl
+                  ? <><RecordingButton session={s} /><button className="admin-btn-ghost" onClick={() => setRecordingFor(s)} title="Cambiar el enlace de la grabación"><Pencil size={13} /></button></>
+                  : <button className="admin-btn-ghost" onClick={() => setRecordingFor(s)}><Upload size={13} /> Subir grabación</button>
+              )} />
+          ))}
       </div>
+
+      {formFor && (
+        <ClassFormModal
+          session={formFor === 'new' ? null : formFor}
+          onClose={() => setFormFor(null)}
+          onSubmit={formFor === 'new' ? handleCreate : handleUpdate}
+          onCancelClass={formFor !== 'new' ? () => handleCancel(formFor) : null}
+        />
+      )}
       {recordingFor && (
         <RecordingLinkModal session={recordingFor} onClose={() => setRecordingFor(null)}
           onSaved={(updated) => setSessions((list) => list.map((x) => (x.id === updated.id ? updated : x)))} />

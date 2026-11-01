@@ -1,30 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchMyActiveEnrollments } from '../../lib/db';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
+import { daysLeft } from '../../lib/workItems';
+import WorkRow from '../../components/WorkRow';
+import SubmitWorkModal from '../../components/SubmitWorkModal';
 
 const TABS = [
-  { key: 'pending', label: 'Pendientes' },
-  { key: 'submitted', label: 'En revisión' },
+  { key: 'pending', label: 'Por entregar' },
+  { key: 'submitted', label: 'Enviadas' },
   { key: 'reviewed', label: 'Calificadas' },
 ];
 
-const STATUS_BADGE = {
-  pending: { label: 'Por entregar', cls: 'admin-status-amber' },
-  submitted: { label: 'En revisión', cls: 'admin-status-gray' },
-  reviewed: { label: 'Calificada', cls: 'admin-status-green' },
-};
-
-const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-
-const formatDate = (iso) => {
-  if (!iso) return null;
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' });
-};
-
+// Mis entregas (E5): todo lo que hay que entregar, de todos los cursos, en un
+// solo lugar. Cada fila dice si es "Práctica de clase" o "Entrega del módulo"
+// y "Entregar" abre el mismo formulario que Mi proyecto. El número de "Por
+// entregar" es el mismo del menú.
 const StudentEntregas = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
@@ -34,76 +27,90 @@ const StudentEntregas = () => {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('pending');
   const [courseFilter, setCourseFilter] = useState('all');
+  const [submitItem, setSubmitItem] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!currentUser) return;
     fetchMyActiveEnrollments(currentUser.uid).then((map) => {
       setEnrollments(map);
       const enrolled = courses.filter((c) => map[c.id]);
-      fetchMyDeliverables(currentUser.uid, enrolled).then((data) => {
+      return fetchMyDeliverables(currentUser.uid, enrolled).then((data) => {
         setItems(data);
         setLoading(false);
       });
-    });
+    }).catch(() => setLoading(false));
   }, [currentUser, courses]);
+   
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tus entregas...</div>;
 
   const myCourses = courses.filter((c) => enrollments[c.id]);
   const inCourse = items.filter((i) => courseFilter === 'all' || i.courseId?.toString() === courseFilter);
-  const counts = { pending: inCourse.filter((i) => i.status === 'pending').length, submitted: inCourse.filter((i) => i.status === 'submitted').length, reviewed: inCourse.filter((i) => i.status === 'reviewed').length };
-  const filtered = inCourse.filter((i) => i.status === tab);
+  const counts = Object.fromEntries(TABS.map((t) => [t.key, inCourse.filter((i) => i.status === t.key).length]));
+  const byDue = (a, b) => String(a.dueAt || '9').localeCompare(String(b.dueAt || '9'));
+  const list = inCourse.filter((i) => i.status === tab).sort(tab === 'pending' ? byDue : (a, b) => byDue(b, a));
+  const view = (item) => navigate(`/student/curso/${item.courseId}/entrega/${item.kind === 'practice' ? 'practica' : 'modulo'}/${item.kind === 'practice' ? item.practiceId : item.moduleId}`);
+
+  // "Por entregar": lo vencido arriba (en rojo), luego lo que vence esta semana y lo de más adelante.
+  const sections = tab === 'pending'
+    ? [
+      { key: 'late', label: 'Vencidas', late: true, items: list.filter((i) => daysLeft(i.dueDate) !== null && daysLeft(i.dueDate) < 0) },
+      { key: 'week', label: 'Vence esta semana', items: list.filter((i) => { const d = daysLeft(i.dueDate); return d !== null && d >= 0 && d <= 7; }) },
+      { key: 'later', label: 'Más adelante', items: list.filter((i) => { const d = daysLeft(i.dueDate); return d === null || d > 7; }) },
+    ].filter((s) => s.items.length)
+    : [{ key: 'all', label: '', items: list }];
 
   return (
     <div className="anim-fade-up d1">
       <div className="admin-page-head">
         <div>
           <h1 className="admin-page-title">Mis entregas</h1>
-          <p className="admin-page-sub">Tus trabajos, fechas de entrega y comentarios del docente.</p>
+          <p className="admin-page-sub">Todo lo que tienes que entregar en tus cursos, en un solo lugar.</p>
         </div>
-      </div>
-
-      {myCourses.length > 1 && (
-        <div className="admin-toolbar" style={{ alignItems: 'center', marginBottom: 12 }}>
-          <label htmlFor="entregas-curso" className="admin-cell-sub">Filtrar por curso</label>
-          <select id="entregas-curso" className="admin-select" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}>
+        {myCourses.length > 1 && (
+          <select className="admin-select" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} aria-label="Filtrar por curso">
             <option value="all">Todos mis cursos</option>
             {myCourses.map((c) => <option key={c.id} value={c.id.toString()}>{c.title}</option>)}
           </select>
-        </div>
-      )}
+        )}
+      </div>
 
-      <div className="admin-toolbar" style={{ gap: 8 }}>
+      <div className="tabs-line">
         {TABS.map((t) => (
-          <button key={t.key} className={`admin-btn-ghost ${tab === t.key ? 'active' : ''}`} style={tab === t.key ? { background: 'var(--accent-bg)', color: 'var(--accent)', borderColor: 'transparent' } : undefined} onClick={() => setTab(t.key)}>
-            {t.label} <span className="admin-status admin-status-gray" style={{ marginLeft: 4 }}>{counts[t.key]}</span>
-          </button>
+          <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => setTab(t.key)}>{t.label} <span className="count">{counts[t.key]}</span></button>
         ))}
       </div>
 
-      <div className="admin-panel">
-        {filtered.length === 0 ? (
-          <p className="admin-panel-caption" style={{ marginTop: 0 }}>No tienes entregas en esta categoría.</p>
-        ) : filtered.map((item) => {
-          const badge = STATUS_BADGE[item.status];
-          const enrollment = enrollments[item.courseId];
-          return (
-            <div key={`${item.courseId}_${item.moduleId}`} className="dash-list-row">
-              <div>
-                <div className="admin-cell-sub" style={{ color: 'var(--accent)', fontWeight: 600 }}>{item.courseTitle}</div>
-                <div className="dash-list-row-title">{item.deliverableTitle}</div>
-                <div className="dash-list-row-sub">{enrollment?.groupName ? `Grupo ${enrollment.groupName}` : item.moduleTitle}</div>
-                {item.dueDate && <div className="dash-list-row-sub" style={item.status === 'pending' && item.dueDate < todayIso() ? { color: '#BE123C', fontWeight: 600 } : undefined}>Fecha límite: {formatDate(item.dueDate)}{item.status === 'pending' && item.dueDate < todayIso() ? ' · Vencida' : ''}</div>}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {!item.graded && <span className="admin-status admin-status-gray" title="Entregable de práctica: no cuenta en tu promedio">Sin nota</span>}
-                <span className={`admin-status ${badge.cls}`}>{item.status === 'reviewed' && !item.graded ? 'Revisada' : badge.label}</span>
-                <button className="admin-btn-edit" onClick={() => navigate(`/student/curso/${item.courseId}/proyecto`)}><ArrowRight size={13} /> Abrir proyecto</button>
-              </div>
+      <div className="entregas-layout">
+        <div className="admin-panel">
+          {list.length === 0 ? (
+            <p className="admin-panel-caption" style={{ margin: 0 }}>{tab === 'pending' ? '¡Estás al día! No tienes nada por entregar.' : tab === 'submitted' ? 'No tienes entregas esperando nota.' : 'Todavía no tienes entregas calificadas.'}</p>
+          ) : sections.map((s) => (
+            <div key={s.key} style={{ marginBottom: 8 }}>
+              {s.label && <div className={`work-section-label ${s.late ? 'is-late' : ''}`}>{s.label}</div>}
+              {s.items.map((item) => (
+                <div key={`${item.courseId}-${item.key}`}>
+                  <WorkRow item={item} sub={item.sub} blocked={item.blocked} showCourse onSubmit={setSubmitItem} onView={view} />
+                  {tab === 'reviewed' && item.sub?.feedback && <p className="admin-cell-sub entregas-feedback">“{item.sub.feedback.split('\n')[0]}”</p>}
+                </div>
+              ))}
             </div>
-          );
-        })}
+          ))}
+        </div>
+        <div className="dark-card entregas-tip">
+          <span className="dark-card-badge">Tip</span>
+          <p>¿No puedes subir tu archivo? Súbelo a Drive y pega el link en la entrega.</p>
+        </div>
       </div>
+
+      {submitItem && (
+        <SubmitWorkModal
+          course={{ id: submitItem.courseId, title: submitItem.courseTitle }}
+          item={submitItem} existing={submitItem.sub}
+          onClose={() => setSubmitItem(null)} onSaved={load}
+        />
+      )}
     </div>
   );
 };

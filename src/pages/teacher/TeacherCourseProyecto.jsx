@@ -3,7 +3,9 @@ import { useOutletContext } from 'react-router-dom';
 import { X } from 'lucide-react';
 import { useUI } from '../../context/UIContext';
 import ModalPortal from '../../components/ModalPortal';
-import { fetchAllEnrollments, fetchCourseContent, updateEnrollmentFollowUp } from '../../lib/db';
+import { fetchAllEnrollments, fetchCourseContent, updateEnrollmentFollowUp, fetchCourseAttendance, fetchLiveSessions, fetchGroupProgress } from '../../lib/db';
+import { buildClassList, normalizeAttendance } from '../../lib/classList';
+import { attendanceStats } from '../../lib/attendance';
 import { aulaRoster } from '../../lib/roster';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
@@ -43,7 +45,7 @@ const StudentDetailModal = ({ row, onClose, onSaved }) => {
           <button className="admin-modal-close" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="admin-field"><label>Progreso</label><div className="admin-price">{row.progress}%</div></div>
-        <div className="admin-field"><label>Sesiones vistas</label><div>{row.attended} / {row.totalSessions}</div></div>
+        <div className="admin-field"><label>Clases asistidas</label><div>{row.attended} / {row.totalSessions}</div></div>
         <div className="admin-field">
           <label>Seguimiento</label>
           <select value={followUp} onChange={(e) => setFollowUp(e.target.value)}>
@@ -69,12 +71,15 @@ const TeacherCourseProyecto = () => {
   const { addToast } = useUI();
 
   const load = useCallback(() => {
-    Promise.all([fetchAllEnrollments(course.id), fetchCourseContent(course.id)]).then(([enrollments, content]) => {
-      const totalSessions = (content.modules || []).reduce((sum, m) => sum + (m.lessons?.length || 0), 0) || 1;
+    // Las clases son las de la lista única del aula (las de Clases en vivo y la Agenda).
+    Promise.all([fetchAllEnrollments(course.id), fetchCourseContent(course.id), fetchCourseAttendance(course.id).catch(() => []), fetchLiveSessions(course.id).catch(() => []), fetchGroupProgress(group?.id).catch(() => [])]).then(([enrollments, content, att, live, doneIds]) => {
+      const classList = buildClassList({ liveSessions: live, modules: content.modules || [], groupId: group?.id || null, doneIds });
+      const records = normalizeAttendance(att, classList);
+      const totalSessions = classList.length;
       const courseEnrollments = aulaRoster(enrollments, course.id, groups, aulaId).map((r) => enrollments.find((e) => e.uid === r.uid && e.courseId?.toString() === course.id.toString()));
       setRows(courseEnrollments.map((e) => ({
         id: e.id, uid: e.uid, studentName: e.studentName || e.uid, studentEmail: e.studentEmail,
-        progress: e.progress || 0, attended: (e.completedLessonIds || []).length, totalSessions,
+        progress: e.progress || 0, attended: attendanceStats(classList, records.filter((a) => a.uid === e.uid)).present, totalSessions,
         followUp: e.followUp || 'ok', courseId: e.courseId,
       })));
       setLoading(false);
@@ -112,7 +117,7 @@ const TeacherCourseProyecto = () => {
                   <tr key={r.uid}>
                     <td className="admin-cell-name">{r.studentName}</td>
                     <td>{r.progress}%</td>
-                    <td>{r.attended}/{r.totalSessions} sesiones</td>
+                    <td>{r.attended}/{r.totalSessions} clases</td>
                     <td><span className={`admin-status ${fu.cls}`}>{fu.label}</span></td>
                     <td><button className="admin-btn-ghost" onClick={() => setViewing(r)}>Ver ficha</button></td>
                   </tr>

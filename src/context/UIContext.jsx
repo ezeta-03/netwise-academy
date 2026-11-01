@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
-import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, fetchOrders, fetchCourseSubmissions } from '../lib/db';
+import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, fetchOrders, fetchCourseSubmissions, fetchPractices } from '../lib/db';
 import { buildStudentNotifications, buildAdminNotifications, buildTeacherNotifications } from '../lib/notifications';
 import { sessionsForStudent } from '../lib/groupAssignment';
 import LoginModal from '../components/LoginModal';
@@ -80,9 +80,10 @@ export const UIProvider = ({ children }) => {
     Promise.all([fetchMyPreregistrations(uid), fetchMyActiveEnrollments(uid)]).then(async ([preregisteredIds, enrollments]) => {
       // Clases y entregas se leen por curso: solo los cursos con matrícula activa.
       const active = Object.values(enrollments);
-      const [liveSessions, submissions] = await Promise.all([
+      const [liveSessions, submissions, practices] = await Promise.all([
         fetchLiveSessions(active.map((e) => e.courseId)),
         Promise.all(active.map((e) => fetchCourseSubmissions(e.courseId, uid).catch(() => []))).then((lists) => lists.flat()),
+        active.length ? fetchPractices(active.map((e) => e.courseId)).catch(() => []) : Promise.resolve([]),
       ]);
       setNotifications(buildStudentNotifications({
         courses,
@@ -91,6 +92,8 @@ export const UIProvider = ({ children }) => {
         liveSessions: sessionsForStudent(liveSessions, enrollments),
         enrollments,
         submissions,
+        // Prácticas nuevas de SU aula.
+        practices: practices.filter((p) => !p.groupId || p.groupId === enrollments[p.courseId]?.groupId),
       }));
     }).catch(() => {});
   }, [currentUser, courses]);

@@ -2,7 +2,7 @@
 // por categoría se calcula en Catalog.jsx a partir de COURSES, no aquí.
 export const CATEGORIES = [
   { id:'redes-ia',       label:'📱 Redes Sociales & IA' },
-  { id:'branding',       label:'🎨 Branding & Marca' },
+  { id:'branding',       label:'🎨 Branding y Gestión de Marca' },
   { id:'marketing',      label:'📈 Marketing Digital' },
   { id:'emprendimiento', label:'🚀 Emprendimiento Digital' },
 ];
@@ -52,7 +52,7 @@ export const COURSES = [
   },
   {
     id: 2,
-    title: 'Branding y Gestión de Marcas',
+    title: 'Branding y Gestión de Marca',
     cat: 'branding',
     emoji: '🎨',
     color: '#1a0d28,#28103a',
@@ -86,12 +86,12 @@ export const COURSES = [
     duration: '4 semanas',
     level: 'Nivel básico',
     cardTag: 'Identidad & Diseño',
-    cardTitle: ['Branding y', 'Gestión de Marcas'],
+    cardTitle: ['Branding y', 'Gestión de Marca'],
     cardDesc: 'Construye una identidad visual sólida y un manual de marca listo para tus canales digitales.',
   },
   {
     id: 3,
-    title: 'Marketing Digital desde 0',
+    title: 'Marketing Digital Aplicado',
     cat: 'marketing',
     emoji: '📈',
     color: '#0d1a10,#102015',
@@ -124,7 +124,7 @@ export const COURSES = [
     duration: '4 semanas',
     level: 'Nivel básico',
     cardTag: 'Growth & Performance',
-    cardTitle: ['Marketing', 'Digital desde 0'],
+    cardTitle: ['Marketing', 'Digital Aplicado'],
     cardDesc: 'Domina Meta/Google Ads, SEO y automatizaciones para generar resultados medibles.',
   },
   {

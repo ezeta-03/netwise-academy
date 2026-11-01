@@ -1,29 +1,31 @@
-import { fetchCourseContent, fetchSubmissions, fetchGroups, fetchMyEnrollments } from './db';
-import { deliverableDueDate } from './deliveryDates.js';
+import { fetchCourseContent, fetchCourseSubmissions, fetchGroups, fetchMyEnrollments, fetchPractices, fetchProjectProfile } from './db';
+import { buildWorkItems, practicesForGroup, submissionFor, itemState } from './workItems.js';
 
-// Junta, para un alumno, el entregable de cada módulo (de los cursos donde
-// está inscrito) con el estado real de su propia entrega -- usado tanto por
-// el contador de "Mis entregas" del sidebar como por la página completa, así
-// ambos ven siempre el mismo número.
+// Todo lo que un alumno tiene que entregar en sus cursos (entregas de cada
+// módulo y prácticas de su aula) con el estado real de su entrega. Lo usan el
+// contador de "Mis entregas" del menú, la página Mis entregas y "Esta semana"
+// del Inicio, así todos cuentan igual (y lo mismo que Mi proyecto).
+// `blocked`: aún no define su empresa en Mi proyecto, así que no puede entregar.
 export const fetchMyDeliverables = async (uid, enrolledCourses) => {
+  if (!enrolledCourses.length) return [];
   // El aula (horario y fecha de inicio) da la fecha límite calculada cuando el
   // docente no fijó una a mano -- así el alumno ve la misma fecha que el docente.
-  const [groups, enrollments] = await Promise.all([fetchGroups(enrolledCourses.map((c) => c.id)), fetchMyEnrollments(uid)]);
+  const ids = enrolledCourses.map((c) => c.id);
+  const [groups, enrollments, practices] = await Promise.all([fetchGroups(ids), fetchMyEnrollments(uid), fetchPractices(ids).catch(() => [])]);
   const perCourse = await Promise.all(enrolledCourses.map(async (course) => {
-    const content = await fetchCourseContent(course.id);
-    const allModules = content.modules || [];
-    const modules = allModules.filter((m) => m.deliverable?.description);
-    const group = groups.find((g) => g.id === enrollments[course.id]?.groupId) || groups.find((g) => g.courseId?.toString() === course.id.toString()) || null;
-    return Promise.all(modules.map(async (m) => {
-      const subs = await fetchSubmissions(course.id, m.id, uid);
-      const mine = subs.find((s) => s.uid === uid);
-      const status = mine?.status === 'reviewed' ? 'reviewed' : mine?.status === 'submitted' ? 'submitted' : 'pending';
+    const [content, subs, profile] = await Promise.all([fetchCourseContent(course.id), fetchCourseSubmissions(course.id, uid), fetchProjectProfile(uid, course.id).catch(() => null)]);
+    const groupId = enrollments[course.id]?.groupId || null;
+    const group = groups.find((g) => g.id === groupId) || groups.find((g) => g.courseId?.toString() === course.id.toString()) || null;
+    const coursePractices = practicesForGroup(practices.filter((p) => p.courseId?.toString() === course.id.toString()), groupId);
+    const mine = (subs || []).filter((s) => s.uid === uid);
+    return buildWorkItems({ course, modules: content.modules || [], practices: coursePractices, group }).map((item) => {
+      const sub = submissionFor(item, mine);
       return {
-        courseId: course.id, courseTitle: course.title, moduleId: m.id, moduleTitle: m.title,
-        deliverableTitle: m.deliverable.description, dueDate: deliverableDueDate(m, allModules.indexOf(m), group),
-        status, note: mine?.note || '', graded: m.deliverable.graded !== false,
+        ...item, sub, status: itemState(sub), blocked: !profile,
+        // Campos de antes, para quien aún los lee.
+        deliverableTitle: item.shortTitle, note: sub?.note || '',
       };
-    }));
+    });
   }));
   return perCourse.flat();
 };

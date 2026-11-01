@@ -578,8 +578,8 @@ const MAIL_USER = defineSecret('MAIL_USER');
 const MAIL_PASSWORD = defineSecret('MAIL_PASSWORD');
 const PROGRAM_COURSES = {
   1: 'Estrategias de Redes Sociales',
-  2: 'Branding y Gestión de Marcas',
-  3: 'Marketing Digital desde 0',
+  2: 'Branding y Gestión de Marca',
+  3: 'Marketing Digital Aplicado',
   4: 'Creación de Negocios Digitales',
 };
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;

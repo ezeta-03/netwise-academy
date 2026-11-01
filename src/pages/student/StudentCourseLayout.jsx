@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, Menu, HelpCircle } from 'lucide-react';
+import { Home, Calendar, CheckSquare, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, Award, CalendarCheck, Users, UsersRound, Sparkles, Bell, Menu, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -26,16 +26,17 @@ const MAIN_NAV = [
 
 const SUB_NAV = [
   { to: 'contenido', label: 'Contenido', icon: BookOpen },
-  { to: 'sala', label: 'Sala de reuniones', icon: Video },
+  { to: 'sala', label: 'Clases en vivo', icon: Video },
   { to: 'materiales', label: 'Materiales', icon: FolderOpen },
   { to: 'proyecto', label: 'Mi proyecto', icon: Target },
-  { to: 'evaluacion', label: 'Mis evaluaciones', icon: ClipboardCheck },
+  { to: 'notas', label: 'Mis notas', icon: Award },
+  { to: 'asistencia', label: 'Mi asistencia', icon: CalendarCheck },
   { to: 'comunidad', label: 'Comunidad', icon: Users },
   { to: 'grupos', label: 'Grupos de trabajo', icon: UsersRound },
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Mi proyecto', evaluacion: 'Mis evaluaciones', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA' };
+const PAGE_LABELS = { contenido: 'Contenido', sala: 'Clases en vivo', materiales: 'Materiales', proyecto: 'Mi proyecto', notas: 'Mis notas', asistencia: 'Mi asistencia', entrega: 'Ver mi entrega', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA' };
 
 const StudentCourseLayout = () => {
   const { courseId } = useParams();
@@ -96,7 +97,7 @@ const StudentCourseLayout = () => {
   // teléfono se ve (null = sin tutorial, manda el estado propio).
   const drawerOpen = sidebarRequest ?? mobileOpen;
 
-  const activeSub = location.pathname.split('/').pop();
+  const activeSub = location.pathname.split('/')[4] || 'contenido';
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
 
   // Al cambiar de curso por URL, la matrícula en memoria aún es la del curso

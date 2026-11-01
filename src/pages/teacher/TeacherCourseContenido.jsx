@@ -98,6 +98,8 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
   const canSave = title.trim() && (file || url.trim());
+  // El botón dice qué falta en vez de quedarse gris sin explicación.
+  const missing = !title.trim() ? 'Escribe un título' : (!file && !url.trim() ? 'Sube un archivo o pega un enlace' : '');
 
   const applyFile = (f) => {
     if (!f) return;
@@ -167,7 +169,8 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
 
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
-        <button className="admin-btn-edit" disabled={!canSave || saving} onClick={handleSave}><Save size={13} /> {saving ? 'Guardando...' : 'Guardar material'}</button>
+        {missing && <span className="admin-cell-sub" style={{ alignSelf: 'center', marginRight: 'auto', color: '#B45309' }}>{missing}</span>}
+        <button className="admin-btn-edit" disabled={!canSave || saving} title={missing || undefined} onClick={handleSave}><Save size={13} /> {saving ? 'Guardando...' : 'Guardar material'}</button>
       </div>
     </div>
   );
@@ -568,7 +571,7 @@ const TeacherCourseContenido = () => {
                   </>
                 )}
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <button className="admin-btn-edit" onClick={() => navigate(`../evaluacion?vista=entregas&modulo=${selected.id}`)}><CheckCircle2 size={14} /> Revisar entregas</button>
+                  <button className="admin-btn-edit" onClick={() => navigate(`../entregas?modulo=${selected.id}`)}><CheckCircle2 size={14} /> Revisar entregas</button>
                   {canEdit && <button className="admin-btn-ghost" onClick={toggleDeliverableOpen}>
                     <CheckCircle2 size={14} /> Marcar como {selected.deliverable?.open === false ? 'activo' : 'completado'}
                   </button>}

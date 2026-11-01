@@ -31,7 +31,9 @@ import StudentCourseContenido from './pages/student/StudentCourseContenido';
 import StudentCourseSala from './pages/student/StudentCourseSala';
 import StudentCourseMateriales from './pages/student/StudentCourseMateriales';
 import StudentCourseProyecto from './pages/student/StudentCourseProyecto';
-import StudentCourseEvaluacion from './pages/student/StudentCourseEvaluacion';
+import StudentCourseNotas from './pages/student/StudentCourseNotas';
+import StudentCourseAsistencia from './pages/student/StudentCourseAsistencia';
+import StudentCourseEntrega from './pages/student/StudentCourseEntrega';
 import StudentCourseComunidad from './pages/student/StudentCourseComunidad';
 import StudentCourseGrupos from './pages/student/StudentCourseGrupos';
 import StudentCourseIA from './pages/student/StudentCourseIA';
@@ -52,6 +54,7 @@ import TeacherCourseSala from './pages/teacher/TeacherCourseSala';
 import TeacherCourseMateriales from './pages/teacher/TeacherCourseMateriales';
 import TeacherCourseProyecto from './pages/teacher/TeacherCourseProyecto';
 import TeacherCourseEvaluacion from './pages/teacher/TeacherCourseEvaluacion';
+import TeacherCoursePracticas from './pages/teacher/TeacherCoursePracticas';
 import TeacherCourseComunidad from './pages/teacher/TeacherCourseComunidad';
 import TeacherCourseGrupos from './pages/teacher/TeacherCourseGrupos';
 import TeacherCourseIA from './pages/teacher/TeacherCourseIA';
@@ -114,6 +117,20 @@ const ScrollToTop = () => {
 // también puede ver el Inicio. Un docente o admin logueado no tiene nada
 // que hacer ahí -- su propio panel ya vive en /teacher y /admin. Un
 // estudiante (o nadie logueado) ve el Home normal.
+// Evaluación (docente) y Mis evaluaciones (alumno) pasaron a secciones propias
+// del menú del curso: los enlaces viejos (?vista=...) llevan a la sección nueva.
+const EvaluacionRedirect = ({ student = false }) => {
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  const vista = params.get('vista');
+  params.delete('vista');
+  const rest = params.toString() ? `?${params}` : '';
+  const target = student
+    ? (vista === 'notas' ? 'notas' : vista === 'asistencia' ? 'asistencia' : 'proyecto')
+    : (vista === 'notas' ? 'notas' : vista === 'asistencia' ? 'asistencia' : 'entregas');
+  return <Navigate to={`../${target}${rest}`} replace />;
+};
+
 const RoleHome = () => {
   const { currentUser } = useAuth();
 
@@ -139,6 +156,8 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<RoleHome />} />
+          {/* El Inicio público también para quien ya inició sesión (el logo del panel lleva aquí). */}
+          <Route path="/inicio" element={<Home />} />
           {/* Los cursos son la sección #talleres del Inicio. /cursos la muestra también a quien
               ya inició sesión ("/" lo manda a su panel); /catalog era la página antigua. */}
           <Route path="/cursos" element={<Home scrollTo="talleres" />} />
@@ -185,7 +204,11 @@ function App() {
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />
-            <Route path="evaluacion" element={<TeacherCourseEvaluacion />} />
+            <Route path="evaluacion" element={<EvaluacionRedirect />} />
+            <Route path="entregas" element={<TeacherCourseEvaluacion vista="entregas" />} />
+            <Route path="practicas" element={<TeacherCoursePracticas />} />
+            <Route path="notas" element={<TeacherCourseEvaluacion vista="notas" />} />
+            <Route path="asistencia" element={<TeacherCourseEvaluacion vista="asistencia" />} />
             <Route path="comunidad" element={<TeacherCourseComunidad />} />
             <Route path="grupos" element={<TeacherCourseGrupos />} />
             <Route path="ia" element={<TeacherCourseIA />} />
@@ -208,7 +231,11 @@ function App() {
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />
-            <Route path="evaluacion" element={<TeacherCourseEvaluacion />} />
+            <Route path="evaluacion" element={<EvaluacionRedirect />} />
+            <Route path="entregas" element={<TeacherCourseEvaluacion vista="entregas" />} />
+            <Route path="practicas" element={<TeacherCoursePracticas />} />
+            <Route path="notas" element={<TeacherCourseEvaluacion vista="notas" />} />
+            <Route path="asistencia" element={<TeacherCourseEvaluacion vista="asistencia" />} />
             <Route path="comunidad" element={<TeacherCourseComunidad />} />
             <Route path="grupos" element={<TeacherCourseGrupos />} />
             <Route path="ia" element={<TeacherCourseIA />} />
@@ -227,7 +254,10 @@ function App() {
             <Route path="sala" element={<StudentCourseSala />} />
             <Route path="materiales" element={<StudentCourseMateriales />} />
             <Route path="proyecto" element={<StudentCourseProyecto />} />
-            <Route path="evaluacion" element={<StudentCourseEvaluacion />} />
+            <Route path="evaluacion" element={<EvaluacionRedirect student />} />
+            <Route path="notas" element={<StudentCourseNotas />} />
+            <Route path="asistencia" element={<StudentCourseAsistencia />} />
+            <Route path="entrega/:kind/:itemId" element={<StudentCourseEntrega />} />
             <Route path="comunidad" element={<StudentCourseComunidad />} />
             <Route path="grupos" element={<StudentCourseGrupos />} />
             <Route path="ia" element={<StudentCourseIA />} />

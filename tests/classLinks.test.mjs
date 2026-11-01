@@ -23,7 +23,26 @@ describe('enlace de Meet de cada clase', () => {
 });
 
 describe('pantallas con el botón directo a Meet', () => {
-  for (const file of ['src/pages/student/StudentInicio.jsx', 'src/pages/student/StudentAgenda.jsx', 'src/pages/admin/AdminGrupos.jsx']) {
+  // Inicio, Agenda y Clases en vivo usan la tarjeta de clase (C1) y su botón.
+  for (const file of ['src/pages/student/StudentInicio.jsx', 'src/pages/teacher/TeacherInicio.jsx']) {
+    test(file, () => {
+      const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+      assert.match(src, /useClassLinks\(sessions\)/);
+      assert.match(src, /<ClassCard/);
+      assert.match(src, /meetLink=\{meetLinkFor\(/);
+    });
+  }
+  test('la Agenda pasa el Meet de cada clase a su fila', () => {
+    const src = readFileSync(new URL('../src/components/ClassAgenda.jsx', import.meta.url), 'utf8');
+    assert.match(src, /<MeetButton session=\{s\} meetLink=\{meetLinkFor\(s, classLinks\)\}/);
+  });
+  test('el botón abre Meet en otra pestaña', () => {
+    const src = readFileSync(new URL('../src/components/ClassCard.jsx', import.meta.url), 'utf8');
+    assert.match(src, /href=\{meetLink\} target="_blank" rel="noreferrer"/);
+    assert.match(src, /Entrar a Meet/);
+    assert.match(src, /Iniciar clase en Meet/);
+  });
+  for (const file of ['src/pages/admin/AdminGrupos.jsx']) {
     test(file, () => {
       const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
       assert.match(src, /useClassLinks\(sessions\)/);

@@ -33,14 +33,14 @@ service firebase.storage {
     // Entregables que el alumno presenta (ver uploadSubmissionFile en
     // lib/db.js): cada alumno escribe solo en su carpeta. Lo leen él mismo y
     // docente/admin (que además lo abren con el link de descarga guardado en
-    // `submissions`). Hasta 10 MB; documentos de Office, PDF, imagen o ZIP.
+    // `submissions`). Hasta 50 MB por archivo; documentos de Office, PDF, imagen o ZIP.
     match /submissions/{uid}/{fileName} {
       allow read: if request.auth != null && (
                     request.auth.uid == uid ||
                     firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['teacher', 'admin']
                   );
       allow write: if request.auth != null && request.auth.uid == uid
-                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.size < 50 * 1024 * 1024
                    && request.resource.contentType.matches('application/pdf|application/msword|application/vnd[.]openxmlformats-officedocument[.].+|application/vnd[.]ms-powerpoint|application/vnd[.]ms-excel|image/(png|jpeg|webp)|application/(x-)?zip(-compressed)?');
       allow delete: if false;
     }

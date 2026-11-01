@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, ClipboardCheck, Users, UsersRound, Sparkles, Bell, Menu, ListChecks, CalendarClock } from 'lucide-react';
+import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, CheckSquare, PenLine, BarChart3, CalendarCheck, Users, UsersRound, Sparkles, Bell, Menu, ListChecks, CalendarClock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -25,10 +25,13 @@ const MAIN_NAV = [
 
 const SUB_NAV = [
   { to: 'contenido', label: 'Contenido', icon: BookOpen },
-  { to: 'sala', label: 'Sala de reuniones', icon: Video },
+  { to: 'sala', label: 'Clases en vivo', icon: Video },
   { to: 'materiales', label: 'Materiales', icon: FolderOpen },
   { to: 'proyecto', label: 'Seguimiento', icon: Target },
-  { to: 'evaluacion', label: 'Evaluación', icon: ClipboardCheck },
+  { to: 'entregas', label: 'Entregas y revisión', icon: CheckSquare },
+  { to: 'practicas', label: 'Prácticas y avances', icon: PenLine },
+  { to: 'notas', label: 'Registro de notas', icon: BarChart3 },
+  { to: 'asistencia', label: 'Asistencia', icon: CalendarCheck },
   { to: 'rubrica', label: 'Rúbrica', icon: ListChecks },
   { to: 'cronograma', label: 'Cronograma', icon: CalendarClock },
   { to: 'comunidad', label: 'Comunidad', icon: Users },
@@ -36,7 +39,7 @@ const SUB_NAV = [
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { indicaciones: 'Indicaciones de clase', contenido: 'Contenido', sala: 'Sala de reuniones', materiales: 'Materiales', proyecto: 'Seguimiento', evaluacion: 'Evaluación', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
+const PAGE_LABELS = { indicaciones: 'Indicaciones de clase', contenido: 'Contenido', sala: 'Clases en vivo', materiales: 'Materiales', proyecto: 'Seguimiento', entregas: 'Entregas y revisión', practicas: 'Prácticas y avances', notas: 'Registro de notas', asistencia: 'Asistencia', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
 
 const TeacherCourseLayout = () => {
   const { courseId } = useParams();
@@ -113,7 +116,7 @@ const TeacherCourseLayout = () => {
   const avgProgress = aulaEnrollments.length ? Math.round(aulaEnrollments.reduce((s, e) => s + (e.progress || 0), 0) / aulaEnrollments.length) : 0;
   const showAulaPicker = groups.length > 1 || unassignedCount > 0;
 
-  const activeSub = location.pathname.split('/').pop();
+  const activeSub = location.pathname.split('/')[4] || 'contenido';
   const currentLabel = PAGE_LABELS[activeSub] || 'Contenido';
 
   if (!course || !isAssigned) return <div className="admin-empty-hint">Cargando curso...</div>;

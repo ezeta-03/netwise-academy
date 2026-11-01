@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
-import { Check, CheckCircle2, FileText, Sparkles, Target, Video } from 'lucide-react';
+import { Check, CheckCircle2, FileText, Sparkles, Target } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { fetchCourseContent, fetchProjectAdvances, fetchProjectProfile } from '../../lib/db';
+import { fetchCourseContent, fetchProjectAdvances, fetchProjectProfile, fetchLiveSessions } from '../../lib/db';
+import { sessionsForStudent } from '../../lib/groupAssignment';
+import { getClassCardState, relativeClassLabel } from '../../lib/liveSessionStatus';
+import { isMeetLink } from '../../lib/classLinks';
+import { useNow } from '../../hooks/useNow';
+import { MeetButton } from '../../components/ClassCard';
 import ModuleSessionCard, { GradedBadge } from '../../components/ModuleSessionCard';
 import { isPendingUrl } from '../../lib/placeholders';
 
 const StudentCourseContenido = () => {
-  const { course } = useOutletContext();
+  const { course, group, enrollment } = useOutletContext();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -16,6 +21,13 @@ const StudentCourseContenido = () => {
   const [advances, setAdvances] = useState({});
   const [hasProfile, setHasProfile] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [liveSessions, setLiveSessions] = useState([]);
+  const now = useNow();
+
+  // La próxima clase del aula, para el botón "Entrar a Meet" (mismas reglas que la tarjeta de clase).
+  useEffect(() => {
+    fetchLiveSessions(course.id).then((all) => setLiveSessions(sessionsForStudent(all, { [course.id]: enrollment }))).catch(() => {});
+  }, [course.id, enrollment]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -30,6 +42,11 @@ const StudentCourseContenido = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [course.id, currentUser]);
+
+  const nextClass = liveSessions
+    .filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; })
+    .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))[0] || null;
+  const meetLink = isMeetLink(group?.classLink) ? group.classLink : null;
 
   const selected = modules.find((m) => m.id === selectedId);
   const selectedIndex = modules.findIndex((m) => m.id === selectedId);
@@ -101,23 +118,6 @@ const StudentCourseContenido = () => {
             ))}
           </div>
 
-          <div className="admin-panel" style={{ marginBottom: 20 }}>
-            <div className="admin-panel-head"><span className="admin-panel-title">Sesiones grabadas</span></div>
-            <p className="admin-panel-caption" style={{ marginTop: 0 }}>
-              {selected.lessons.length === 0 ? 'Todavía no hay grabaciones para este módulo.' : 'Vuelve a ver las clases pasadas de este módulo a tu ritmo.'}
-            </p>
-            {selected.lessons.map((les, li) => (
-              <div key={les.id} className="dash-list-row">
-                <div>
-                  <div className="dash-list-row-eyebrow">Sesión {String(li + 1).padStart(2, '0')}</div>
-                  <div className="dash-list-row-title">{les.title}</div>
-                  <div className="dash-list-row-sub">{les.date ? `${les.date} · ` : ''}{les.duration || 'Sin duración'}</div>
-                </div>
-                {isPendingUrl(les.videoUrl) ? <span className="admin-status admin-status-gray">Pendiente de grabar</span> : <button className="admin-btn-ghost" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-${li + 1}`)}><Video size={13} /> Ver grabación</button>}
-              </div>
-            ))}
-          </div>
-
           <div className="admin-panel">
             <div className="admin-panel-head">
               <span className="admin-panel-title">Entregable</span>
@@ -140,14 +140,21 @@ const StudentCourseContenido = () => {
               <button className="admin-btn-edit" onClick={() => navigate(`/student/curso/${course.id}/proyecto`)}>
                 <Target size={14} /> {hasProfile ? 'Abrir mi proyecto' : 'Crear mi proyecto'}
               </button>
-              {selected.lessons.length > 0 && (
-                <button className="admin-btn-ghost" onClick={() => navigate(`/player/${course.id}/${selectedIndex + 1}-1`)}><Video size={14} /> Ver la clase</button>
-              )}
             </div>
           </div>
         </div>
 
         <div>
+          {nextClass && (
+            <div className="content-meet">
+              <MeetButton session={nextClass} meetLink={meetLink} now={now} />
+              <div className="admin-cell-sub" style={{ textAlign: 'center' }}>
+                {getClassCardState(nextClass, now) === 'scheduled'
+                  ? `${nextClass.title} · ${relativeClassLabel(nextClass, now)} · se activa 10 min antes`
+                  : 'Entra con tu correo @netwiseacademy.pe'}
+              </div>
+            </div>
+          )}
           <div className="admin-panel" style={{ marginBottom: 20 }}>
             <div className="admin-panel-head"><span className="admin-panel-title">Módulos</span></div>
             <div className="dash-modules-rail">

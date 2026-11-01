@@ -5,7 +5,7 @@
 //   'submitted' y la nota vieja deja de valer), notas manuales
 //   (courseGrades.scores por clave), asistencia (present true/false; sesión
 //   dictada sin registro = falta) -> buildStudentRows -> computeGradeSummary ->
-//   evaluateApproval con { taken, pct: raw } (así lo hace StudentCourseEvaluacion).
+//   evaluateApproval con { taken, pct: raw } (así lo hace StudentCourseNotas).
 //
 // Los escenarios salen de un PRNG con semilla (mulberry32): son deterministas y
 // un fallo se reproduce con el seed que aparece en el mensaje.
@@ -21,6 +21,17 @@ import { attendanceStats } from '../src/lib/attendance.js';
 import { getOrderedSessions } from '../src/lib/courseSessions.js';
 import { courseRoster } from '../src/lib/roster.js';
 import { resolveWeights } from '../src/lib/weights.js';
+
+// Esquema "solo módulos" (un bloque del 100%, sin componente manual): era el de
+// Redes Sociales hasta que el sílabo pidió 70% módulos + 30% sustentación. Se
+// conserva como esquema de prueba para cubrir ese caso.
+const SOLO_MODULOS = 'solo-modulos';
+GRADING_SCHEMES[SOLO_MODULOS] = {
+  subtitle: 'Notas por entregable y promedio final.',
+  footer: 'Pesos del sílabo EDRRSS · 20% + 25% + 25% + 30%',
+  blocks: [{ key: 'modules', label: 'Entregables del curso', weight: 100, moduleWeights: [20, 25, 25, 30] }],
+};
+
 
 // ---------------------------------------------------------------- PRNG ----
 const mulberry32 = (seed) => {
@@ -410,8 +421,8 @@ describe('propiedades: flujo de entregas y notas manuales -> promedio', () => {
     store.set('m1', { ...store.get('m1'), status: 'reviewed', grade: 12 });
     assert.equal(view().promedioParcial, round2((17.5 * 12 + 30 * 10) / 47.5)); // 510 / 47.5 = 10.74
   });
-  test('reentrega (Redes, sin componente manual): la nota anterior deja de contar hasta recalificar; M2 = 10 fija el promedio mientras M1 está reentregado', () => {
-    const model = getGradingModel(1, mods(4));
+  test('reentrega (Solo módulos, sin componente manual): la nota anterior deja de contar hasta recalificar; M2 = 10 fija el promedio mientras M1 está reentregado', () => {
+    const model = getGradingModel(SOLO_MODULOS, mods(4));
     const store = new Map([['m2', rev('m2', 10)]]);
     const view = () => summaryOf(model, [...store.values()], {});
     assert.equal(view().promedioParcial, 10); // sólo M2
@@ -613,7 +624,7 @@ describe('propiedades: asistencia', () => {
     const a = attendanceStats(sessions, Array.from({ length: 51 }, (_, i) => ({ sessionId: `s${i}`, present: i < 38 })));
     assert.equal(a.pct, 75);
     assert.equal(evaluateApproval(null, { taken: a.taken, pct: a.raw }).attendance, 'fail');
-    assert.equal(evaluateApproval(null, { taken: a.taken, pct: a.pct }).attendance, 'ok'); // por eso StudentCourseEvaluacion pasa raw
+    assert.equal(evaluateApproval(null, { taken: a.taken, pct: a.pct }).attendance, 'ok'); // por eso StudentCourseNotas pasa raw
   });
   test('regla exacta con enteros: 4*present >= 3*taken en todas las combinaciones hasta 60 sesiones', () => {
     for (let n = 1; n <= 60; n++) {
@@ -696,14 +707,14 @@ describe('propiedades: matrículas -> courseRoster', () => {
 
 // ------------------------------------------------- escenarios "de oro" ----
 describe('escenarios manuales (valores calculados a mano)', () => {
-  test('Redes (curso 1): pesos 20/25/25/30 sin componente manual; M1..M4 = 18,19,17,16 -> 17.4, rendimiento 87, regular; asistencia 3/4 = 75 ok', () => {
+  test('Solo módulos: pesos 20/25/25/30 sin componente manual; M1..M4 = 18,19,17,16 -> 17.4, rendimiento 87, regular; asistencia 3/4 = 75 ok', () => {
     const modules = [
       { id: 'r1', title: 'M1', deliverable: { description: 'Estrategia' }, sessions: [{ id: 'a1', status: 'done' }, { id: 'a2', status: 'done' }] },
       { id: 'r2', title: 'M2', deliverable: { description: 'Contenido' }, sessions: [{ id: 'b1', status: 'done' }, { id: 'b2', status: 'done' }] },
       { id: 'r3', title: 'M3', deliverable: { description: 'IA' }, sessions: [] },
       { id: 'r4', title: 'M4', deliverable: { description: 'Métricas', weight: 99 } },
     ];
-    const model = getGradingModel('1', modules);
+    const model = getGradingModel(SOLO_MODULOS, modules);
     assert.deepEqual(model.components.map((c) => c.weight), [20, 25, 25, 30]);
     assert.ok(model.components.every((c) => c.kind === 'module'));
     const subs = [rev('r1', 18), rev('r2', 19), rev('r3', 17), rev('r4', 16)];
@@ -713,7 +724,7 @@ describe('escenarios manuales (valores calculados a mano)', () => {
     assert.ok(close(summary.rendimientoRaw, 87));
     assert.equal(summary.rendimientoPct, 87);
     assert.deepEqual([summary.allGraded, summary.gradedCount, summary.totalCount], [true, 4, 4]);
-    // una nota "sustentacion" en scores no existe para Redes y no cambia nada
+    // una nota "sustentacion" en scores no existe en este esquema y no cambia nada
     assert.deepEqual(summaryOf(model, subs, { sustentacion: 17 }), summary);
     const att = attendanceStats(getOrderedSessions(modules), [{ sessionId: 'a1', present: true }, { sessionId: 'a2', present: true }, { sessionId: 'b1', present: true }, { sessionId: 'b2', present: false }]);
     assert.deepEqual([att.taken, att.present, att.absent, att.raw, att.pct], [4, 3, 1, 75, 75]);
@@ -811,8 +822,8 @@ describe('escenarios manuales (valores calculados a mano)', () => {
     assert.equal(evaluateApproval(s, null).overall, 'substitute');
   });
 
-  test('Redes con 5 módulos: cada uno pesa 20 (100/5), sin componente manual, y el promedio es la media simple', () => {
-    const model = getGradingModel(1, mods(5));
+  test('Solo módulos con 5 módulos: cada uno pesa 20 (100/5), sin componente manual, y el promedio es la media simple', () => {
+    const model = getGradingModel(SOLO_MODULOS, mods(5));
     assert.deepEqual(model.components.map((c) => c.weight), [20, 20, 20, 20, 20]);
     const s = summaryOf(model, [10, 12, 14, 16, 18].map((g, i) => rev(`m${i + 1}`, g)), {});
     // 20*70 = 1400 -> 1400 / 100 = 14
@@ -821,8 +832,8 @@ describe('escenarios manuales (valores calculados a mano)', () => {
     assert.equal(evaluateApproval(s, null).overall, 'substitute');
   });
 
-  test('Redes con 3 módulos: cada uno pesa 33.33 (total 99.99) y con notas 10, 15, 20 el promedio es 15', () => {
-    const model = getGradingModel(1, mods(3));
+  test('Solo módulos con 3 módulos: cada uno pesa 33.33 (total 99.99) y con notas 10, 15, 20 el promedio es 15', () => {
+    const model = getGradingModel(SOLO_MODULOS, mods(3));
     assert.deepEqual(model.components.map((c) => c.weight), [33.33, 33.33, 33.33]);
     assert.equal(model.total, 99.99);
     const s = summaryOf(model, [rev('m1', 10), rev('m2', 15), rev('m3', 20)], {});
