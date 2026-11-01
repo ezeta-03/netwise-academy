@@ -76,7 +76,7 @@ const StudentLayout = () => {
                 <Icon size={17} />
                 <span className="admin-nav-label">{item.label}</span>
                 {item.to === '/student/entregas' && pendingCount > 0 && (
-                  <span className="admin-status admin-status-amber" style={{ marginLeft: 'auto' }}>{pendingCount}</span>
+                  <span className="nav-count" aria-label={`${pendingCount} por entregar`}>{pendingCount}</span>
                 )}
               </NavLink>
             );

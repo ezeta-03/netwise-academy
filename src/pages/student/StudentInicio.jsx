@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, ArrowRight, BookOpen, Clock3, Video } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -27,6 +27,7 @@ const fmtTime = (iso) => new Date(iso).toLocaleTimeString('es-PE', { hour: 'nume
 // parcial y asistencia) y ¿qué tengo que entregar esta semana?
 const StudentInicio = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useAuth();
   const { courses } = useCourseOfferings();
   const now = useNow();
@@ -128,6 +129,8 @@ const StudentInicio = () => {
         </div>
       ))}
       <InstitutionalEmailCard
+        // "Mi correo de la academia" (menú del perfil) la vuelve a mostrar.
+        key={location.state?.showAcademyEmail || 'correo'}
         uid={currentUser.uid}
         hasActiveEnrollment={enrolledCourses.length > 0}
         awaitingApproval={pendingOrders.length > 0}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { AtSign, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const ROLE_LABEL = { admin: 'Administrador', teacher: 'Docente', student: 'Estudiante' };
@@ -45,6 +45,14 @@ const UserMenu = ({ avatarClassName = 'admin-avatar' }) => {
     navigate('/', { replace: true });
   };
 
+  // El alumno puede ocultar la franja de su correo en el Inicio (ver
+  // InstitutionalEmailCard): desde acá la vuelve a ver.
+  const showAcademyEmail = () => {
+    setOpen(false);
+    try { localStorage.removeItem(`nw-inst-strip-hidden-${currentUser.uid}`); } catch { /* sin almacenamiento */ }
+    navigate('/student/inicio', { state: { showAcademyEmail: Date.now() } });
+  };
+
   return (
     <div className="user-menu" ref={ref}>
       <button
@@ -61,6 +69,11 @@ const UserMenu = ({ avatarClassName = 'admin-avatar' }) => {
             {currentUser.displayName && <div className="user-menu-email">{currentUser.email}</div>}
             <span className="user-menu-role">{ROLE_LABEL[currentUser.role] || 'Usuario'}</span>
           </div>
+          {currentUser.role === 'student' && (
+            <button type="button" role="menuitem" className="user-menu-item" onClick={showAcademyEmail}>
+              <AtSign size={16} /> Mi correo de la academia
+            </button>
+          )}
           <button type="button" role="menuitem" className="user-menu-item user-menu-logout" onClick={handleLogout}>
             <LogOut size={16} /> Cerrar sesión
           </button>

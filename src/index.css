@@ -2517,6 +2517,15 @@ body {
 
 /* Correo de la academia en el panel del alumno (InstitutionalEmailCard). */
 .inst-card { margin-bottom: 16px; }
+/* Correo ya activo: una franja con el correo, Copiar y cerrar. */
+.inst-strip { display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap; background: #EFE9FF; border-radius: 10px; padding: 11px 16px; margin-bottom: 16px; font-size: .86rem; color: #4B4A5C; }
+.inst-strip strong { color: var(--accent); font-weight: 600; display: inline-block; overflow-wrap: anywhere; }
+.inst-strip-actions { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+.inst-strip-btn { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-weight: 600; color: var(--accent); }
+.inst-strip-btn.is-muted { font-weight: 500; color: #8B8A9B; }
+.inst-strip-close { background: none; border: 0; padding: 2px; cursor: pointer; color: #8B8A9B; display: inline-flex; }
+.nav-count { margin-left: auto; background: var(--accent); color: #fff; font-size: .7rem; font-weight: 700; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; }
+.admin-sidebar.collapsed .nav-count { display: none; }
 .inst-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
 .inst-card-head svg { color: var(--accent); flex-shrink: 0; }
 .inst-steps { display: flex; gap: 8px; margin: 16px 0 4px; }
