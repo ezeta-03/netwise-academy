@@ -8,8 +8,16 @@ import negocios from '../assets/NETWISE ACADEMY WEB/descargables/CREACION NEGOCI
 
 export const PROGRAM_PDFS = { 1: redes, 2: branding, 3: marketing, 4: negocios };
 
+// El sílabo que sube el admin en Cursos y precios (A8) manda; si un curso aún
+// no lo tiene, queda el PDF incluido en la web. Acepta el curso o su id.
 // Object.hasOwn: un id inesperado ('constructor'...) no debe devolver nada.
-export const getProgramPdf = (courseId) => (Object.hasOwn(PROGRAM_PDFS, courseId) ? PROGRAM_PDFS[courseId] : null);
+export const getProgramPdf = (courseOrId) => {
+  if (courseOrId && typeof courseOrId === 'object') {
+    if (courseOrId.syllabus?.url) return courseOrId.syllabus.url;
+    courseOrId = courseOrId.id;
+  }
+  return Object.hasOwn(PROGRAM_PDFS, courseOrId) ? PROGRAM_PDFS[courseOrId] : null;
+};
 
 // Nombre con el que se guarda el archivo, sin caracteres que un sistema de
 // archivos no acepte.
@@ -18,7 +26,7 @@ export const programFileName = (course) => `Programa - ${String(course?.title ||
 // Dispara la descarga del PDF del curso. Devuelve false si el curso no tiene PDF
 // (el llamador puede caer a otra alternativa).
 export const downloadProgramPdf = (course) => {
-  const url = getProgramPdf(course?.id);
+  const url = getProgramPdf(course);
   if (!url) return false;
   const a = document.createElement('a');
   a.href = url;

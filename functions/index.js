@@ -5,6 +5,7 @@
 // viajaba dentro del bundle público. Ahora vive como secreto de Functions:
 //   npx firebase-tools functions:secrets:set GROQ_API_KEY
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
@@ -25,7 +26,7 @@ const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Topes para que la función no sirva de proxy gratuito a cualquier LLM.
 const DAILY_LIMIT = 80;
-const MAX_SYSTEM = 24000;
+const MAX_SYSTEM = 30000;
 const MAX_MESSAGE = 2000;
 const MAX_HISTORY = 20;
 const MAX_HISTORY_TEXT = 4000;
@@ -46,46 +47,151 @@ const consumeQuota = async (uid) => {
   });
 };
 
+// Instrucciones del asistente (A6): las edita el admin en settings/assistant;
+// estas son las de arranque. Las reglas fijas no se pueden apagar.
+const DEFAULT_ASSISTANT = {
+  studentInstructions: 'Eres el tutor de Netwise Academy. Ayudas al estudiante a entender los temas de su curso con ejemplos simples y preguntas que lo hagan pensar. Respondes en español, con un tono cercano y claro. Si no sabes algo, lo dices.',
+  teacherInstructions: 'Eres el asistente de Netwise Academy para docentes. Ayudas a preparar clases, redactar retroalimentación, generar preguntas de repaso y criterios de rúbrica. Respondes en español, breve y práctico.',
+  offTopicMessage: 'Solo puedo ayudarte con temas de tu curso. Para otras dudas, escribe a Soporte.',
+};
+const FIXED_RULES = [
+  'Responde solo temas del curso en el que está la persona. Si la pregunta no es del curso, responde exactamente con el mensaje fijo para temas fuera del curso.',
+  'No hagas las entregas ni el trabajo del alumno: explica y guía, pero no entregues el trabajo resuelto.',
+  'No des ni adelantes notas.',
+  'La interfaz muestra texto plano: no uses Markdown (nada de **, #, tablas ni backticks). Para listas usa un guion simple "-".',
+  'Al final de cada respuesta, en una línea aparte, escribe las fuentes que usaste con este formato exacto: [[fuentes: Sílabo | Material: nombre del archivo | Fechas de entrega | Tu empresa]] (solo las que usaste; si no usaste ninguna, no escribas esa línea).',
+];
+const MAX_SYLLABUS = 14000;
+const CONVERSATION_DAYS = 60;
+
+const peruDate = (iso) => {
+  const ms = new Date(iso).getTime();
+  return Number.isNaN(ms) ? '' : new Date(ms - 5 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
+};
+
+// Arma las instrucciones del sistema en el servidor: nadie las puede cambiar
+// desde su navegador. Usa solo tres cosas: del curso (sílabo y módulos), del
+// aula (materiales del docente y fechas de entrega) y del alumno (su empresa).
+const buildAssistantSystem = async ({ uid, courseId, mode, groupId }) => {
+  const [settingsSnap, contentSnap, syllabusSnap, offeringSnap] = await Promise.all([
+    db.collection('settings').doc('assistant').get(),
+    db.collection('courseContent').doc(String(courseId)).get(),
+    db.collection('courseSyllabi').doc(String(courseId)).get(),
+    db.collection('courseOfferings').doc(String(courseId)).get(),
+  ]);
+  const cfg = { ...DEFAULT_ASSISTANT, ...(settingsSnap.data() || {}) };
+  const modules = contentSnap.data()?.modules || [];
+  const courseTitle = str(syllabusSnap.data()?.courseTitle) || str(offeringSnap.data()?.title) || `curso ${courseId}`;
+  const syllabus = str(syllabusSnap.data()?.text).slice(0, MAX_SYLLABUS);
+
+  const moduleLines = modules.filter((m) => m.title).map((m, i) => [
+    `Módulo ${i + 1}: ${m.title}`, m.objective ? `Objetivo: ${m.objective}` : '', m.deliverable?.description ? `Entrega del módulo: ${m.deliverable.description}${m.deliverable.dueDate ? ` (vence ${m.deliverable.dueDate})` : ''}` : '',
+  ].filter(Boolean).join(' · '));
+  const materials = modules.flatMap((m, i) => (m.materials || []).filter((x) => x.title).map((x) => `- ${x.title} (Módulo ${i + 1}${x.category ? `, ${x.category}` : ''})`));
+
+  const practicesSnap = await db.collection('practices').where('courseId', 'in', [courseId, String(courseId), Number(courseId)].filter((v, i, a) => a.indexOf(v) === i && (typeof v === 'string' || Number.isFinite(v)))).get().catch(() => null);
+  const practices = (practicesSnap?.docs || []).map((d) => d.data()).filter((p) => !groupId || !p.groupId || p.groupId === groupId);
+  const dueLines = practices.filter((p) => p.dueAt).map((p) => `- Práctica "${p.title}"${p.classTitle ? ` (${p.classTitle})` : ''}: vence ${peruDate(p.dueAt)}${p.instructions ? ` · Indicaciones: ${p.instructions}` : ''}`);
+
+  let company = '';
+  if (mode === 'student') {
+    const profile = (await db.collection('projectProfiles').doc(`${uid}_${courseId}`).get()).data();
+    if (profile?.name) company = `Empresa o marca del alumno (Mi proyecto): ${profile.name}${profile.activity ? ` · ${profile.activity}` : ''}${profile.sector ? ` · Sector: ${profile.sector}` : ''}${profile.audience ? ` · Público: ${profile.audience}` : ''}${profile.description ? ` · ${profile.description}` : ''}. Usa su marca para los ejemplos cuando ayude.`;
+  }
+
+  return {
+    hasSyllabus: !!syllabus,
+    text: [
+      mode === 'teacher' ? cfg.teacherInstructions : cfg.studentInstructions,
+      `Reglas que siempre cumples:\n${FIXED_RULES.map((r) => `- ${r}`).join('\n')}\nMensaje fijo para temas fuera del curso: "${cfg.offTopicMessage}"`,
+      `Curso: "${courseTitle}".`,
+      syllabus ? `Sílabo del curso:\n${syllabus}` : 'Este curso todavía no tiene sílabo cargado: responde solo con lo que sigue y avisa si te falta información.',
+      moduleLines.length ? `Módulos del curso:\n${moduleLines.join('\n')}` : '',
+      materials.length ? `Materiales que subió el docente:\n${materials.join('\n')}` : '',
+      dueLines.length ? `Fechas de entrega del aula:\n${dueLines.join('\n')}` : '',
+      company,
+    ].filter(Boolean).join('\n\n'),
+  };
+};
+
+// "[[fuentes: Sílabo | Material: X]]" al final de la respuesta -> lista aparte.
+const splitSources = (reply) => {
+  const m = reply.match(/\[\[\s*fuentes?\s*:([^\]]*)\]\]\s*$/i);
+  if (!m) return { text: reply, sources: [] };
+  return { text: reply.slice(0, m.index).trim(), sources: m[1].split('|').map((x) => x.trim()).filter(Boolean).slice(0, 4) };
+};
+
+// Asistente IA (E13 alumno / docente): cada curso y aula tiene su asistente y
+// cada persona sus conversaciones (`aiConversations`, se borran a los 2
+// meses; solo esta función las escribe).
 export const askAssistant = onCall(
   { secrets: [GROQ_API_KEY], region: 'us-central1', maxInstances: 5, timeoutSeconds: 60 },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión para usar el asistente.');
-
-    const { systemInstruction, history, message } = request.data || {};
-    const text = str(message).trim();
+    const uid = request.auth.uid;
+    const { courseId, conversationId } = request.data || {};
+    const text = str(request.data?.message).trim();
     if (!text) throw new HttpsError('invalid-argument', 'Mensaje vacío.');
     if (text.length > MAX_MESSAGE) throw new HttpsError('invalid-argument', 'El mensaje es demasiado largo.');
+    if (courseId === undefined || courseId === null || courseId === '') throw new HttpsError('invalid-argument', 'Falta el curso.');
 
-    const turns = (Array.isArray(history) ? history : [])
-      .slice(-MAX_HISTORY)
-      .filter((m) => (m?.role === 'user' || m?.role === 'assistant') && str(m.text).trim())
+    // Quién pregunta: alumno con matrícula activa, docente del curso o admin.
+    const user = (await db.collection('users').doc(uid).get()).data() || {};
+    const offering = (await db.collection('courseOfferings').doc(String(courseId)).get()).data() || {};
+    let mode = 'student';
+    let groupId = null;
+    if (user.role === 'admin' || (user.role === 'teacher' && offering.teacherUid === uid)) {
+      mode = 'teacher';
+      groupId = str(request.data?.groupId) || null;
+    } else {
+      const enrollment = (await db.collection('enrollments').doc(`${uid}_${courseId}`).get()).data();
+      if (!enrollment || (enrollment.status || 'active') !== 'active') throw new HttpsError('permission-denied', 'No tienes acceso a este curso.');
+      groupId = enrollment.groupId || null;
+    }
+
+    // La conversación (si sigue) es de quien pregunta.
+    const convRef = conversationId ? db.collection('aiConversations').doc(str(conversationId)) : db.collection('aiConversations').doc();
+    const existing = conversationId ? (await convRef.get()).data() : null;
+    if (conversationId && (!existing || existing.uid !== uid)) throw new HttpsError('not-found', 'No encontramos esa conversación.');
+    const turns = (existing?.messages || []).slice(-MAX_HISTORY)
       .map((m) => ({ role: m.role, content: str(m.text).slice(0, MAX_HISTORY_TEXT) }));
 
-    if (!(await consumeQuota(request.auth.uid))) {
+    if (!(await consumeQuota(uid))) {
       throw new HttpsError('resource-exhausted', 'Llegaste al límite diario del asistente. Vuelve mañana.');
     }
 
+    const system = await buildAssistantSystem({ uid, courseId, mode, groupId });
     const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { Authorization: `Bearer ${GROQ_API_KEY.value()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        messages: [{ role: 'system', content: str(systemInstruction).slice(0, MAX_SYSTEM) }, ...turns, { role: 'user', content: text }],
-        temperature: 0.6,
-        max_tokens: 700,
+        messages: [{ role: 'system', content: system.text.slice(0, MAX_SYSTEM) }, ...turns, { role: 'user', content: text }],
+        temperature: 0.5,
+        max_tokens: 800,
       }),
     });
-
     if (!res.ok) {
       const err = await res.json().catch(() => null);
       console.error('Groq error', res.status, err?.error?.message);
       throw new HttpsError('unavailable', 'El modelo no respondió.');
     }
-
     const data = await res.json();
-    const reply = data?.choices?.[0]?.message?.content?.trim();
-    if (!reply) throw new HttpsError('unavailable', 'Respuesta vacía del modelo.');
-    return { text: reply };
+    const raw = data?.choices?.[0]?.message?.content?.trim();
+    if (!raw) throw new HttpsError('unavailable', 'Respuesta vacía del modelo.');
+    const { text: reply, sources } = splitSources(raw);
+
+    const now = new Date();
+    const at = now.toISOString();
+    const messages = [...(existing?.messages || []), { role: 'user', text, at }, { role: 'assistant', text: reply, sources, at }].slice(-60);
+    await convRef.set({
+      uid, courseId, groupId, mode,
+      title: existing?.title || (text.length > 60 ? `${text.slice(0, 57)}…` : text),
+      messages, createdAt: existing?.createdAt || at, updatedAt: at,
+      // Se borran a los 2 meses (política TTL de Firestore sobre expiresAt).
+      expiresAt: new Date(new Date(existing?.createdAt || at).getTime() + CONVERSATION_DAYS * 86400000),
+    });
+    return { text: reply, sources, conversationId: convRef.id };
   },
 );
 
@@ -760,6 +866,44 @@ const meetAccessToken = async (organizer) => {
   return token.access_token;
 };
 
+// Crea una sala de Meet fija a nombre de MEET_ORGANIZER (en el emulador, un
+// enlace de mentira con `tag` para reconocerlo).
+const createSpace = async (tag, id) => {
+  if (IS_EMULATOR) {
+    return { name: `spaces/${tag}-${id}`, meetingUri: `https://meet.google.com/${tag}-${id.slice(0, 4).toLowerCase()}-lador`, meetingCode: 'emulador' };
+  }
+  const organizer = str(process.env.MEET_ORGANIZER).trim();
+  if (!organizer) throw new HttpsError('failed-precondition', 'Falta configurar la cuenta organizadora de Meet (MEET_ORGANIZER).');
+  const token = await meetAccessToken(organizer);
+  const res = await fetch('https://meet.googleapis.com/v2/spaces', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config: { accessType: 'TRUSTED', entryPointAccess: 'ALL' } }),
+  });
+  const space = await res.json().catch(() => null);
+  if (!res.ok || !space?.meetingUri) {
+    console.error('meet create', res.status, space?.error?.message);
+    throw new HttpsError(res.status === 403 ? 'failed-precondition' : 'internal', res.status === 403 ? 'Google Meet rechazó crear la reunión (revisa la API de Meet y la delegación de dominio).' : 'No se pudo crear la sala de Meet.');
+  }
+  return space;
+};
+
+// Grupos de trabajo (E12/D7): cada grupo que crea un alumno recibe su propia
+// sala de Meet apenas se crea. Es una sola y nadie la cambia (las reglas no
+// dejan que el alumno toque meetLink). Si falla, queda `meetError` para que el
+// docente lo vea y el admin pueda reintentar.
+export const createWorkGroupMeet = onDocumentCreated({ document: 'workGroups/{groupId}', region: 'us-central1', timeoutSeconds: 60 }, async (event) => {
+  const data = event.data?.data();
+  if (!data || data.meetLink) return;
+  try {
+    const space = await createSpace('grp', event.params.groupId);
+    await event.data.ref.update({ meetLink: space.meetingUri, meetSpace: space.name, meetCreatedAt: new Date().toISOString(), meetError: FieldValue.delete() });
+  } catch (err) {
+    console.error('workGroup meet', event.params.groupId, err?.message);
+    await event.data.ref.update({ meetError: String(err?.message || 'No se pudo crear la sala.') });
+  }
+});
+
 export const createMeetSpace = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, async (request) => {
   await assertAdmin(request);
   const groupId = str(request.data?.groupId).trim();
@@ -773,25 +917,7 @@ export const createMeetSpace = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, asy
     : ['classLink', 'meetSpace', 'meetCode', 'meetCreatedAt'];
   if (group[spaceField] && request.data?.replace !== true) return { link: group[linkField], classLink: group[linkField], created: false };
 
-  let space;
-  if (IS_EMULATOR) {
-    const tag = work ? 'trab' : 'emu';
-    space = { name: `spaces/${tag}-${groupId}`, meetingUri: `https://meet.google.com/${tag}-${groupId.slice(0, 4).toLowerCase()}-lador`, meetingCode: 'emulador' };
-  } else {
-    const organizer = str(process.env.MEET_ORGANIZER).trim();
-    if (!organizer) throw new HttpsError('failed-precondition', 'Falta configurar la cuenta organizadora de Meet (MEET_ORGANIZER).');
-    const token = await meetAccessToken(organizer);
-    const res = await fetch('https://meet.googleapis.com/v2/spaces', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config: { accessType: 'TRUSTED', entryPointAccess: 'ALL' } }),
-    });
-    space = await res.json().catch(() => null);
-    if (!res.ok || !space?.meetingUri) {
-      console.error('meet create', res.status, space?.error?.message);
-      throw new HttpsError(res.status === 403 ? 'failed-precondition' : 'internal', res.status === 403 ? 'Google Meet rechazó crear la reunión (revisa la API de Meet y la delegación de dominio).' : 'No se pudo crear la sala de Meet.');
-    }
-  }
+  const space = await createSpace(work ? 'trab' : 'emu', groupId);
   await groupRef.update({ [linkField]: space.meetingUri, [spaceField]: space.name, [codeField]: space.meetingCode || null, [dateField]: new Date().toISOString() });
   return { link: space.meetingUri, classLink: space.meetingUri, created: true };
 });

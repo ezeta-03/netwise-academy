@@ -45,6 +45,40 @@ service firebase.storage {
       allow delete: if false;
     }
 
+    // Capturas que el alumno adjunta a una solicitud de soporte (E9): cada
+    // uno escribe en su carpeta; las lee él mismo y el admin. Imagen o PDF de hasta 10 MB.
+    match /supportAttachments/{uid}/{fileName} {
+      allow read: if request.auth != null && (
+                    request.auth.uid == uid ||
+                    firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                  );
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|webp)|application/pdf');
+      allow delete: if false;
+    }
+
+    // Imágenes del banner del campus (A7): las ve cualquiera con sesión; las sube el admin.
+    match /campusBanners/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|webp)');
+      allow delete: if false;
+    }
+
+    // Sílabo (PDF) de cada curso (A8): lo sube el admin; lo descarga cualquiera
+    // desde la página del curso ("Descargar programa del curso").
+    match /syllabi/{courseId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin'
+                   && request.resource.size < 10 * 1024 * 1024
+                   && request.resource.contentType == 'application/pdf';
+      allow delete: if false;
+    }
+
     // Materiales que el docente sube en "Contenido" (ver uploadCourseMaterial
     // en lib/db.js). Cualquier usuario logueado puede leer (el alumno del
     // curso descarga el material); solo docente/admin puede escribir --

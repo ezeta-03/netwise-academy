@@ -26,6 +26,7 @@ import StudentAgenda from './pages/student/StudentAgenda';
 import StudentCursos from './pages/student/StudentCursos';
 import StudentEntregas from './pages/student/StudentEntregas';
 import StudentSoporte from './pages/student/StudentSoporte';
+import StudentSoporteConversacion from './pages/student/StudentSoporteConversacion';
 import StudentCourseLayout from './pages/student/StudentCourseLayout';
 import StudentCourseContenido from './pages/student/StudentCourseContenido';
 import StudentCourseSala from './pages/student/StudentCourseSala';
@@ -72,6 +73,8 @@ import AdminDocentes from './pages/admin/AdminDocentes';
 import AdminVentas from './pages/admin/AdminVentas';
 import AdminPagos from './pages/admin/AdminPagos';
 import AdminSoporte from './pages/admin/AdminSoporte';
+import AdminAsistente from './pages/admin/AdminAsistente';
+import AdminBanner from './pages/admin/AdminBanner';
 import AdminEquipo from './pages/admin/AdminEquipo';
 import AdminHistorial from './pages/admin/AdminHistorial';
 import AdminConfiguracion from './pages/admin/AdminConfiguracion';
@@ -189,6 +192,8 @@ function App() {
             <Route path="ventas" element={<AdminVentas />} />
             <Route path="pagos" element={<AdminPagos />} />
             <Route path="soporte" element={<AdminSoporte />} />
+            <Route path="asistente" element={<AdminAsistente />} />
+            <Route path="banner" element={<AdminBanner />} />
             <Route path="equipo" element={<AdminEquipo />} />
             <Route path="historial" element={<AdminHistorial />} />
             <Route path="configuracion" element={<AdminConfiguracion />} />
@@ -247,6 +252,7 @@ function App() {
             <Route path="cursos" element={<StudentCursos />} />
             <Route path="entregas" element={<StudentEntregas />} />
             <Route path="soporte" element={<StudentSoporte />} />
+            <Route path="soporte/:requestId" element={<StudentSoporteConversacion />} />
           </Route>
           <Route path="/student/curso/:courseId" element={<RoleRoute allowedRoles={['student']}><StudentCourseLayout /></RoleRoute>}>
             <Route index element={<Navigate to="contenido" replace />} />

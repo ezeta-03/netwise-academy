@@ -4,7 +4,9 @@ import { Calendar, ArrowRight, BookOpen, Clock3, Video } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
-import { fetchLiveSessions, fetchMyEnrollments, fetchMyOrders, isActiveEnrollment } from '../../lib/db';
+import { fetchLiveSessions, fetchMyEnrollments, fetchMyOrders, isActiveEnrollment, fetchCampusBanners } from '../../lib/db';
+import { activeBanner } from '../../lib/campusBanner';
+import CampusBanner from '../../components/CampusBanner';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import { fetchCourseStanding } from '../../lib/studentStanding';
 import { getClassCardState, daysUntil } from '../../lib/liveSessionStatus';
@@ -36,10 +38,14 @@ const StudentInicio = () => {
   const [rejectedOrders, setRejectedOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitItem, setSubmitItem] = useState(null);
+  const [banners, setBanners] = useState([]);
   // Sube cuando el admin aprueba un pago mientras el alumno mira esta página.
   const [reloadKey, setReloadKey] = useState(0);
 
   const enrolledCourses = courses.filter((c) => enrollments[c.id] && (enrollments[c.id].status || 'active') === 'active');
+
+  // Banner del campus (C3): el que esté activo, arriba de la clase de hoy.
+  useEffect(() => { fetchCampusBanners().then(setBanners).catch(() => {}); }, []);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -143,6 +149,8 @@ const StudentInicio = () => {
           <button className="admin-btn-edit" onClick={() => navigate(`/checkout/${o.courseId}`)}>Volver a registrar mi pago</button>
         </div>
       ))}
+
+      <CampusBanner banner={activeBanner(banners, now)} />
 
       {nextClass ? (
         <>

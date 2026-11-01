@@ -17,12 +17,14 @@ const stripMarkdown = (text) => text
   .replace(/^#{1,6}\s+/gm, '')
   .replace(/`{1,3}/g, '');
 
-// `history` es una lista de { role: 'user' | 'assistant', text }.
-export const askAssistant = async ({ systemInstruction, history, message }) => {
+// El servidor arma las instrucciones (lo que configura el admin, el sílabo,
+// los materiales y fechas del aula y la empresa del alumno) y guarda la
+// conversación. Devuelve { text, sources, conversationId }.
+export const askAssistant = async ({ courseId, groupId, conversationId, message }) => {
   if (!isAiConfigured()) throw new Error('missing-backend');
   const call = httpsCallable(functions, 'askAssistant', { timeout: 60000 });
-  const { data } = await call({ systemInstruction, history, message });
+  const { data } = await call({ courseId, groupId: groupId || null, conversationId: conversationId || null, message });
   const text = data?.text?.trim();
   if (!text) throw new Error('empty-response');
-  return stripMarkdown(text);
+  return { text: stripMarkdown(text), sources: data.sources || [], conversationId: data.conversationId };
 };

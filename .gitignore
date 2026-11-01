@@ -40,3 +40,6 @@ Thumbs.db
 
 # Capturas de Figma de referencia (no forman parte de la app)
 src/assets/figma_img/
+
+# Secretos para el emulador de Functions (ej. GROQ_API_KEY): nunca al repositorio.
+functions/.secret.local

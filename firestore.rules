@@ -399,9 +399,17 @@ service cloud.firestore {
       allow read: if canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId));
       // Solo gente del curso: quien lo gestiona o un alumno con matrícula activa
       // (antes cualquier cuenta podía renombrar o vaciar el equipo de otros).
-      allow create: if canManageCourse(string(request.resource.data.courseId)) || isEnrolledIn(string(request.resource.data.courseId));
+      allow create: if canManageCourse(string(request.resource.data.courseId)) || (
+        isEnrolledIn(string(request.resource.data.courseId))
+        && !('meetLink' in request.resource.data) && !('meetSpace' in request.resource.data)
+      );
+      // La sala de Meet del grupo la pone la función createWorkGroupMeet: un
+      // alumno no puede crearla ni cambiarla.
       allow update: if request.resource.data.courseId == resource.data.courseId
-        && (canManageCourse(string(resource.data.courseId)) || isEnrolledIn(string(resource.data.courseId)));
+        && (canManageCourse(string(resource.data.courseId)) || (
+          isEnrolledIn(string(resource.data.courseId))
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['meetLink', 'meetSpace', 'meetCreatedAt', 'meetError'])
+        ));
       allow delete: if canManageCourse(string(resource.data.courseId));
     }
 
@@ -425,10 +433,21 @@ service cloud.firestore {
     // Soporte y tutorías. Un usuario crea/lee sus propias solicitudes; el
     // admin puede leerlas todas y es el único que puede actualizar su estado
     // (ej. marcarla "resuelta") desde Admin > Soporte.
+    // Solicitudes de soporte con su hilo de mensajes (E9 / A5). Quien la creó
+    // solo puede sumar mensajes al hilo, volver a abrirla ('new') o marcarla
+    // resuelta; asignar, responder como soporte y todo lo demás es del admin.
     match /supportRequests/{requestId} {
       allow read: if isSignedIn() && (resource.data.requesterUid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid;
-      allow update: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.get('status', 'new') in ['new', 'pending'];
+      allow update: if isAdmin() || (
+        isSignedIn()
+        && resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messages', 'status', 'lastMessageAt', 'lastMessageFrom', 'resolvedAt'])
+        && request.resource.data.status in ['new', 'resolved']
+        && (request.resource.data.get('lastMessageFrom', null) == resource.data.get('lastMessageFrom', null) || request.resource.data.get('lastMessageFrom', null) == 'requester')
+      );
       allow delete: if false;
     }
 
@@ -492,6 +511,32 @@ service cloud.firestore {
     // incluye qué métodos de pago están activos. Lectura pública porque el
     // checkout debe poder mostrarlos incluso antes de que el comprador
     // inicie sesión; solo el admin la edita.
+    // Banner del campus (A7): lo leen los usuarios con sesión; lo maneja el
+    // admin. Un estudiante solo puede sumar un clic.
+    match /campusBanners/{bannerId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks'])
+        && request.resource.data.clicks == resource.data.get('clicks', 0) + 1
+      );
+    }
+
+    // Conversaciones con el Asistente IA: cada persona lee solo las suyas; las
+    // escribe solo la función askAssistant (y se borran a los 2 meses).
+    match /aiConversations/{conversationId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create, update: if false;
+    }
+
+    // Texto del sílabo de cada curso (lo extrae el admin al subir el PDF en
+    // Cursos y precios). Solo lo usa el asistente desde el servidor.
+    match /courseSyllabi/{courseId} {
+      allow read, write: if isAdmin();
+    }
+
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();

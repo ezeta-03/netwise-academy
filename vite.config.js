@@ -24,6 +24,8 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
+        // pdf.js solo lo usa el admin al subir un sílabo: no se precarga para todos.
+        globIgnores: ['**/pdf.min-*.js', '**/pdf.worker*'],
         // index.html siempre se pide a la red primero (si hay conexión).
         navigateFallback: null,
         runtimeCaching: [

@@ -20,6 +20,8 @@ const PAGE_LABELS = {
   '/admin/ventas': 'Ventas e inscripciones',
   '/admin/pagos': 'Métodos de pago',
   '/admin/soporte': 'Soporte',
+  '/admin/asistente': 'Asistente IA',
+  '/admin/banner': 'Banner del campus',
   '/admin/equipo': 'Equipo y permisos',
   '/admin/historial': 'Historial de cambios',
   '/admin/configuracion': 'Configuración',

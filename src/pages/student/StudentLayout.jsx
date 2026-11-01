@@ -38,7 +38,8 @@ const StudentLayout = () => {
   // teléfono se ve (null = sin tutorial, manda el estado propio).
   const drawerOpen = sidebarRequest ?? mobileOpen;
 
-  const currentLabel = PAGE_LABELS[location.pathname] || 'Mi campus';
+  // /student/soporte/:id (Ver conversación) muestra "Soporte".
+  const currentLabel = PAGE_LABELS[location.pathname] || PAGE_LABELS[location.pathname.split('/').slice(0, 3).join('/')] || 'Mi campus';
 
   // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
   const handleCollapseClick = () => {

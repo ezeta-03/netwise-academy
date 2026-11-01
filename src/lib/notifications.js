@@ -1,4 +1,6 @@
 import { getLiveSessionStatus } from './liveSessionStatus';
+import { ticketStatus, ticketTitle } from './support.js';
+import { activeBanner, isExternalLink } from './campusBanner.js';
 
 // Antes el sidebar mostraba 3 notificaciones hardcodeadas que nunca
 // cambiaban. Esto las reemplaza por notificaciones derivadas del estado
@@ -16,7 +18,7 @@ const ACCESS_NOTICE_MS = 14 * 24 * 3600 * 1000;
 
 // `enrollments`: matrículas activas del alumno ({ [courseId]: matrícula }).
 // `submissions`: sus entregas (para avisar cuando el docente las califica).
-export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledCourseIds, liveSessions, enrollments = {}, submissions = [], practices = [], now = Date.now() }) => {
+export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledCourseIds, liveSessions, enrollments = {}, submissions = [], practices = [], support = [], groupInvites = [], banners = [], now = Date.now() }) => {
   const notifications = [];
 
   Object.values(enrollments).forEach((e) => {
@@ -40,6 +42,39 @@ export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledC
       to: s.practiceId ? `/student/curso/${s.courseId}/entrega/practica/${s.practiceId}` : `/student/curso/${s.courseId}/entrega/modulo/${s.moduleId}`,
     });
   });
+  // Soporte respondió: con la fecha de la respuesta en el id, cada respuesta vuelve a avisar.
+  support.filter((t) => ticketStatus(t) === 'answered').forEach((t) => {
+    notifications.push({
+      id: `support_${t.id}_${t.lastMessageAt}`,
+      title: '💬 Soporte respondió tu solicitud',
+      detail: ticketTitle(t),
+      to: `/student/soporte/${t.id}`,
+    });
+  });
+
+  // Banner del campus (A7): el activo también llega a la campana, con su
+  // miniatura y el mismo link (el aviso nace el día que se activa).
+  const banner = activeBanner(banners, now);
+  if (banner) {
+    notifications.push({
+      id: `banner_${banner.id}`,
+      title: `📣 ${banner.title}`,
+      detail: 'Novedad de Netwise Academy',
+      image: banner.mobileImage || banner.desktopImage,
+      ...(isExternalLink(banner.link) ? { href: banner.link } : { to: banner.link }),
+    });
+  }
+
+  // Invitaciones a un grupo de trabajo (E12).
+  groupInvites.forEach((g) => {
+    notifications.push({
+      id: `group_invite_${g.id}`,
+      title: `👥 ${g.leaderName || 'Un compañero'} te invitó a "${g.name}"`,
+      detail: 'Grupo de trabajo · acéptala o recházala en Grupos de trabajo.',
+      to: `/student/curso/${g.courseId}/grupos`,
+    });
+  });
+
   // Una práctica nueva del docente se avisa durante una semana.
   practices.forEach((p) => {
     const since = new Date(p.createdAt || 0).getTime();
@@ -110,16 +145,25 @@ export const buildStudentNotifications = ({ courses, preregisteredIds, enrolledC
 // apruebe (ver approveOrder en lib/db.js) para recién matricular al
 // alumno. Igual que las del alumno, se recalculan a partir de `orders` en
 // vez de guardarse aparte.
-export const buildAdminNotifications = ({ orders }) => (
-  orders
+export const buildAdminNotifications = ({ orders, support = [] }) => [
+  ...orders
     .filter((o) => o.status === 'pending')
     .map((o) => ({
       id: `order_pending_${o.id}`,
       title: `🧾 Pago por validar: ${o.studentName}`,
       detail: `${o.courseTitle} · S/ ${Number(o.amount).toFixed(2)} · ${o.code}`,
       to: '/admin/ventas',
-    }))
-);
+    })),
+  // Pedidos de soporte esperando respuesta (los nuevos y los que el alumno volvió a abrir).
+  ...support
+    .filter((t) => t.type !== 'tutoria' && ticketStatus(t) === 'new')
+    .map((t) => ({
+      id: `support_new_${t.id}_${t.lastMessageAt || t.createdAt}`,
+      title: `🛟 Soporte: ${t.requesterName}`,
+      detail: ticketTitle(t),
+      to: '/admin/soporte',
+    })),
+];
 
 // Notificaciones para el Docente: entregas que esperan su revisión, una por
 // curso. `pendingByCourse`: [{ course, pending }]. El número va en el id para

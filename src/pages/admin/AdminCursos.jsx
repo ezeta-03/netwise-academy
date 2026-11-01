@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, X, BookOpen } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
+import SyllabusModal from '../../components/SyllabusModal';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -97,6 +98,7 @@ const AdminCursos = () => {
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
   const [editing, setEditing] = useState(null);
+  const [syllabusFor, setSyllabusFor] = useState(null);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
 
@@ -216,6 +218,10 @@ const AdminCursos = () => {
                       {/* Módulos, objetivos, contenidos, sesiones, materiales y entregables:
                           el admin usa el mismo editor del docente (TeacherCourseContenido). */}
                       <button className="admin-btn-ghost" onClick={() => navigate(`/admin/curso/${c.id}/contenido`)}><BookOpen size={14} /> Editar contenido</button>
+                      {/* Sílabo (A8): el mismo PDF va a la web y al Asistente IA. */}
+                      {c.syllabus?.url
+                        ? <button className="admin-btn-ghost" onClick={() => setSyllabusFor(c)}><span className="dot-ok" /> Sílabo</button>
+                        : <button className="admin-btn-ghost" style={{ color: '#B45309', borderColor: '#FCD9A8' }} onClick={() => setSyllabusFor(c)}>+ Subir sílabo</button>}
                     </div>
                   </td>
                 </tr>
@@ -229,6 +235,7 @@ const AdminCursos = () => {
         </div>
       </div>
 
+      {syllabusFor && <SyllabusModal course={syllabusFor} onClose={() => setSyllabusFor(null)} onSaved={refresh} />}
       {editing && (
         <EditCourseModal course={editing} adminName={adminName} adminUid={currentUser?.uid} onClose={() => setEditing(null)} onSaved={refresh} />
       )}

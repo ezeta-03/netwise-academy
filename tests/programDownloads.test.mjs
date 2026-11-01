@@ -35,7 +35,7 @@ describe('programDownloads', () => {
   });
 
   test('usa Object.hasOwn para que un id inesperado no devuelva miembros del prototipo', () => {
-    assert.match(src, /Object\.hasOwn\(PROGRAM_PDFS, courseId\)/);
+    assert.match(src, /Object\.hasOwn\(PROGRAM_PDFS, courseOrId\)/);
   });
 
   test('el nombre de archivo se sanea', () => {

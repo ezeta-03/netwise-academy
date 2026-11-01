@@ -167,7 +167,7 @@ const CourseDetail = () => {
                 </div>
               )}
 
-              {getProgramPdf(course.id) && (
+              {getProgramPdf(course) && (
                 <div className="cd-download-wrap">
                   <button className="cd-download-btn" onClick={() => setDownloadModalOpen(true)}><Download size={16} /> Recibir el programa del curso</button>
                   <p className="cd-download-caption">Te lo enviamos a tu correo: contenidos y entregables de cada módulo.</p>

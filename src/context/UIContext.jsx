@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
-import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, fetchOrders, fetchCourseSubmissions, fetchPractices } from '../lib/db';
+import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, fetchOrders, fetchCourseSubmissions, fetchPractices, fetchSupportRequests, fetchAllSupportRequests, fetchWorkGroups, fetchCampusBanners } from '../lib/db';
 import { buildStudentNotifications, buildAdminNotifications, buildTeacherNotifications } from '../lib/notifications';
 import { sessionsForStudent } from '../lib/groupAssignment';
 import LoginModal from '../components/LoginModal';
@@ -62,7 +62,8 @@ export const UIProvider = ({ children }) => {
     const uid = currentUser?.uid;
 
     if (isAdmin) {
-      fetchOrders().then((orders) => setNotifications(buildAdminNotifications({ orders }))).catch(() => {});
+      Promise.all([fetchOrders(), fetchAllSupportRequests().catch(() => [])])
+        .then(([orders, support]) => setNotifications(buildAdminNotifications({ orders, support }))).catch(() => {});
       return;
     }
 
@@ -80,10 +81,13 @@ export const UIProvider = ({ children }) => {
     Promise.all([fetchMyPreregistrations(uid), fetchMyActiveEnrollments(uid)]).then(async ([preregisteredIds, enrollments]) => {
       // Clases y entregas se leen por curso: solo los cursos con matrícula activa.
       const active = Object.values(enrollments);
-      const [liveSessions, submissions, practices] = await Promise.all([
+      const [liveSessions, submissions, practices, support, workGroups, banners] = await Promise.all([
         fetchLiveSessions(active.map((e) => e.courseId)),
         Promise.all(active.map((e) => fetchCourseSubmissions(e.courseId, uid).catch(() => []))).then((lists) => lists.flat()),
         active.length ? fetchPractices(active.map((e) => e.courseId)).catch(() => []) : Promise.resolve([]),
+        fetchSupportRequests(uid).catch(() => []),
+        Promise.all(active.map((e) => fetchWorkGroups(e.courseId).catch(() => []))).then((lists) => lists.flat()),
+        fetchCampusBanners().catch(() => []),
       ]);
       setNotifications(buildStudentNotifications({
         courses,
@@ -94,6 +98,9 @@ export const UIProvider = ({ children }) => {
         submissions,
         // Prácticas nuevas de SU aula.
         practices: practices.filter((p) => !p.groupId || p.groupId === enrollments[p.courseId]?.groupId),
+        support,
+        banners,
+        groupInvites: workGroups.filter((g) => (g.pendingUids || []).includes(uid) && !(g.memberUids || []).includes(uid)),
       }));
     }).catch(() => {});
   }, [currentUser, courses]);
@@ -207,10 +214,11 @@ export const UIProvider = ({ children }) => {
               <div
                 key={n.id}
                 className={`notif-item ${n.read ? 'read' : 'unread'}`}
-                style={n.to ? { cursor: 'pointer' } : undefined}
-                onClick={n.to ? () => { closeSidebar(); navigate(n.to); } : undefined}
+                style={n.to || n.href ? { cursor: 'pointer' } : undefined}
+                onClick={n.to ? () => { closeSidebar(); navigate(n.to); } : n.href ? () => { closeSidebar(); window.open(n.href, '_blank', 'noopener'); } : undefined}
               >
                 <div className="notif-dot"></div>
+                {n.image && <img className="notif-thumb" src={n.image} alt="" />}
                 <div>
                   <div className="notif-title">{n.title}</div>
                   {n.detail && <div className="notif-time">{n.detail}</div>}

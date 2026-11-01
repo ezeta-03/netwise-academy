@@ -1,5 +1,5 @@
 import { db, storage, auth, functions, createAccountKeepingSession } from './firebase';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
@@ -1234,6 +1234,107 @@ export const saveAcademySettings = async (settings) => {
   return settings;
 };
 
+// --- Banner del campus (colección `campusBanners`, ver lib/campusBanner.js) ---
+
+export const fetchCampusBanners = async () => {
+  if (!isConfigValid) return JSON.parse(localStorage.getItem('mock_campus_banners') || '[]');
+  const snap = await getDocs(collection(db, 'campusBanners'));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.startsAt).localeCompare(String(a.startsAt)));
+};
+
+export const saveCampusBanner = async ({ id, ...data }) => {
+  const now = new Date().toISOString();
+  if (!isConfigValid) {
+    const list = JSON.parse(localStorage.getItem('mock_campus_banners') || '[]');
+    const bid = id || `banner-${Date.now()}`;
+    const idx = list.findIndex((b) => b.id === bid);
+    const next = { ...(idx >= 0 ? list[idx] : { clicks: 0, createdAt: now }), ...data, id: bid, updatedAt: now };
+    if (idx >= 0) list[idx] = next; else list.push(next);
+    localStorage.setItem('mock_campus_banners', JSON.stringify(list));
+    return next;
+  }
+  if (id) {
+    await updateDoc(doc(db, 'campusBanners', id), { ...data, updatedAt: now });
+    return { id, ...data };
+  }
+  const ref = await addDoc(collection(db, 'campusBanners'), { clicks: 0, ...data, createdAt: now, updatedAt: now });
+  return { id: ref.id, clicks: 0, ...data };
+};
+
+export const uploadBannerImage = async (file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(file); });
+  }
+  const safeName = file.name.replace(/[^\w.-]+/g, '_');
+  const ref = storageRef(storage, `campusBanners/${Date.now()}_${safeName}`);
+  await uploadBytes(ref, file, { contentType: file.type });
+  return getDownloadURL(ref);
+};
+
+// Un clic del estudiante en el banner (las reglas solo dejan sumar 1).
+export const recordBannerClick = async (id) => {
+  if (!isConfigValid) return;
+  await updateDoc(doc(db, 'campusBanners', id), { clicks: increment(1) });
+};
+
+// --- Asistente IA: instrucciones (settings/assistant) e historial (`aiConversations`) ---
+
+export const fetchAssistantSettings = async () => {
+  if (!isConfigValid) return JSON.parse(localStorage.getItem('mock_assistant_settings') || '{}');
+  const snap = await getDoc(doc(db, 'settings', 'assistant'));
+  return snap.exists() ? snap.data() : {};
+};
+
+export const saveAssistantSettings = async (patch) => {
+  if (!isConfigValid) {
+    localStorage.setItem('mock_assistant_settings', JSON.stringify({ ...JSON.parse(localStorage.getItem('mock_assistant_settings') || '{}'), ...patch }));
+    return;
+  }
+  await setDoc(doc(db, 'settings', 'assistant'), { ...patch, updatedAt: new Date().toISOString() }, { merge: true });
+};
+
+// Conversaciones de una persona en un curso, la más reciente primero (las
+// vencidas -más de 2 meses- no se muestran aunque la limpieza aún no corra).
+export const fetchMyConversations = async (uid, courseId) => {
+  if (!isConfigValid) return [];
+  const snap = await getDocs(query(collection(db, 'aiConversations'), where('uid', '==', uid)));
+  const now = Date.now();
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    .filter((c) => String(c.courseId) === String(courseId) && (!c.expiresAt || (c.expiresAt.toDate ? c.expiresAt.toDate() : new Date(c.expiresAt)).getTime() > now))
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+};
+
+export const deleteConversation = async (id) => {
+  if (!isConfigValid) return;
+  await deleteDoc(doc(db, 'aiConversations', id));
+};
+
+// --- Sílabo de cada curso (A8) ---
+// El PDF va a Storage y su link a courseOfferings (lo usa la página del curso
+// para "Descargar programa"); el texto va aparte a courseSyllabi, que solo
+// lee el asistente desde el servidor.
+export const saveCourseSyllabus = async ({ courseId, courseTitle, file, text, pages }) => {
+  const uploadedAt = new Date().toISOString();
+  if (!isConfigValid) {
+    const url = await new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(file); });
+    const syllabus = { url, name: file.name, uploadedAt, pages: pages || null, chars: (text || '').length };
+    const raw = JSON.parse(localStorage.getItem('mock_course_offerings') || '{}');
+    raw[courseId] = { ...(raw[courseId] || {}), syllabus };
+    localStorage.setItem('mock_course_offerings', JSON.stringify(raw));
+    return syllabus;
+  }
+  const safeName = file.name.replace(/[^\w.-]+/g, '_');
+  const ref = storageRef(storage, `syllabi/${courseId}/${Date.now()}_${safeName}`);
+  await uploadBytes(ref, file, { contentType: 'application/pdf' });
+  const url = await getDownloadURL(ref);
+  const syllabus = { url, name: file.name, uploadedAt, pages: pages || null, chars: (text || '').length };
+  await Promise.all([
+    setDoc(doc(db, 'courseOfferings', String(courseId)), { syllabus }, { merge: true }),
+    setDoc(doc(db, 'courseSyllabi', String(courseId)), { courseId, courseTitle, text: text || '', updatedAt: uploadedAt }),
+  ]);
+  return syllabus;
+};
+
 // --- Entregas de un módulo (colección Firestore `submissions`) ---
 // Un doc por alumno+módulo. El alumno presenta un archivo (Storage, ver
 // uploadSubmissionFile) y/o un link o descripción (`note`); el docente la
@@ -1419,10 +1520,17 @@ export const fetchSupportRequests = async (requesterUid) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const createSupportRequest = async ({ requesterUid, requesterName, requesterRole, type, courseTitle, groupName, message }) => {
+// Una solicitud nueva ya trae su hilo (`messages`): el primer mensaje es el
+// del alumno; soporte responde en el mismo hilo (ver addSupportMessage).
+// `category`: tipo de problema (lib/support.js); `attachment`: captura { url, name }.
+export const createSupportRequest = async ({ requesterUid, requesterName, requesterRole, requesterEmail, type, category, courseId, courseTitle, groupName, message, attachment, title }) => {
+  const now = new Date().toISOString();
+  const first = { from: 'requester', authorName: requesterName || '', text: message || '', at: now, ...(attachment ? { attachment } : {}) };
   const payload = {
-    requesterUid, requesterName, requesterRole, type, courseTitle: courseTitle || null, groupName: groupName || null,
-    message: message || '', status: 'pending', createdAt: new Date().toISOString(),
+    requesterUid, requesterName, requesterRole, requesterEmail: requesterEmail || null, type: type || 'plataforma',
+    category: category || null, courseId: courseId ?? null, courseTitle: courseTitle || null, groupName: groupName || null,
+    title: title || null, message: message || '', messages: message ? [first] : [],
+    status: 'new', createdAt: now, lastMessageAt: now, lastMessageFrom: 'requester',
   };
 
   if (!isConfigValid) {
@@ -1436,6 +1544,75 @@ export const createSupportRequest = async ({ requesterUid, requesterName, reques
 
   const ref = await addDoc(collection(db, 'supportRequests'), payload);
   return { id: ref.id, ...payload };
+};
+
+export const fetchSupportRequest = async (requestId) => {
+  if (!isConfigValid) {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('mock_support_')) {
+        const found = JSON.parse(localStorage.getItem(key) || '[]').find((r) => r.id === requestId);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  const snap = await getDoc(doc(db, 'supportRequests', requestId));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+};
+
+// Agrega un mensaje al hilo. `from`: 'requester' (el alumno: si estaba
+// resuelta se vuelve a abrir) o 'support' (queda Respondida). `status`
+// opcional fuerza el estado (ej. "Ya se resolvió").
+export const addSupportMessage = async (requestId, { from, authorName, authorUid, text, attachment, link }, status) => {
+  const now = new Date().toISOString();
+  const msg = { from, authorName: authorName || '', text: text || '', at: now, ...(authorUid ? { authorUid } : {}), ...(attachment ? { attachment } : {}), ...(link ? { link } : {}) };
+  const nextStatus = status || (from === 'support' ? 'answered' : 'new');
+  if (!isConfigValid) {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('mock_support_')) continue;
+      const list = JSON.parse(localStorage.getItem(key) || '[]');
+      const idx = list.findIndex((r) => r.id === requestId);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], messages: [...(list[idx].messages || []), msg], status: nextStatus, lastMessageAt: now, lastMessageFrom: from };
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+    }
+    return msg;
+  }
+  const patch = { status: nextStatus, lastMessageAt: now, lastMessageFrom: from };
+  if (text || attachment) patch.messages = arrayUnion(msg);
+  await updateDoc(doc(db, 'supportRequests', requestId), patch);
+  return msg;
+};
+
+// El alumno marca "Ya se resolvió" (sin mensaje nuevo).
+export const resolveMySupportRequest = async (requestId) => {
+  if (!isConfigValid) return;
+  await updateDoc(doc(db, 'supportRequests', requestId), { status: 'resolved', resolvedAt: new Date().toISOString() });
+};
+
+// Cambios del admin: asignar, marcar resuelto, etc.
+export const updateSupportRequest = async (requestId, patch) => {
+  if (!isConfigValid) return;
+  await updateDoc(doc(db, 'supportRequests', requestId), patch);
+};
+
+// Captura que adjunta el alumno (imagen hasta 10 MB, ver storage.rules).
+export const uploadSupportAttachment = async (uid, file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ url: reader.result, name: file.name });
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+      reader.readAsDataURL(file);
+    });
+  }
+  const safeName = file.name.replace(/[^\w.-]+/g, '_');
+  const ref = storageRef(storage, `supportAttachments/${uid}/${Date.now()}_${safeName}`);
+  await uploadBytes(ref, file, { contentType: file.type });
+  return { url: await getDownloadURL(ref), name: file.name };
 };
 
 // Todas las solicitudes, para el Admin (a diferencia de fetchSupportRequests,
@@ -1456,10 +1633,7 @@ export const fetchAllSupportRequests = async () => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const updateSupportRequestStatus = async (requestId, status) => {
-  if (!isConfigValid) return;
-  await updateDoc(doc(db, 'supportRequests', requestId), { status });
-};
+export const updateSupportRequestStatus = async (requestId, status) => updateSupportRequest(requestId, { status });
 
 // --- Leads del programa descargable (colección `programLeads`) ---
 // Captura de contacto antes de descargar el programa de un curso, o interés
@@ -1806,13 +1980,17 @@ export const fetchWorkGroups = async (courseId) => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-export const createWorkGroup = async ({ courseId, courseTitle, name, description, maxMembers, leaderUid, leaderName, memberUids, memberNames }) => {
+// `groupId`: el aula (cada grupo es de una sola aula). `pendingUids` son los
+// invitados al crear; la sala de Meet la agrega la función createWorkGroupMeet.
+export const createWorkGroup = async ({ courseId, courseTitle, groupId, name, description, maxMembers, leaderUid, leaderName, memberUids, memberNames, pendingUids, pendingNames }) => {
+  const now = new Date().toISOString();
   const payload = {
-    courseId, courseTitle, name, description: description || '', maxMembers: maxMembers || 5,
+    courseId, courseTitle, groupId: groupId || null, name, description: description || '', maxMembers: maxMembers || 8,
     leaderUid: leaderUid || null, leaderName: leaderName || null,
     memberUids: memberUids || [], memberNames: memberNames || [],
-    pendingUids: [], pendingNames: [],
-    createdAt: new Date().toISOString(),
+    pendingUids: pendingUids || [], pendingNames: pendingNames || [],
+    invitedAt: Object.fromEntries((pendingUids || []).map((uid) => [uid, now])),
+    createdAt: now,
   };
 
   if (!isConfigValid) {
@@ -1826,6 +2004,15 @@ export const createWorkGroup = async ({ courseId, courseTitle, name, description
 
   const ref = await addDoc(collection(db, 'workGroups'), payload);
   return { id: ref.id, ...payload };
+};
+
+export const deleteWorkGroup = async (groupId, courseId) => {
+  if (!isConfigValid) {
+    const key = `mock_work_groups_${courseId}`;
+    localStorage.setItem(key, JSON.stringify(JSON.parse(localStorage.getItem(key) || '[]').filter((g) => g.id !== groupId)));
+    return;
+  }
+  await deleteDoc(doc(db, 'workGroups', groupId));
 };
 
 export const updateWorkGroup = async (groupId, courseId, patch) => {
