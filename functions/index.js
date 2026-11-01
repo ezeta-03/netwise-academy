@@ -168,7 +168,11 @@ export const askAssistant = onCall(
         model: MODEL,
         messages: [{ role: 'system', content: system.text.slice(0, MAX_SYSTEM) }, ...turns, { role: 'user', content: text }],
         temperature: 0.5,
-        max_tokens: 800,
+        // gpt-oss razona antes de responder y ese razonamiento sale del mismo
+        // tope: con el sílabo en las instrucciones, 800 tokens se iban en
+        // pensar y la respuesta llegaba vacía. Razonamiento corto y más margen.
+        reasoning_effort: 'low',
+        max_completion_tokens: 2500,
       }),
     });
     if (!res.ok) {
@@ -178,7 +182,10 @@ export const askAssistant = onCall(
     }
     const data = await res.json();
     const raw = data?.choices?.[0]?.message?.content?.trim();
-    if (!raw) throw new HttpsError('unavailable', 'Respuesta vacía del modelo.');
+    if (!raw) {
+      console.error('Groq respuesta vacía', data?.choices?.[0]?.finish_reason, JSON.stringify(data?.usage || {}));
+      throw new HttpsError('unavailable', 'Respuesta vacía del modelo.');
+    }
     const { text: reply, sources } = splitSources(raw);
 
     const now = new Date();
