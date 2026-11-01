@@ -16,6 +16,7 @@ import dns from 'node:dns/promises';
 import nodemailer from 'nodemailer';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
+import { gradeFormulaText, splitSources } from './assistantText.js';
 
 initializeApp();
 const db = getFirestore();
@@ -59,7 +60,7 @@ const FIXED_RULES = [
   'No hagas las entregas ni el trabajo del alumno: explica y guía, pero no entregues el trabajo resuelto.',
   'No des ni adelantes notas.',
   'La interfaz muestra texto plano: no uses Markdown (nada de **, #, tablas ni backticks). Para listas usa un guion simple "-".',
-  'Al final de cada respuesta, en una línea aparte, escribe las fuentes que usaste con este formato exacto: [[fuentes: Sílabo | Material: nombre del archivo | Fechas de entrega | Tu empresa]] (solo las que usaste; si no usaste ninguna, no escribas esa línea).',
+  'Al final de cada respuesta, en una línea aparte y sin ningún título antes, escribe las fuentes con este formato exacto: [[fuentes: Sílabo | Material: nombre exacto del archivo | Fechas de entrega | Tu empresa]]. Pon solo las que de verdad usaste para esa respuesta y que aparecen en tus instrucciones; si no usaste ninguna, no escribas esa línea.',
 ];
 const MAX_SYLLABUS = 14000;
 const CONVERSATION_DAYS = 60;
@@ -101,10 +102,12 @@ const buildAssistantSystem = async ({ uid, courseId, mode, groupId }) => {
 
   return {
     hasSyllabus: !!syllabus,
+    available: { syllabus: !!syllabus, materials: modules.flatMap((m) => (m.materials || []).map((x) => x.title).filter(Boolean)), dates: dueLines.length > 0, company: !!company },
     text: [
       mode === 'teacher' ? cfg.teacherInstructions : cfg.studentInstructions,
       `Reglas que siempre cumples:\n${FIXED_RULES.map((r) => `- ${r}`).join('\n')}\nMensaje fijo para temas fuera del curso: "${cfg.offTopicMessage}"`,
       `Curso: "${courseTitle}".`,
+      gradeFormulaText(courseId),
       syllabus ? `Sílabo del curso:\n${syllabus}` : 'Este curso todavía no tiene sílabo cargado: responde solo con lo que sigue y avisa si te falta información.',
       moduleLines.length ? `Módulos del curso:\n${moduleLines.join('\n')}` : '',
       materials.length ? `Materiales que subió el docente:\n${materials.join('\n')}` : '',
@@ -112,13 +115,6 @@ const buildAssistantSystem = async ({ uid, courseId, mode, groupId }) => {
       company,
     ].filter(Boolean).join('\n\n'),
   };
-};
-
-// "[[fuentes: Sílabo | Material: X]]" al final de la respuesta -> lista aparte.
-const splitSources = (reply) => {
-  const m = reply.match(/\[\[\s*fuentes?\s*:([^\]]*)\]\]\s*$/i);
-  if (!m) return { text: reply, sources: [] };
-  return { text: reply.slice(0, m.index).trim(), sources: m[1].split('|').map((x) => x.trim()).filter(Boolean).slice(0, 4) };
 };
 
 // Asistente IA (E13 alumno / docente): cada curso y aula tiene su asistente y
@@ -186,7 +182,7 @@ export const askAssistant = onCall(
       console.error('Groq respuesta vacía', data?.choices?.[0]?.finish_reason, JSON.stringify(data?.usage || {}));
       throw new HttpsError('unavailable', 'Respuesta vacía del modelo.');
     }
-    const { text: reply, sources } = splitSources(raw);
+    const { text: reply, sources } = splitSources(raw, system.available);
 
     const now = new Date();
     const at = now.toISOString();
