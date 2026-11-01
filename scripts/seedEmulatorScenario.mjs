@@ -5,7 +5,7 @@
 // 127.0.0.1: nunca toca producción.
 //
 // Uso: npm run emulators  (en otra terminal)  →  node scripts/seedEmulatorScenario.mjs
-process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
+process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
 process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
 
 const { initializeApp } = await import('firebase-admin/app');

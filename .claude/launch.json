@@ -21,6 +21,18 @@
       "port": 5174
     },
     {
+      "name": "netwise-emu-8085",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:emu"
+      ],
+      "port": 5174,
+      "env": {
+        "VITE_FIRESTORE_EMULATOR_PORT": "8085"
+      }
+    },
+    {
       "name": "netwise-emulators",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
