@@ -1,6 +1,6 @@
 import { db, storage, auth, functions, createAccountKeepingSession } from './firebase';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, query, orderBy, where, runTransaction, arrayUnion, arrayRemove, increment } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { COURSES, CATEGORIES, LIVE_SESSIONS } from './data';
@@ -1027,7 +1027,9 @@ export const uploadSubmissionFile = async (uid, courseId, moduleId, file) => {
 // Archivo que el docente sube para "Materiales de este módulo" (PDF/DOCX/PPT)
 // -- misma idea que uploadPaymentProof: en modo mock no hay Storage, así que
 // se guarda como data URL en localStorage junto con el resto del contenido.
-export const uploadCourseMaterial = async (courseId, moduleId, file) => {
+// `onProgress(fracción 0..1)`: la subida va por partes, así el docente ve
+// cuánto falta con archivos grandes (hasta 20 MB, ver storage.rules).
+export const uploadCourseMaterial = async (courseId, moduleId, file, onProgress) => {
   if (!isConfigValid) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1038,7 +1040,9 @@ export const uploadCourseMaterial = async (courseId, moduleId, file) => {
   }
   const path = `courseMaterials/${courseId}/${moduleId}_${Date.now()}_${file.name}`;
   const ref = storageRef(storage, path);
-  await uploadBytes(ref, file);
+  const task = uploadBytesResumable(ref, file);
+  task.on('state_changed', (snap) => onProgress?.(snap.totalBytes ? snap.bytesTransferred / snap.totalBytes : 0));
+  await task;
   return getDownloadURL(ref);
 };
 

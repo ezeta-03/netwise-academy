@@ -12,7 +12,9 @@ import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-const MAX_MATERIAL_SIZE = 5 * 1024 * 1024;
+const MAX_MATERIAL_MB = 20;
+const MAX_MATERIAL_SIZE = MAX_MATERIAL_MB * 1024 * 1024;
+const fmtMb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
 const MATERIAL_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx';
 const MATERIAL_TYPE_RE = /application\/(pdf|msword|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation))/;
 
@@ -96,6 +98,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   const [file, setFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState(null); // 0..1 mientras sube el archivo
   const fileInputRef = useRef(null);
   const canSave = title.trim() && (file || url.trim());
   // El botón dice qué falta en vez de quedarse gris sin explicación.
@@ -104,20 +107,22 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   const applyFile = (f) => {
     if (!f) return;
     if (!MATERIAL_TYPE_RE.test(f.type)) { addToast('Solo se aceptan archivos PDF, DOCX o PPT.', 'error'); return; }
-    if (f.size > MAX_MATERIAL_SIZE) { addToast('El archivo pesa más de 5.0MB.', 'error'); return; }
+    if (f.size > MAX_MATERIAL_SIZE) { addToast(`El archivo pesa más de ${MAX_MATERIAL_MB} MB. Súbelo a Drive y pega el enlace.`, 'error'); return; }
     setFile(f);
   };
 
   const handleSave = async () => {
     if (!file && !isSafeLink(url)) { addToast('El enlace debe empezar con http:// o https://', 'error'); return; }
     setSaving(true);
+    if (file) setProgress(0);
     try {
-      const finalUrl = file ? await uploadCourseMaterial(courseId, moduleId, file) : url.trim();
+      const finalUrl = file ? await uploadCourseMaterial(courseId, moduleId, file, setProgress) : url.trim();
       onSave({ id: uid('mat'), title: title.trim(), category, url: finalUrl });
     } catch {
       addToast('No se pudo subir el archivo. Intenta de nuevo.', 'error');
     } finally {
       setSaving(false);
+      setProgress(null);
     }
   };
 
@@ -150,17 +155,23 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
         >
           {file ? (
             <div className="dash-upload-zone-file">
-              <FileText size={16} /> {file.name}
-              <button type="button" className="admin-icon-btn" onClick={(e) => { e.stopPropagation(); setFile(null); }}><X size={13} /></button>
+              <FileText size={16} /> {file.name} <span className="admin-cell-sub">{fmtMb(file.size)}</span>
+              {!saving && <button type="button" className="admin-icon-btn" onClick={(e) => { e.stopPropagation(); setFile(null); }}><X size={13} /></button>}
             </div>
           ) : (
             <>
               <div className="dash-upload-zone-icon"><UploadCloud size={22} /></div>
               <div className="dash-upload-zone-text">Arrastra y suelta o <span className="dash-upload-zone-link">elige el archivo</span> a subir.</div>
-              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT. Máx 5.0MB</div>
+              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT. Máx {MAX_MATERIAL_MB} MB</div>
             </>
           )}
         </div>
+        {progress !== null && file && (
+          <div style={{ marginTop: 8 }} role="progressbar" aria-label="Subiendo archivo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
+            <div className="progress-bar" style={{ height: 6 }}><div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%`, transition: 'width .2s ease', animation: 'none' }}></div></div>
+            <div className="admin-cell-sub" style={{ marginTop: 4 }}>Subiendo {Math.round(progress * 100)}% · {fmtMb(file.size * progress)} de {fmtMb(file.size)}</div>
+          </div>
+        )}
       </div>
 
       <div className="dash-upload-divider">o</div>
@@ -170,7 +181,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
       <div className="admin-modal-actions">
         <button className="admin-btn-ghost" onClick={onCancel}>Cancelar</button>
         {missing && <span className="admin-cell-sub" style={{ alignSelf: 'center', marginRight: 'auto', color: '#B45309' }}>{missing}</span>}
-        <button className="admin-btn-edit" disabled={!canSave || saving} title={missing || undefined} onClick={handleSave}><Save size={13} /> {saving ? 'Guardando...' : 'Guardar material'}</button>
+        <button className="admin-btn-edit" disabled={!canSave || saving} title={missing || undefined} onClick={handleSave}><Save size={13} /> {progress !== null ? `Subiendo ${Math.round(progress * 100)}%...` : saving ? 'Guardando...' : 'Guardar material'}</button>
       </div>
     </div>
   );
