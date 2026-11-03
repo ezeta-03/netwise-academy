@@ -12,7 +12,7 @@ import { ModulesRailPanel, GuidePanel } from '../../components/CourseGuidePanels
 
 const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-const MAX_MATERIAL_SIZE = 2 * 1024 * 1024;
+const MAX_MATERIAL_SIZE = 5 * 1024 * 1024;
 const MATERIAL_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx';
 const MATERIAL_TYPE_RE = /application\/(pdf|msword|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation))/;
 
@@ -104,7 +104,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
   const applyFile = (f) => {
     if (!f) return;
     if (!MATERIAL_TYPE_RE.test(f.type)) { addToast('Solo se aceptan archivos PDF, DOCX o PPT.', 'error'); return; }
-    if (f.size > MAX_MATERIAL_SIZE) { addToast('El archivo pesa más de 2.0MB.', 'error'); return; }
+    if (f.size > MAX_MATERIAL_SIZE) { addToast('El archivo pesa más de 5.0MB.', 'error'); return; }
     setFile(f);
   };
 
@@ -157,7 +157,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
             <>
               <div className="dash-upload-zone-icon"><UploadCloud size={22} /></div>
               <div className="dash-upload-zone-text">Arrastra y suelta o <span className="dash-upload-zone-link">elige el archivo</span> a subir.</div>
-              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT. Máx 2.0MB</div>
+              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT. Máx 5.0MB</div>
             </>
           )}
         </div>
