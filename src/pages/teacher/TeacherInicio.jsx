@@ -12,6 +12,7 @@ import { getClassCardState, daysUntil, isPendingClass } from '../../lib/liveSess
 import { meetLinkFor } from '../../lib/classLinks';
 import { courseRoster } from '../../lib/roster';
 import { buildClassList, normalizeAttendance } from '../../lib/classList';
+import { withTakenSessions } from '../../lib/attendance';
 import { deliverableDueDate } from '../../lib/deliveryDates';
 import { deliverableModules } from '../../lib/weights';
 import { buildToReview, buildAttentionList } from '../../lib/teacherHome';
@@ -82,10 +83,13 @@ const TeacherInicio = () => {
         const group = groupById.get(enr?.groupId) || null;
         const graded = deliverableModules(modules);
         const classList = buildClassList({ liveSessions: allSessions.filter((s) => s.courseId?.toString() === course.id.toString()), modules, groupId: group?.id || null, doneIds: progress[group?.id] || [] });
+        // Registros de su aula: una clase en la que ya se tomó lista cuenta como dictada para todos.
+        const aulaOf = (uid) => groupById.get(enrollmentOf.get(`${course.id}_${uid}`)?.groupId)?.id || null;
+        const aulaRecords = normalizeAttendance(att.filter((a) => aulaOf(a.uid) === (group?.id || null)), classList);
         return {
           ...r, course, email: enr?.studentEmail || null, groupId: group?.id || null,
-          sessions: classList,
-          attendance: normalizeAttendance(att.filter((a) => a.uid === r.uid), classList),
+          sessions: withTakenSessions(classList, aulaRecords),
+          attendance: aulaRecords.filter((a) => a.uid === r.uid),
           submissions: subs.filter((s) => s.uid === r.uid && !s.practiceId),
           overdueModules: graded
             .map((m) => ({ m, due: deliverableDueDate(m, modules.indexOf(m), group) }))

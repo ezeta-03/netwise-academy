@@ -26,6 +26,15 @@ export const attendanceStats = (sessions, records) => {
   };
 };
 
+// Tomar lista a un alumno deja la sesión como dictada para toda el aula,
+// aunque el docente no la haya marcado como Realizada: quien quede sin registro
+// cuenta como falta en vez de quedar fuera del porcentaje.
+// `classRecords`: registros de los alumnos de ESA aula (no de otras).
+export const withTakenSessions = (sessions, classRecords) => {
+  const taken = new Set((classRecords || []).map((r) => r.sessionId));
+  return (sessions || []).map((s) => (!s.done && taken.has(s.id) ? { ...s, done: true } : s));
+};
+
 // Sesiones marcadas "No aplica" para ese alumno (fuera de su porcentaje).
 export const excusedCount = (sessions, records) => {
   const ids = new Set((sessions || []).map((s) => s.id));

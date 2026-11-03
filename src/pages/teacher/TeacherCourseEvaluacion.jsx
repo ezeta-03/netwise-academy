@@ -12,7 +12,7 @@ import { APPROVAL } from '../../lib/approval';
 import { getOrderedSessions } from '../../lib/courseSessions';
 import { buildClassList, normalizeAttendance } from '../../lib/classList';
 import { hasDelivered, practicesForGroup } from '../../lib/workItems';
-import { attendanceStats } from '../../lib/attendance';
+import { attendanceStats, withTakenSessions } from '../../lib/attendance';
 import { aulaRoster, NO_AULA } from '../../lib/roster';
 import GradeReview from '../../components/GradeReview';
 import { usePagedTable } from '../../hooks/usePagedTable';
@@ -521,6 +521,9 @@ const TeacherCourseEvaluacion = ({ vista = 'entregas' }) => {
   // los módulos se leen en su clase, ver lib/classList.js).
   const classList = useMemo(() => buildClassList({ liveSessions, modules: courseModules, groupId, doneIds }), [liveSessions, courseModules, groupId, doneIds]);
   const classAttendance = useMemo(() => normalizeAttendance(attendance, classList), [attendance, classList]);
+  // Las clases en las que ya se tomó lista a alguien del aula cuentan como dictadas para todos.
+  const rosterUids = useMemo(() => new Set(roster.map((r) => r.uid)), [roster]);
+  const takenList = useMemo(() => withTakenSessions(classList, classAttendance.filter((a) => rosterUids.has(a.uid))), [classList, classAttendance, rosterUids]);
   const inRecord = useMemo(() => new Set(practicesForGroup(practices, groupId).filter((pr) => pr.countsInRecord).map((pr) => pr.id)), [practices, groupId]);
   const globalDoneIds = useMemo(() => new Set(getOrderedSessions(courseModules).filter((s) => s.done).map((s) => s.id)), [courseModules]);
   const aulaDoneIds = useMemo(() => new Set(doneIds), [doneIds]);
@@ -582,7 +585,7 @@ const TeacherCourseEvaluacion = ({ vista = 'entregas' }) => {
   const classSummary = useMemo(() => {
     const model = getGradingModel(course.id, modules);
     const scoresByUid = Object.fromEntries(scores.map((g) => [g.uid, g.scores || {}]));
-    const sessions = classList;
+    const sessions = takenList;
     let riskCount = 0;
     let gradeSum = 0; let gradeN = 0;
     let attSum = 0; let attN = 0;
@@ -599,7 +602,7 @@ const TeacherCourseEvaluacion = ({ vista = 'entregas' }) => {
       enRiesgo: riskCount,
       total: roster.length,
     };
-  }, [course.id, modules, classList, inRecord, roster, submissions, classAttendance, scores]);
+  }, [course.id, modules, takenList, inRecord, roster, submissions, classAttendance, scores]);
 
   if (!can(currentUser, 'grade')) {
     return <div className="admin-panel" style={{ textAlign: 'center', color: '#6B6980' }}>Tu cuenta no tiene habilitado ver fichas ni calificar entregas. Pídele a un administrador que active esa función.</div>;
@@ -613,8 +616,8 @@ const TeacherCourseEvaluacion = ({ vista = 'entregas' }) => {
     <div className="admin-two-col" style={{ gridTemplateColumns: showSummary ? '1fr 300px' : '1fr', alignItems: 'flex-start' }}>
       <div style={{ minWidth: 0 }}>
         {vista === 'entregas' && <EntregasRevision course={course} aulaLabel={aulaLabel} modules={modules} roster={roster} submissions={submissions} onReloadSubmissions={reloadSubmissions} onFocusChange={setReviewFocus} />}
-        {vista === 'notas' && <RegistroNotas course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} sessions={classList} inRecord={inRecord} roster={roster} submissions={submissions} attendance={classAttendance} scores={scores} onGradeSaved={reloadGrades} />}
-        {vista === 'asistencia' && <Asistencia course={course} aulaLabel={aulaLabel} fileTag={fileTag} sessions={classList} roster={roster} attendance={classAttendance} onToggle={toggleAttendance} doneIds={aulaDoneIds} globalDoneIds={globalDoneIds} onToggleDone={groupId ? (session, done) => toggleSessionDone(session, done) : null} />}
+        {vista === 'notas' && <RegistroNotas course={course} aulaLabel={aulaLabel} fileTag={fileTag} modules={modules} sessions={takenList} inRecord={inRecord} roster={roster} submissions={submissions} attendance={classAttendance} scores={scores} onGradeSaved={reloadGrades} />}
+        {vista === 'asistencia' && <Asistencia course={course} aulaLabel={aulaLabel} fileTag={fileTag} sessions={takenList} roster={roster} attendance={classAttendance} onToggle={toggleAttendance} doneIds={aulaDoneIds} globalDoneIds={globalDoneIds} onToggleDone={groupId ? (session, done) => toggleSessionDone(session, done) : null} />}
       </div>
       {showSummary && <div><ClassSummaryPanel summary={classSummary} /></div>}
     </div>

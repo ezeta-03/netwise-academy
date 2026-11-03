@@ -9,7 +9,7 @@ import { getOrderedSessions } from '../src/lib/courseSessions.js';
 import { deliverableDueDate } from '../src/lib/deliveryDates.js';
 import { resolveWeights } from '../src/lib/weights.js';
 import { APPROVAL, evaluateApproval } from '../src/lib/approval.js';
-import { attendanceStats } from '../src/lib/attendance.js';
+import { attendanceStats, withTakenSessions } from '../src/lib/attendance.js';
 import { GRADING_SCHEMES, getGradingModel, buildStudentRows, moduleLabel } from '../src/lib/gradingScheme.js';
 import { courseRoster } from '../src/lib/roster.js';
 
@@ -345,7 +345,7 @@ describe('Rúbrica: pointsValue / totalPoints (suma de "destacado")', () => {
 //   y classSummary; lib/attendance.js (attendanceStats)
 // ---------------------------------------------------------------------------
 const teacherAttendance = (modules, roster, attendance) => {
-  const sessions = getOrderedSessions(modules);
+  const sessions = withTakenSessions(getOrderedSessions(modules), attendance);
   // Sesión dictada sin registro = falta (ver lib/attendance.js).
   const statsFor = (uid) => {
     const st = attendanceStats(sessions, attendance.filter((a) => a.uid === uid));
@@ -361,7 +361,7 @@ const teacherAttendance = (modules, roster, attendance) => {
 const classSummary = (modules, roster, submissions, attendance, scores = [], courseId = 99) => {
   const model = getGradingModel(courseId, modules);
   const scoresByUid = Object.fromEntries(scores.map((g) => [g.uid, g.scores || {}]));
-  const sessions = getOrderedSessions(modules);
+  const sessions = withTakenSessions(getOrderedSessions(modules), attendance);
   let riskCount = 0; let gradeSum = 0; let gradeN = 0; let attSum = 0; let attN = 0;
   roster.forEach((r) => {
     const summary = computeGradeSummary(buildStudentRows(model, submissions.filter((sub) => sub.uid === r.uid), scoresByUid[r.uid]));
@@ -484,7 +484,7 @@ describe('Asistencia (docente)', () => {
       assert.equal(teacherAttendance(mods, ROSTER, rows).avgPct, classSummary(mods, ROSTER, [], rows).asistenciaPromedio);
     }
   });
-  test('una sesión con registros de OTROS alumnos pero no marcada Realizada debería contar como dictada para todos', { todo: 'DISEÑO lib/attendance.js:200 - dictated = s.done || registro de ESE alumno; si el docente sólo tomó lista a algunos y no marcó la sesión como Realizada, los alumnos sin fila quedan con pct null (invisibles) aunque sessionsTaken ya cuenta la sesión' }, () => {
+  test('una sesión con registros de OTROS alumnos pero no marcada Realizada cuenta como dictada para todos', () => {
     const a = teacherAttendance([sessionsMod(2)], ROSTER, att('u1', [true]));
     assert.equal(a.statsFor('u2').pct, 0);
   });
