@@ -744,6 +744,17 @@ body::before {
   cursor: pointer; font-family: var(--ff-body); margin-bottom: 18px;
 }
 .auth-google-btn:hover { background: #F0EEF6; }
+.inapp-notice { border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: .8rem; line-height: 1.45; text-align: left; }
+.inapp-notice p { margin: 0; }
+.inapp-notice--dark { background: rgba(251,191,36,.12); border: 1px solid rgba(251,191,36,.35); color: #FDE68A; }
+.inapp-notice--light { background: #FFF8E6; border: 1px solid #F5D98B; color: #6B4E00; }
+.inapp-notice-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.inapp-notice-btn {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 7px 12px;
+  font-size: .78rem; font-weight: 600; font-family: var(--ff-body); cursor: pointer; text-decoration: none;
+  border: 1px solid currentColor; background: transparent; color: inherit;
+}
+.inapp-notice-hint { margin-top: 8px !important; font-size: .74rem; opacity: .85; }
 .auth-divider { font-size: .74rem; color: rgba(255,255,255,.45); margin-bottom: 18px; position: relative; }
 .auth-divider::before, .auth-divider::after { content: ''; position: absolute; top: 50%; width: 30%; height: 1px; background: rgba(255,255,255,.15); }
 .auth-divider::before { left: 0; }
