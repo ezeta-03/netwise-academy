@@ -48,10 +48,10 @@ const AdminLayout = () => {
   }, [loaded, offerings]);
 
   const currentLabel = PAGE_LABELS[location.pathname] || 'Resumen';
-  // `notifications` para el admin es 1 aviso por pedido pendiente (ver
-  // buildAdminNotifications) -- su length es la cuenta real de pedidos por
-  // validar, sin importar si ya los marcó como leídos en la campanita.
-  const counts = { courses: courses.length, ventas: notifications.length };
+  // `notifications` para el admin trae 1 aviso por pedido pendiente y 1 por
+  // ticket de soporte nuevo (ver buildAdminNotifications). El badge de Ventas
+  // cuenta solo los de pedidos, sin importar si ya se marcaron como leídos.
+  const counts = { courses: courses.length, ventas: notifications.filter((n) => n.to === '/admin/ventas').length };
 
   // En teléfono el sidebar es un cajón: el botón lo cierra (colapsarlo a íconos no aplica ahí).
   const handleCollapseClick = () => {
