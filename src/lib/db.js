@@ -82,6 +82,16 @@ const fetchByCourses = async (collectionName, courseIds) => {
   return [...found.values()];
 };
 
+// Una clase cargada a mano en la consola de Firebase puede traer `startsAt`
+// como Timestamp en vez del texto ISO que guarda la app: se pasa a texto para
+// que todas las pantallas la lean igual.
+const withIsoStart = (session) => {
+  const v = session.startsAt;
+  if (v && typeof v.toDate === 'function') return { ...session, startsAt: v.toDate().toISOString() };
+  if (v instanceof Date || typeof v === 'number') return { ...session, startsAt: new Date(v).toISOString() };
+  return session;
+};
+
 // `courseIds` (un id o una lista): solo las clases de esos cursos. Sin
 // argumento trae todas -- solo el Admin puede (reglas de Firestore).
 export const fetchLiveSessions = async (courseIds) => {
@@ -94,7 +104,7 @@ export const fetchLiveSessions = async (courseIds) => {
   }
 
   if (scoped) {
-    const list = await fetchByCourses('liveSessions', courseIds);
+    const list = (await fetchByCourses('liveSessions', courseIds)).map(withIsoStart);
     return list.sort((a, b) => String(a.startsAt || '').localeCompare(String(b.startsAt || '')));
   }
 
@@ -102,7 +112,7 @@ export const fetchLiveSessions = async (courseIds) => {
   const querySnapshot = await getDocs(q);
   const sessions = [];
   querySnapshot.forEach((doc) => {
-    sessions.push({ id: doc.id, ...doc.data() });
+    sessions.push(withIsoStart({ id: doc.id, ...doc.data() }));
   });
   return sessions;
 };
@@ -117,7 +127,7 @@ export const fetchLiveSessionById = async (sessionId) => {
 
   const docRef = doc(db, 'liveSessions', sessionId);
   const docSnap = await getDoc(docRef);
-  return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+  return docSnap.exists() ? withIsoStart({ id: docSnap.id, ...docSnap.data() }) : null;
 };
 
 // `groupId` + `generated` marcan las clases que el sistema genera para un aula

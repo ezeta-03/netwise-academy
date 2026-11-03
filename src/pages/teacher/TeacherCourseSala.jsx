@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { scheduleLiveSession, fetchLiveSessions, cancelLiveSession, deleteLiveSession, updateLiveSession } from '../../lib/db';
 import { can } from '../../lib/permissions';
-import { getClassCardState } from '../../lib/liveSessionStatus';
+import { getClassCardState, isPendingClass } from '../../lib/liveSessionStatus';
 import { toPeruIso, peruDateTimeParts } from '../../lib/liveScheduleGenerator';
 import { isMeetLink } from '../../lib/classLinks';
 import { useNow } from '../../hooks/useNow';
@@ -91,7 +91,7 @@ const TeacherCourseSala = () => {
   // Con varias aulas, solo las clases del aula con la que trabaja el docente.
   const mine = sessions.filter((s) => !group?.id || !s.groupId || s.groupId === group.id);
   const byDate = [...mine].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
-  const active = byDate.filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; });
+  const active = byDate.filter((s) => isPendingClass(s, now));
   const main = active[0] || null;
   const upcoming = byDate.filter((s) => s !== main && getClassCardState(s, now) !== 'ended');
   const past = byDate.filter((s) => getClassCardState(s, now) === 'ended').reverse();

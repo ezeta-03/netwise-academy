@@ -4,7 +4,7 @@ import { Check, CheckCircle2, FileText, Sparkles, Target } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { fetchCourseContent, fetchProjectAdvances, fetchProjectProfile, fetchLiveSessions } from '../../lib/db';
 import { sessionsForStudent } from '../../lib/groupAssignment';
-import { getClassCardState, relativeClassLabel } from '../../lib/liveSessionStatus';
+import { getClassCardState, relativeClassLabel, isPendingClass } from '../../lib/liveSessionStatus';
 import { isMeetLink } from '../../lib/classLinks';
 import { useNow } from '../../hooks/useNow';
 import { MeetButton } from '../../components/ClassCard';
@@ -44,7 +44,7 @@ const StudentCourseContenido = () => {
   }, [course.id, currentUser]);
 
   const nextClass = liveSessions
-    .filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; })
+    .filter((s) => isPendingClass(s, now))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))[0] || null;
   const meetLink = isMeetLink(group?.classLink) ? group.classLink : null;
 

@@ -9,7 +9,7 @@ import { activeBanner } from '../../lib/campusBanner';
 import CampusBanner from '../../components/CampusBanner';
 import { fetchMyDeliverables } from '../../lib/studentDeliverables';
 import { fetchCourseStanding } from '../../lib/studentStanding';
-import { getClassCardState, daysUntil } from '../../lib/liveSessionStatus';
+import { getClassCardState, daysUntil, isPendingClass } from '../../lib/liveSessionStatus';
 import { daysLeft, dueLabel, KIND_LABEL } from '../../lib/workItems';
 import SubmitWorkModal from '../../components/SubmitWorkModal';
 import { sessionsForStudent } from '../../lib/groupAssignment';
@@ -89,7 +89,7 @@ const StudentInicio = () => {
 
   // "Tu clase de hoy": la próxima que aún no termina (si hoy no hay, la siguiente).
   const pending = sessions
-    .filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; })
+    .filter((s) => isPendingClass(s, now))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
   const nextClass = pending[0] || null;
   const nextIsToday = nextClass && daysUntil(nextClass, now) === 0;

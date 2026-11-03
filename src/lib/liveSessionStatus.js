@@ -54,6 +54,14 @@ export const getClassCardState = (session, now = Date.now()) => {
   return 'scheduled';
 };
 
+// ¿Cuenta como clase por venir (para "Tu próxima clase")? Una sin fecha
+// válida no: no hay día ni hora que mostrar, y nunca terminaría.
+export const isPendingClass = (session, now = Date.now()) => {
+  if (Number.isNaN(new Date(session.startsAt).getTime())) return false;
+  const st = getClassCardState(session, now);
+  return st !== 'ended' && st !== 'cancelled';
+};
+
 export const sessionEndsAt = (session) => new Date(new Date(session.startsAt).getTime() + durationOf(session) * 60000);
 
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();

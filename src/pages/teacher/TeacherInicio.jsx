@@ -8,7 +8,7 @@ import { useEnterCourse } from '../../hooks/useEnterCourse';
 import { useClassLinks } from '../../hooks/useClassLinks';
 import { useNow } from '../../hooks/useNow';
 import { fetchLiveSessions, fetchAllEnrollments, fetchCourseContent, fetchCourseSubmissions, fetchCourseAttendance, fetchGroups, fetchGroupProgress, fetchPractices } from '../../lib/db';
-import { getClassCardState, daysUntil } from '../../lib/liveSessionStatus';
+import { getClassCardState, daysUntil, isPendingClass } from '../../lib/liveSessionStatus';
 import { meetLinkFor } from '../../lib/classLinks';
 import { courseRoster } from '../../lib/roster';
 import { buildClassList, normalizeAttendance } from '../../lib/classList';
@@ -104,7 +104,7 @@ const TeacherInicio = () => {
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
 
   const pending = sessions
-    .filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; })
+    .filter((s) => isPendingClass(s, now))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
   const nextClass = pending[0] || null;
   const titleOf = (s) => courses.find((c) => c.id.toString() === s.courseId?.toString())?.title || s.courseTitle;

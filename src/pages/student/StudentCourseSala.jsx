@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import { FolderOpen } from 'lucide-react';
 import { fetchLiveSessions } from '../../lib/db';
 import { sessionsForStudent } from '../../lib/groupAssignment';
-import { getClassCardState } from '../../lib/liveSessionStatus';
+import { getClassCardState, isPendingClass } from '../../lib/liveSessionStatus';
 import { isMeetLink } from '../../lib/classLinks';
 import { useNow } from '../../hooks/useNow';
 import ClassCard, { ClassRow, RecordingButton } from '../../components/ClassCard';
@@ -29,7 +29,7 @@ const StudentCourseSala = () => {
 
   const meetLink = isMeetLink(group?.classLink) ? group.classLink : null;
   const byDate = [...sessions].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
-  const pending = byDate.filter((s) => { const st = getClassCardState(s, now); return st !== 'ended' && st !== 'cancelled'; });
+  const pending = byDate.filter((s) => isPendingClass(s, now));
   const main = pending[0] || null;
   const upcoming = pending.slice(1);
   const past = byDate.filter((s) => getClassCardState(s, now) === 'ended').reverse();
