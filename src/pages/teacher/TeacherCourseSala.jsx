@@ -264,7 +264,8 @@ const TeacherCourseSala = () => {
       </div>
 
       {main ? (
-        <ClassCard session={main} courseTitle={course.title} meetLink={meetLink} role="teacher" />
+        <ClassCard session={main} courseTitle={course.title} meetLink={meetLink} role="teacher"
+          secondary={canEdit(main) && <button className="admin-btn-ghost" onClick={() => setFormFor(main)}><Pencil size={14} /> Editar o cancelar</button>} />
       ) : (
         <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B', marginBottom: 20 }}>
           <p style={{ margin: 0 }}>No hay clases por delante en esta aula.</p>
