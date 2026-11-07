@@ -7,9 +7,10 @@ import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { useEnterCourse } from '../../hooks/useEnterCourse';
 import { useClassLinks } from '../../hooks/useClassLinks';
 import { useNow } from '../../hooks/useNow';
-import { fetchLiveSessions, fetchAllEnrollments, fetchCourseContent, fetchCourseSubmissions, fetchCourseAttendance, fetchGroups, fetchGroupProgress, fetchPractices } from '../../lib/db';
+import { fetchLiveSessions, fetchMyGeneralClasses, fetchAllEnrollments, fetchCourseContent, fetchCourseSubmissions, fetchCourseAttendance, fetchGroups, fetchGroupProgress, fetchPractices } from '../../lib/db';
 import { getClassCardState, daysUntil, isPendingClass } from '../../lib/liveSessionStatus';
 import { meetLinkFor } from '../../lib/classLinks';
+import { dedupeGeneralClasses } from '../../lib/generalClasses';
 import { courseRoster } from '../../lib/roster';
 import { buildClassList, normalizeAttendance } from '../../lib/classList';
 import { withTakenSessions } from '../../lib/attendance';
@@ -51,7 +52,8 @@ const TeacherInicio = () => {
   useEffect(() => {
     const ids = courses.map((c) => c.id);
     Promise.all([
-      fetchLiveSessions(ids),
+      // Sus clases y las clases generales que programó (también en cursos que no dicta).
+      Promise.all([fetchLiveSessions(ids), fetchMyGeneralClasses(currentUser?.uid).catch(() => [])]).then(([list, general]) => [...list, ...general]),
       // Un docente solo puede leer las matrículas de SUS cursos (reglas de Firestore).
       fetchAllEnrollments(currentUser?.role === 'admin' ? undefined : ids),
       ids.length ? fetchGroups(ids) : Promise.resolve([]),
@@ -66,7 +68,7 @@ const TeacherInicio = () => {
       const enrollmentOf = new Map(allEnrollments.map((e) => [`${e.courseId}_${e.uid}`, e]));
       const today = todayIso();
 
-      setSessions(allSessions.filter((s) => myCourseIds.has(s.courseId?.toString())));
+      setSessions(dedupeGeneralClasses(allSessions.filter((s) => myCourseIds.has(s.courseId?.toString()) || (s.general && s.instructorUid === currentUser?.uid))));
 
       // El plazo de una entrega depende del aula (horario e inicio): se usa la primera aula del curso.
       const firstGroupOf = (course) => groups.find((g) => g.courseId?.toString() === course.id.toString()) || null;
@@ -103,7 +105,7 @@ const TeacherInicio = () => {
       setRosterByGroup(counts);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, [courses, myCourseIds, currentUser?.role]);
+  }, [courses, myCourseIds, currentUser?.role, currentUser?.uid]);
 
   if (loading) return <div className="admin-empty-hint">Cargando tu semana...</div>;
 

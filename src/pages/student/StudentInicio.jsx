@@ -17,6 +17,7 @@ import InstitutionalEmailCard from './InstitutionalEmailCard';
 import { useClassLinks } from '../../hooks/useClassLinks';
 import { useNow } from '../../hooks/useNow';
 import { meetLinkFor } from '../../lib/classLinks';
+import { dedupeGeneralClasses } from '../../lib/generalClasses';
 import ClassCard from '../../components/ClassCard';
 
 const WEEK_DAYS = 7;
@@ -74,7 +75,7 @@ const StudentInicio = () => {
           .catch(() => {});
       });
       Promise.all([fetchLiveSessions(enrolled.map((c) => c.id)), fetchMyDeliverables(currentUser.uid, enrolled)]).then(([allSessions, list]) => {
-        setSessions(sessionsForStudent(allSessions, map));
+        setSessions(dedupeGeneralClasses(sessionsForStudent(allSessions, map)));
         setDeliverables(list);
         setLoading(false);
       }).catch(() => setLoading(false));
@@ -242,7 +243,7 @@ const StudentInicio = () => {
               </div>
               <div className="class-row-actions">
                 {d.blocked
-                  ? <button className="admin-btn-ghost" onClick={() => navigate(`/student/curso/${d.courseId}/proyecto`)} title="Primero define tu empresa en Mi proyecto">Definir mi empresa</button>
+                  ? <button className="admin-btn-ghost" onClick={() => navigate(`/student/curso/${d.courseId}/proyecto`)} title="Primero crea tu proyecto con la ficha en Mi proyecto">Crear mi proyecto</button>
                   : <button className="admin-btn-edit" onClick={() => setSubmitItem(d)}>Entregar</button>}
               </div>
             </div>

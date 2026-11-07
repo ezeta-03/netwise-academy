@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { fetchLiveSessions, fetchGroups } from '../../lib/db';
+import { dedupeGeneralClasses } from '../../lib/generalClasses';
 
 // Agenda del admin: las clases de TODOS los cursos y aulas, cada curso con su
 // color. Es de solo consulta -- la grabación y la sala las gestiona el docente
@@ -37,7 +38,8 @@ const AdminAgenda = () => {
   const [selectedDay, setSelectedDay] = useState(new Date());
 
   useEffect(() => {
-    fetchLiveSessions().then(setSessions).catch(() => {});
+    // Una clase general (varios cursos) sale una sola vez.
+    fetchLiveSessions().then((list) => setSessions(dedupeGeneralClasses(list))).catch(() => {});
     fetchGroups().then(setGroups).catch(() => {});
   }, []);
 

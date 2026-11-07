@@ -18,7 +18,8 @@ const pad = (n) => String(n).padStart(2, '0');
 export const buildClassList = ({ liveSessions, modules, groupId = null, doneIds = [], now = Date.now() }) => {
   const legacy = getOrderedSessions(modules);
   const classes = (liveSessions || [])
-    .filter((s) => s.status !== 'cancelled' && s.startsAt && (!groupId || !s.groupId || s.groupId === groupId))
+    // Las clases generales (varios cursos) no son sesiones del curso.
+    .filter((s) => s.status !== 'cancelled' && !s.general && s.startsAt && (!groupId || !s.groupId || s.groupId === groupId))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 
   if (classes.length === 0) {

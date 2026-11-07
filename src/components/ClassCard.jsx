@@ -3,6 +3,7 @@ import { Video, Clock, Play } from 'lucide-react';
 import { getClassCardState, relativeClassLabel, sessionEndsAt, LIVE_JOIN_WINDOW_MIN } from '../lib/liveSessionStatus';
 import { isSafeLink } from '../lib/placeholders';
 import { useNow } from '../hooks/useNow';
+import { generalClassLabel } from '../lib/generalClasses';
 
 const fmtTime = (d) => d.toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit' });
 
@@ -32,7 +33,7 @@ export const MeetButton = ({ session, meetLink, role = 'student', size = 'md', n
     return <button type="button" className={`${cls} is-disabled`} disabled title="Esta aula todavía no tiene enlace de Meet. Escríbenos por Soporte."><Video size={14} /> {label}</button>;
   }
   return (
-    <a className={cls} href={meetLink} target="_blank" rel="noreferrer" title={role === 'teacher' ? 'Abre la sala de Meet del aula' : 'Abre la sala de Google Meet de tu aula. Entra con tu correo @netwiseacademy.pe'}>
+    <a className={cls} href={meetLink} target="_blank" rel="noreferrer" title={session.general ? 'Abre el enlace de Meet de esta clase general' : role === 'teacher' ? 'Abre la sala de Meet del aula' : 'Abre la sala de Google Meet de tu aula. Entra con tu correo @netwiseacademy.pe'}>
       <Video size={14} /> {label}
     </a>
   );
@@ -61,13 +62,16 @@ const ClassCard = ({ session, courseTitle, meetLink, role = 'student', meta, sec
       : state === 'cancelled'
         ? 'El docente canceló esta clase'
         : !meetLink
-          ? 'Esta aula aún no tiene enlace de Meet'
-          : role === 'teacher' ? `Tus alumnos ven el botón «Entrar» ${LIVE_JOIN_WINDOW_MIN} min antes.` : 'Entra con tu correo @netwiseacademy.pe';
+          ? (session.general ? 'Esta clase aún no tiene enlace de Meet' : 'Esta aula aún no tiene enlace de Meet')
+          : role === 'teacher' ? (session.general ? `Abre el enlace de esta clase. Los alumnos de sus cursos ven «Entrar» ${LIVE_JOIN_WINDOW_MIN} min antes.` : `Tus alumnos ven el botón «Entrar» ${LIVE_JOIN_WINDOW_MIN} min antes.`) : 'Entra con tu correo @netwiseacademy.pe';
 
   return (
     <div className={`class-card ${state === 'live' ? 'is-live' : ''}`}>
       <div className="class-card-info">
-        <span className={`class-card-tag ${TAG_CLASS[state]}`}>{state === 'live' && <span className="class-card-dot" />}{tag}</span>
+        <div className="class-card-tags">
+          <span className={`class-card-tag ${TAG_CLASS[state]}`}>{state === 'live' && <span className="class-card-dot" />}{tag}</span>
+          {session.general && <span className="class-general-pill is-dark">{generalClassLabel(session, role)}</span>}
+        </div>
         {courseTitle && <div className="class-card-course">{courseTitle}</div>}
         <div className="class-card-title">{session.title}</div>
         <div className="class-card-meta"><Clock size={13} /> {classScheduleLine(session, now)}{session.instructor && role !== 'teacher' ? ` · ${session.instructor}` : ''}{meta ? ` · ${meta}` : ''}</div>
@@ -87,7 +91,7 @@ export default ClassCard;
 
 // Fila de una clase con la fecha en bloque ("MIÉ 28"), usada en las listas de
 // la Agenda y de Clases en vivo. `actions` va a la derecha.
-export const ClassRow = ({ session, courseTitle, actions, showRelative = true, past = false }) => {
+export const ClassRow = ({ session, courseTitle, actions, showRelative = true, past = false, role = 'student' }) => {
   const now = useNow();
   const start = new Date(session.startsAt);
   const isToday = new Date(now).toDateString() === start.toDateString();
@@ -103,6 +107,7 @@ export const ClassRow = ({ session, courseTitle, actions, showRelative = true, p
       </div>
       <div className="class-row-body">
         {courseTitle && <div className="class-row-course">{courseTitle}</div>}
+        {session.general && <span className="class-general-pill">{generalClassLabel(session, role)}</span>}
         <div className="class-row-title" style={state === 'cancelled' ? { textDecoration: 'line-through', color: '#8B8A9B' } : undefined}>{session.title}</div>
         <div className="class-row-sub"><Clock size={12} /> {fmtTime(start)} – {fmtTime(sessionEndsAt(session))}{rel ? ` · ${rel}` : ''}</div>
       </div>

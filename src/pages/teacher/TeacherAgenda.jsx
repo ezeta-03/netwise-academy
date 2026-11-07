@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
-import { fetchLiveSessions } from '../../lib/db';
+import { fetchLiveSessions, fetchMyGeneralClasses } from '../../lib/db';
 import { useClassLinks } from '../../hooks/useClassLinks';
 import ClassAgenda from '../../components/ClassAgenda';
 
@@ -21,7 +21,12 @@ const TeacherAgenda = () => {
   const [sessions, setSessions] = useState([]);
   const classLinks = useClassLinks(sessions);
 
-  useEffect(() => { fetchLiveSessions([...myCourseIds]).then(setSessions).catch(() => {}); }, [myCourseIds]);
+  // También las clases generales que programó, aunque incluyan cursos que no dicta.
+  useEffect(() => {
+    Promise.all([fetchLiveSessions([...myCourseIds]), fetchMyGeneralClasses(currentUser?.uid).catch(() => [])])
+      .then(([list, general]) => setSessions([...list, ...general.filter((g) => !list.some((s) => s.id === g.id))]))
+      .catch(() => {});
+  }, [myCourseIds, currentUser?.uid]);
 
   return <ClassAgenda sessions={sessions} courses={courses} classLinks={classLinks} role="teacher" subtitle="Tus clases en vivo. Inícialas desde aquí a la hora de clase." />;
 };

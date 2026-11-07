@@ -4,7 +4,7 @@ import { FolderOpen } from 'lucide-react';
 import { fetchLiveSessions } from '../../lib/db';
 import { sessionsForStudent } from '../../lib/groupAssignment';
 import { getClassCardState, isPendingClass } from '../../lib/liveSessionStatus';
-import { isMeetLink } from '../../lib/classLinks';
+import { classMeetLink } from '../../lib/generalClasses';
 import { useNow } from '../../hooks/useNow';
 import ClassCard, { ClassRow, RecordingButton } from '../../components/ClassCard';
 
@@ -27,7 +27,6 @@ const StudentCourseSala = () => {
 
   if (loading) return <div className="admin-empty-hint">Cargando clases en vivo...</div>;
 
-  const meetLink = isMeetLink(group?.classLink) ? group.classLink : null;
   const byDate = [...sessions].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
   const pending = byDate.filter((s) => isPendingClass(s, now));
   const main = pending[0] || null;
@@ -41,7 +40,7 @@ const StudentCourseSala = () => {
       </div>
 
       {main ? (
-        <ClassCard session={main} courseTitle={course.title} meetLink={meetLink}
+        <ClassCard session={main} courseTitle={course.title} meetLink={classMeetLink(main, group?.classLink)}
           secondary={<button className="admin-btn-ghost" onClick={() => navigate('../materiales')}><FolderOpen size={14} /> Materiales del curso</button>} />
       ) : (
         <div className="admin-panel" style={{ textAlign: 'center', color: '#8B8A9B', marginBottom: 20 }}>

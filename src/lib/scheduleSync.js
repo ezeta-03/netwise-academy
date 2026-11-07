@@ -1,15 +1,20 @@
 // Sincroniza el calendario de clases de un aula cuando se EDITA (horario,
-// docente, estado, fecha de cierre) en vez de crear otra aula. Compara las
-// clases futuras que el sistema generó para el aula con las que deberían
-// existir según la configuración nueva, y devuelve solo la diferencia.
+// docente, estado, fecha de inicio o de cierre) en vez de crear otra aula.
+// Compara las clases que el sistema generó para el aula con las que deberían
+// existir según la configuración nueva (fecha de inicio + horario + cierre), y
+// devuelve solo la diferencia.
 //
 // Reglas que respeta (ver AdminGrupos):
-// - Lo ya realizado / en vivo / cancelado a propósito NO se toca: es historial
-//   (asistencia, grabaciones) o una decisión del docente (feriado, etc.).
+// - El aula tiene exactamente las clases que salen de sus fechas y su horario:
+//   si se mueve la fecha de inicio o de cierre, las clases se recalculan y no
+//   quedan clases de más (antes las ya pasadas se quedaban y se sumaban).
+// - No se mueve una clase con asistencia marcada (`lockedIds`), con grabación,
+//   en vivo, ni una ya dictada que sigue dentro de las fechas del aula: se
+//   queda donde está y ocupa el lugar de la clase calculada más cercana, para
+//   no pasarse del total.
+// - Una clase cancelada a propósito (feriado) no se vuelve a crear ni se borra.
 // - Las clases sueltas que el docente programó a mano no llevan `generated`
 //   y nunca se borran.
-// - Solo se compara lo FUTURO: cambiar el horario afecta desde la próxima
-//   clase; las semanas pasadas conservan el horario con el que se dictaron.
 const instant = (startsAt) => new Date(startsAt).getTime();
 
 // Estado de una clase en el instante `now` (mismo criterio que liveSessionStatus.js,
@@ -35,50 +40,91 @@ const belongsToGroup = (session, groupId, adoptLegacy) => {
   return adoptLegacy && !session.groupId && /^Semana \d+ · /.test(session.title || '');
 };
 
+const startOfDayPeru = (isoDate) => instant(`${isoDate}T00:00:00-05:00`);
+
 export const planScheduleSync = ({
   desired = [], existing = [], groupId, now = Date.now(), endDate = null,
-  closed = false, adoptLegacy = false, instructor = '', instructorUid = '',
+  closed = false, adoptLegacy = false, instructor = '', instructorUid = '', lockedIds = [],
 }) => {
   const mine = existing.filter((s) => belongsToGroup(s, groupId, adoptLegacy));
   const statusOf = (s) => statusAt(s, now);
+  const locked = new Set(lockedIds);
 
-  const future = mine.filter((s) => statusOf(s) === 'upcoming' && instant(s.startsAt) > now);
-  const cancelledFuture = mine.filter((s) => s.status === 'cancelled' && instant(s.startsAt) > now);
-  const past = mine.filter((s) => !future.includes(s) && !cancelledFuture.includes(s));
+  const cancelled = mine.filter((s) => s.status === 'cancelled');
+  const active = mine.filter((s) => s.status !== 'cancelled');
+  const future = active.filter((s) => statusOf(s) === 'upcoming' && instant(s.startsAt) > now);
+  const past = mine.filter((s) => !future.includes(s));
 
+  // Clases que debería tener el aula. Un aula cerrada conserva lo ya dictado
+  // y pierde lo que falta.
   const limit = endDate ? endOfDayPeru(endDate) : Infinity;
-  const wanted = closed
-    ? []
-    : desired.filter((e) => instant(e.startsAt) > now && instant(e.startsAt) <= limit);
+  const wanted = desired
+    .filter((e) => instant(e.startsAt) <= limit && (!closed || instant(e.startsAt) <= now))
+    .sort((a, b) => instant(a.startsAt) - instant(b.startsAt));
+  const rangeStart = wanted.length ? startOfDayPeru(wanted[0].startsAt.slice(0, 10)) : null;
+  const rangeEnd = wanted.length ? endOfDayPeru(wanted[wanted.length - 1].startsAt.slice(0, 10)) : null;
 
-  const wantedKeys = new Set(wanted.map((e) => keyOf(e.startsAt, e.durationMin)));
-  const futureByKey = new Map(future.map((s) => [keyOf(s.startsAt, s.durationMin), s]));
+  // Lo que no se mueve. Sin calendario calculado (fechas sin clases) tampoco
+  // se borra lo ya dictado: no hay con qué compararlo.
+  const isLocked = (s) => {
+    if (locked.has(s.id) || s.recordingUrl) return true;
+    const st = statusOf(s);
+    if (st === 'live') return true;
+    if (st !== 'ended') return false;
+    if (rangeStart === null) return true;
+    const t = instant(s.startsAt);
+    return t >= rangeStart && t <= rangeEnd;
+  };
+  const fixed = active.filter(isLocked);
+  const movable = active.filter((s) => !isLocked(s));
+
+  // Cada clase calculada se usa una sola vez.
+  const remaining = wanted.map((e) => ({ ...e, key: keyOf(e.startsAt, e.durationMin) }));
+  const takeExact = (s) => {
+    const i = remaining.findIndex((e) => e.key === keyOf(s.startsAt, s.durationMin));
+    return i >= 0 ? remaining.splice(i, 1)[0] : null;
+  };
+  const takeNearest = (s) => {
+    if (remaining.length === 0) return null;
+    const t = instant(s.startsAt);
+    let best = 0;
+    remaining.forEach((e, i) => { if (Math.abs(instant(e.startsAt) - t) < Math.abs(instant(remaining[best].startsAt) - t)) best = i; });
+    return remaining.splice(best, 1)[0];
+  };
+
+  const byTime = (a, b) => instant(a.startsAt) - instant(b.startsAt);
+  const matchOf = new Map();
+  [...fixed].sort(byTime).forEach((s) => { const e = takeExact(s); if (e) matchOf.set(s.id, e); });
   // Una clase que el docente canceló a propósito no se vuelve a crear.
-  const cancelledKeys = new Set(cancelledFuture.map((s) => keyOf(s.startsAt, s.durationMin)));
+  cancelled.forEach((s) => takeExact(s));
+  [...fixed].sort(byTime).filter((s) => !matchOf.has(s.id)).forEach((s) => takeNearest(s));
 
-  const toDelete = future.filter((s) => !wantedKeys.has(keyOf(s.startsAt, s.durationMin)));
-  const toCreate = wanted.filter((e) => {
-    const k = keyOf(e.startsAt, e.durationMin);
-    return !futureByKey.has(k) && !cancelledKeys.has(k);
+  const toKeep = [];
+  const toDelete = [];
+  [...movable].sort(byTime).forEach((s) => {
+    const e = takeExact(s);
+    if (e) { matchOf.set(s.id, e); toKeep.push(s); } else toDelete.push(s);
   });
-  const toKeep = future.filter((s) => wantedKeys.has(keyOf(s.startsAt, s.durationMin)));
+  const toCreate = remaining.map((e) => { const copy = { ...e }; delete copy.key; return copy; });
+
   // Una clase que se conserva puede cambiar de docente o de número de semana
   // (al mover la fecha de inicio, el lunes que era "Semana 2" pasa a ser
-  // "Semana 1"): `patch` lleva solo los campos que cambian.
-  const wantedByKey = new Map(wanted.map((e) => [keyOf(e.startsAt, e.durationMin), e]));
-  const toUpdate = toKeep.map((s) => {
+  // "Semana 1"): `patch` lleva solo los campos que cambian. Lo ya dictado
+  // conserva el docente y el título con que se dictó.
+  const toUpdate = [...fixed, ...toKeep].filter((s) => statusOf(s) === 'upcoming').map((s) => {
     const patch = {};
     if ((instructorUid && s.instructorUid !== instructorUid) || (instructor && s.instructor !== instructor)) {
       Object.assign(patch, { instructor, instructorUid });
     }
-    const title = wantedByKey.get(keyOf(s.startsAt, s.durationMin))?.title;
+    const title = matchOf.get(s.id)?.title;
     if (title && s.title !== title) patch.title = title;
     return { ...s, patch };
   }).filter((s) => Object.keys(s.patch).length > 0);
 
   return {
     toCreate, toDelete, toUpdate,
-    unchanged: toKeep.length - toUpdate.length,
+    unchanged: fixed.length + toKeep.length - toUpdate.length,
+    lockedCount: fixed.length,
     pastCount: past.length,
     mineCount: mine.length,
     futureCount: future.length,

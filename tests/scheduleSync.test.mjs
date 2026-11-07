@@ -23,7 +23,8 @@ describe('planScheduleSync: escenarios en los que SÍ se regenera (editar, no cr
   test('sin cambios -> nada que hacer; 2 pasadas, 6 futuras al día', () => {
     const p = plan();
     assert.equal(p.hasChanges, false);
-    assert.equal(p.unchanged, 6);
+    assert.equal(p.unchanged, 8);
+    assert.equal(p.lockedCount, 2);
     assert.equal(p.pastCount, 2);
     assert.equal(p.hasStarted, true);
   });
@@ -41,17 +42,18 @@ describe('planScheduleSync: escenarios en los que SÍ se regenera (editar, no cr
   test('agrega un día (sábado): crea solo las clases nuevas, mantiene las demás', () => {
     const p = plan({ desired: desiredFor([...TUE_THU, { day: 'Sábado', start: '09:00', end: '12:00' }]) });
     assert.equal(p.toDelete.length, 0);
-    assert.equal(p.unchanged, 6);
+    assert.equal(p.unchanged, 8);
     assert.ok(p.toCreate.length >= 3);
     assert.ok(p.toCreate.every((e) => e.title.includes('Sábado')));
   });
 
-  test('quita un día (jueves): elimina solo las clases de ese día en el futuro', () => {
+  test('quita un día (jueves): el jueves ya dictado se queda y ocupa un lugar; el total no pasa de 4', () => {
     const p = plan({ desired: desiredFor([TUE_THU[0]]) });
     assert.equal(p.toCreate.length, 0);
-    assert.equal(p.toDelete.length, 3);
-    assert.ok(p.toDelete.every((s) => s.title.includes('Jueves')));
+    assert.equal(p.toDelete.length, 4);
+    assert.equal(p.toDelete.filter((s) => s.title.includes('Jueves')).length, 3);
     assert.equal(p.pastCount, 2);
+    assert.equal(8 - p.toDelete.length + p.toCreate.length, 4);
   });
 
   test('cambia el docente: no recrea nada, solo reasigna las clases futuras', () => {
@@ -78,7 +80,7 @@ describe('planScheduleSync: escenarios en los que SÍ se regenera (editar, no cr
   test('adelanta la fecha de cierre: elimina las clases posteriores a esa fecha', () => {
     const p = plan({ endDate: '2026-08-20' });
     assert.equal(p.toDelete.length, 4);
-    assert.equal(p.unchanged, 2);
+    assert.equal(p.unchanged, 4);
   });
 
   test('un feriado: la clase que el docente canceló a propósito NO se vuelve a crear', () => {
@@ -137,7 +139,7 @@ describe('planScheduleSync: señales para decidir "editar" vs "crear otra aula"'
   test('aula sin calendario generado (mineCount 0): no se sincroniza sola, hay que pedirlo', () => {
     const p = plan({ existing: [] });
     assert.equal(p.mineCount, 0);
-    assert.equal(p.toCreate.length, 6);
+    assert.equal(p.toCreate.length, 8);
   });
 
   test('mover la fecha de inicio de un aula ya iniciada reprograma solo lo futuro (por eso Admin lo bloquea)', () => {
@@ -159,5 +161,41 @@ describe('planScheduleSync: mover la fecha de inicio renumera las semanas', () =
     const nov9 = p.toUpdate.find((s) => s.startsAt.startsWith('2026-11-09'));
     assert.deepEqual(nov9.patch, { title: 'Semana 1 · Lunes' });
     assert.ok(p.toCreate.every((e) => e.title.startsWith('Semana 4')));
+  });
+});
+
+describe('planScheduleSync: las fechas salen de la fecha de inicio y de cierre del aula', () => {
+  // El aula se creó con inicio el 11 de agosto; ya pasaron mar 11 y jue 13.
+  test('mover el inicio al 18: las clases del 11 y 13 (sin asistencia) se borran y no quedan clases de más', () => {
+    const p = plan({ desired: desiredFor(TUE_THU, '2026-08-18') });
+    assert.ok(p.toDelete.some((s) => s.startsAt.startsWith('2026-08-11')));
+    assert.ok(p.toDelete.some((s) => s.startsAt.startsWith('2026-08-13')));
+    assert.equal(8 - p.toDelete.length + p.toCreate.length, 8);
+  });
+
+  test('una clase con asistencia marcada no se mueve y ocupa el lugar de una calculada', () => {
+    const p = plan({ desired: desiredFor(TUE_THU, '2026-08-18'), lockedIds: ['s0'] });
+    assert.ok(!p.toDelete.some((s) => s.id === 's0'));
+    assert.ok(p.toDelete.some((s) => s.id === 's1'));
+    assert.equal(8 - p.toDelete.length + p.toCreate.length, 8);
+  });
+
+  test('una clase con grabación tampoco se mueve', () => {
+    const existing = base().map((s, i) => (i === 1 ? { ...s, recordingUrl: 'https://x' } : s));
+    const p = plan({ existing, desired: desiredFor(TUE_THU, '2026-08-18') });
+    assert.ok(!p.toDelete.some((s) => s.id === 's1'));
+  });
+
+  test('con fecha de cierre, el total es exactamente el de las fechas', () => {
+    const desired = buildRecurringSessions({ slots: TUE_THU, weeksLabel: '8' }, '2026-08-18', '2026-08-27');
+    const p = plan({ desired, endDate: '2026-08-27' });
+    assert.equal(desired.length, 4);
+    assert.equal(8 - p.toDelete.length + p.toCreate.length, 4);
+  });
+
+  test('cambiar la hora no reescribe las clases ya dictadas', () => {
+    const slots = TUE_THU.map((s) => ({ ...s, start: '20:00', end: '22:00' }));
+    const p = plan({ desired: desiredFor(slots) });
+    assert.ok(p.toCreate.every((e) => Date.parse(e.startsAt) > NOW));
   });
 });

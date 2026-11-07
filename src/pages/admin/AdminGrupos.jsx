@@ -8,7 +8,8 @@ import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import AdminAsignarAlumnos from './AdminAsignarAlumnos';
 import AulaStudentsModal from './AulaStudentsModal';
 import { countByGroup, freeSeats, unassignedEnrollments } from '../../lib/groupAssignment';
-import { fetchOrders, fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers, createMeetSpace } from '../../lib/db';
+import { fetchOrders, fetchGroups, fetchAllEnrollments, createGroup, updateGroup, deleteGroup, updateCourseSchedule, logChange, fetchLiveSessions, scheduleLiveSession, updateLiveSession, cancelLiveSession, deleteLiveSession, fetchCourseContent, fetchAllUsers, createMeetSpace, fetchCourseAttendance } from '../../lib/db';
+import { buildClassList, normalizeAttendance } from '../../lib/classList';
 import { getLiveSessionStatus } from '../../lib/liveSessionStatus';
 import { buildRecurringSessions, buildScheduleLabel, validSlots, parseScheduleLabel } from '../../lib/liveScheduleGenerator';
 import { courseWeeksFromModules } from '../../lib/deliveryDates';
@@ -107,14 +108,19 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
   const [siblingCount, setSiblingCount] = useState(1);
   const [courseModules, setCourseModules] = useState([]);
   const [syncChoice, setSyncChoice] = useState(null);
+  // Clases del aula con asistencia marcada: no se mueven al recalcular.
+  const [lockedIds, setLockedIds] = useState([]);
 
   useEffect(() => {
     if (!group) return;
-    Promise.all([fetchLiveSessions(), fetchGroups(), fetchCourseContent(group.courseId).catch(() => ({ modules: [] }))]).then(([sessions, groups, content]) => {
+    Promise.all([fetchLiveSessions(), fetchGroups(), fetchCourseContent(group.courseId).catch(() => ({ modules: [] })), fetchCourseAttendance(group.courseId).catch(() => [])]).then(([sessions, groups, content, attendance]) => {
       const same = (x) => x?.toString() === group.courseId?.toString();
-      setGroupSessions(sessions.filter((s) => same(s.courseId)));
+      const courseSessions = sessions.filter((s) => same(s.courseId));
+      setGroupSessions(courseSessions);
       setSiblingCount(groups.filter((g) => same(g.courseId)).length);
       setCourseModules(content.modules || []);
+      const classList = buildClassList({ liveSessions: courseSessions.filter((s) => !s.general), modules: content.modules || [], groupId: group.id });
+      setLockedIds([...new Set(normalizeAttendance(attendance, classList).map((r) => r.sessionId))]);
     });
   }, [group]);
 
@@ -133,14 +139,14 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
   const plan = useMemo(() => {
     if (!group) return null;
     const slotsOk = validSlots(slots);
-    const common = { existing: groupSessions, groupId: group.id, endDate: endDate || null, closed: status === 'closed', adoptLegacy: siblingCount <= 1, instructor: instructor.trim(), instructorUid };
+    const common = { existing: groupSessions, groupId: group.id, endDate: endDate || null, closed: status === 'closed', adoptLegacy: siblingCount <= 1, instructor: instructor.trim(), instructorUid, lockedIds };
     // Sin fecha de inicio u horario válido no se sabe qué clases deberían existir:
     // no se propone ningún cambio (borrar todo por un campo vacío sería peligroso).
     if (!startDate || slotsOk.length === 0 || slotsOk.length < slots.length) {
       return { ...planScheduleSync({ ...common, desired: [] }), toCreate: [], toDelete: [], toUpdate: [], hasChanges: false, invalid: true };
     }
     return planScheduleSync({ ...common, desired: buildRecurringSessions({ slots: slotsOk, weeksLabel: String(weeksForPlan) }, startDate, endDate || null) });
-  }, [group, slots, startDate, endDate, status, instructor, instructorUid, groupSessions, siblingCount, weeksForPlan]);
+  }, [group, slots, startDate, endDate, status, instructor, instructorUid, groupSessions, siblingCount, weeksForPlan, lockedIds]);
   // Con calendario ya generado por el sistema se sincroniza por defecto; un aula
   // sin calendario (o con clases antiguas sin aula asociada) solo si se pide.
   const applySync = syncChoice ?? ((plan?.mineCount || 0) > 0);
@@ -266,7 +272,7 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
         <div className="admin-field-row">
           <div className="admin-field">
             <label>Fecha de inicio</label>
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={!!plan?.hasStarted} title={plan?.hasStarted ? 'El aula ya inició: para un nuevo grupo crea otra aula' : undefined} />
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           </div>
           <div className="admin-field">
             <label>Fecha de cierre</label>
@@ -368,10 +374,11 @@ const GroupModal = ({ group, courses, defaultCourseId, adminName, onClose, onSav
             ) : plan.hasChanges ? (
               <span>
                 Con estos cambios: {plan.toCreate.length} clase(s) nueva(s), {plan.toDelete.length} eliminada(s), {plan.toUpdate.length} actualizada(s) (docente o número de semana) y {plan.unchanged} sin cambios.
-                Las {plan.pastCount} ya realizadas o canceladas no se tocan, ni las clases sueltas del docente.
+                Las fechas se recalculan con la fecha de inicio, la de cierre y el horario, sin pasarse del total de clases.
+                {plan.lockedCount > 0 ? ` ${plan.lockedCount} clase(s) con asistencia, grabación o ya dictadas no se mueven.` : ''} Las canceladas y las clases sueltas del docente no se tocan.
               </span>
             ) : (
-              <span>Sin cambios en el calendario ({plan.unchanged} clases futuras al día).</span>
+              <span>Sin cambios en el calendario ({plan.unchanged} clases al día).</span>
             )}
             {(plan.hasChanges || plan.mineCount === 0) && (
               <label className="admin-field-checkbox" style={{ marginTop: 8 }}>

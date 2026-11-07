@@ -32,6 +32,11 @@ service cloud.firestore {
     // falta (no es admin y sí es docente). Así las consultas del admin que no
     // filtran por curso (todas las aulas, todas las clases) y las del alumno
     // por su uid no dejan errores de evaluación.
+    // Clase general programada por quien hace la petición.
+    function isGeneralBy(data) {
+      return isSignedIn() && myRole() == 'teacher' && data.get('general', false) == true && data.get('instructorUid', null) == request.auth.uid;
+    }
+
     function managesCourseOf(data) {
       return isAdmin() || (isSignedIn() && myRole() == 'teacher' && isCourseTeacher(string(data.courseId)));
     }
@@ -145,13 +150,20 @@ service cloud.firestore {
     match /liveSessions/{sessionId} {
       // Trae el nombre de la sala de videollamada: solo gente del curso. La app
       // consulta siempre por curso (where courseId == ...), ver fetchLiveSessions.
-      allow read: if managesCourseOf(resource.data) || isEnrolledIn(string(resource.data.courseId));
+      // Quien programó una clase general la lee en todos sus cursos (para
+      // editarla), aunque no dicte alguno de ellos.
+      allow read: if managesCourseOf(resource.data) || isEnrolledIn(string(resource.data.courseId))
+        || (isSignedIn() && resource.data.get('instructorUid', null) == request.auth.uid);
       // Admin programa clases (incluido el calendario que genera al crear un
       // aula, a nombre del docente del aula); un docente solo las de SU curso
-      // y a su nombre.
-      allow create: if isAdmin() || (isCourseTeacher(string(request.resource.data.courseId)) && request.resource.data.instructorUid == request.auth.uid);
-      allow update: if managesCourseOf(resource.data) && canManageCourse(string(request.resource.data.courseId));
-      allow delete: if managesCourseOf(resource.data);
+      // y a su nombre -- salvo una clase general (`general`: una clase para
+      // varios cursos, ver src/lib/generalClasses.js), que puede llegar a
+      // cualquier curso, siempre a su nombre.
+      allow create: if isAdmin() || (isCourseTeacher(string(request.resource.data.courseId)) && request.resource.data.instructorUid == request.auth.uid)
+        || (isSignedIn() && myRole() == 'teacher' && request.resource.data.get('general', false) == true && request.resource.data.instructorUid == request.auth.uid);
+      allow update: if (managesCourseOf(resource.data) && canManageCourse(string(request.resource.data.courseId)))
+        || (isGeneralBy(resource.data) && isGeneralBy(request.resource.data) && request.resource.data.courseId == resource.data.courseId);
+      allow delete: if managesCourseOf(resource.data) || isGeneralBy(resource.data);
     }
 
     // Preinscripciones ("me interesa este taller"): un alumno solo puede

@@ -6,7 +6,9 @@ export const isMeetLink = (link) => /^https:\/\//.test(link || '');
 // Aulas distintas de una lista de clases, para pedir cada enlace una sola vez.
 export const groupIdsOf = (sessions) => [...new Set((sessions || []).map((s) => s.groupId).filter(Boolean))];
 
+// Una clase general (varios cursos) usa su propio enlace, no el del aula.
 export const meetLinkFor = (session, linksByGroup) => {
+  if (session?.general) return isMeetLink(session.meetLink) ? session.meetLink : null;
   const link = session?.groupId ? linksByGroup?.[session.groupId] : null;
   return isMeetLink(link) ? link : null;
 };

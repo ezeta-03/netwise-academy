@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useUI } from '../context/UIContext';
-import { updateLiveSession } from '../lib/db';
+import { updateLiveSession, fetchGeneralClassCopies } from '../lib/db';
 import { isSafeLink } from '../lib/placeholders';
 import ModalPortal from './ModalPortal';
 
@@ -19,7 +19,11 @@ const RecordingLinkModal = ({ session, onClose, onSaved }) => {
     setSaving(true);
     try {
       const patch = { recordingUrl: clean || null, recordingAddedAt: clean ? new Date().toISOString() : null };
-      await updateLiveSession(session.id, patch);
+      // Una clase general publica la grabación en todos sus cursos.
+      const ids = session.general && session.generalId
+        ? (await fetchGeneralClassCopies(session.generalId, session.instructorUid).catch(() => [])).map((c) => c.id)
+        : [];
+      for (const id of ids.length ? ids : [session.id]) await updateLiveSession(id, patch);
       onSaved({ ...session, ...patch });
       addToast(clean ? 'Grabación publicada para los alumnos.' : 'Grabación quitada.', 'success');
       onClose();

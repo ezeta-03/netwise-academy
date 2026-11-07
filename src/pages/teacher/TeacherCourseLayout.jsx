@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, CheckSquare, PenLine, BarChart3, CalendarCheck, Users, UsersRound, Sparkles, Bell, Menu, ListChecks, CalendarClock } from 'lucide-react';
+import { Home, Calendar, Headphones, ArrowLeft, ChevronLeft, BookOpen, Video, FolderOpen, Target, CheckSquare, PenLine, BarChart3, CalendarCheck, Users, UsersRound, Sparkles, Bell, Menu, ListChecks, CalendarClock, Briefcase } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
@@ -28,6 +28,7 @@ const SUB_NAV = [
   { to: 'sala', label: 'Clases en vivo', icon: Video },
   { to: 'materiales', label: 'Materiales', icon: FolderOpen },
   { to: 'proyecto', label: 'Seguimiento', icon: Target },
+  { to: 'proyectos', label: 'Proyectos', icon: Briefcase },
   { to: 'entregas', label: 'Entregas y revisión', icon: CheckSquare },
   { to: 'practicas', label: 'Prácticas y avances', icon: PenLine },
   { to: 'notas', label: 'Registro de notas', icon: BarChart3 },
@@ -39,7 +40,7 @@ const SUB_NAV = [
   { to: 'ia', label: 'Asistente IA', icon: Sparkles },
 ];
 
-const PAGE_LABELS = { indicaciones: 'Indicaciones de clase', contenido: 'Contenido', sala: 'Clases en vivo', materiales: 'Materiales', proyecto: 'Seguimiento', entregas: 'Entregas y revisión', practicas: 'Prácticas y avances', notas: 'Registro de notas', asistencia: 'Asistencia', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
+const PAGE_LABELS = { indicaciones: 'Indicaciones de clase', contenido: 'Contenido', sala: 'Clases en vivo', materiales: 'Materiales', proyecto: 'Seguimiento', proyectos: 'Proyectos', entregas: 'Entregas y revisión', practicas: 'Prácticas y avances', notas: 'Registro de notas', asistencia: 'Asistencia', comunidad: 'Comunidad', grupos: 'Grupos de trabajo', ia: 'Asistente IA', rubrica: 'Rúbrica de evaluación', cronograma: 'Cronograma de evaluación' };
 
 const TeacherCourseLayout = () => {
   const { courseId } = useParams();

@@ -114,7 +114,7 @@ const Checkout = () => {
     if (!course || !currentUser) return;
     fetchLiveSessions(course.id).then((list) => {
       const upcoming = list
-        .filter((s) => s.courseId?.toString() === course.id.toString() && ['upcoming', 'live'].includes(getLiveSessionStatus(s)))
+        .filter((s) => s.courseId?.toString() === course.id.toString() && !s.general && ['upcoming', 'live'].includes(getLiveSessionStatus(s)))
         .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
       setFirstClass(upcoming[0] || null);
     }).catch(() => {});

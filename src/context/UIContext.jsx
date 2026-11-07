@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 import { useCourseOfferings } from './CourseOfferingsContext';
 import { fetchMyPreregistrations, fetchMyActiveEnrollments, fetchLiveSessions, fetchOrders, fetchCourseSubmissions, fetchPractices, fetchSupportRequests, fetchAllSupportRequests, fetchWorkGroups, fetchCampusBanners } from '../lib/db';
 import { buildStudentNotifications, buildAdminNotifications, buildTeacherNotifications } from '../lib/notifications';
+import { dedupeGeneralClasses } from '../lib/generalClasses';
 import { sessionsForStudent } from '../lib/groupAssignment';
 import LoginModal from '../components/LoginModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -93,7 +94,7 @@ export const UIProvider = ({ children }) => {
         courses,
         preregisteredIds,
         enrolledCourseIds: Object.keys(enrollments).map(Number),
-        liveSessions: sessionsForStudent(liveSessions, enrollments),
+        liveSessions: dedupeGeneralClasses(sessionsForStudent(liveSessions, enrollments)),
         enrollments,
         submissions,
         // Prácticas nuevas de SU aula.

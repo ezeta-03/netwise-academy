@@ -54,6 +54,7 @@ import TeacherCourseIndicaciones from './pages/teacher/TeacherCourseIndicaciones
 import TeacherCourseSala from './pages/teacher/TeacherCourseSala';
 import TeacherCourseMateriales from './pages/teacher/TeacherCourseMateriales';
 import TeacherCourseProyecto from './pages/teacher/TeacherCourseProyecto';
+import TeacherCourseProyectos from './pages/teacher/TeacherCourseProyectos';
 import TeacherCourseEvaluacion from './pages/teacher/TeacherCourseEvaluacion';
 import TeacherCoursePracticas from './pages/teacher/TeacherCoursePracticas';
 import TeacherCourseComunidad from './pages/teacher/TeacherCourseComunidad';
@@ -209,6 +210,7 @@ function App() {
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />
+            <Route path="proyectos" element={<TeacherCourseProyectos />} />
             <Route path="evaluacion" element={<EvaluacionRedirect />} />
             <Route path="entregas" element={<TeacherCourseEvaluacion vista="entregas" />} />
             <Route path="practicas" element={<TeacherCoursePracticas />} />
@@ -236,6 +238,7 @@ function App() {
             <Route path="sala" element={<TeacherCourseSala />} />
             <Route path="materiales" element={<TeacherCourseMateriales />} />
             <Route path="proyecto" element={<TeacherCourseProyecto />} />
+            <Route path="proyectos" element={<TeacherCourseProyectos />} />
             <Route path="evaluacion" element={<EvaluacionRedirect />} />
             <Route path="entregas" element={<TeacherCourseEvaluacion vista="entregas" />} />
             <Route path="practicas" element={<TeacherCoursePracticas />} />

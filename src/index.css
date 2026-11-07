@@ -2452,6 +2452,20 @@ body {
 /* Subir QR (Admin > Métodos de pago) */
 .qr-upload-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 26px 16px; border-radius: 12px; background: var(--accent-bg); border: 1.5px dashed #CDBDFA; color: var(--accent); font-size: .84rem; text-align: center; cursor: pointer; }
 .qr-upload-drop span { color: #4A4860; }
+/* Ficha de proyecto (Mi proyecto del alumno y Proyectos del docente). */
+.ficha-steps { margin: 0 0 16px; padding: 16px 18px; }
+.ficha-steps p { margin: 8px 0 12px; }
+.ficha-steps .admin-btn-ghost { background: transparent; color: #fff; border-color: rgba(255,255,255,.22); }
+.ficha-file { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid #ECEAF3; border-radius: 12px; background: #FAF9FD; color: var(--accent); }
+.ficha-file.is-missing { background: #FFFBEB; border-color: #FDE68A; color: #B45309; }
+.ficha-file-body { flex: 1; min-width: 0; color: #14141F; }
+.ficha-file-body .dash-list-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-student { display: flex; align-items: center; gap: 10px; }
+.project-avatar { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; background: var(--accent-bg); color: var(--accent); font-size: .74rem; font-weight: 700; }
+.project-desc { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ficha-change { border: none; background: none; padding: 0; font: 600 .8rem var(--ff-body); color: var(--accent); cursor: pointer; }
+@media (max-width: 520px) { .ficha-file { flex-wrap: wrap; } }
 .qr-upload-drop.over, .qr-upload-drop:hover, .qr-upload-drop:focus-visible { border-color: var(--accent); outline: none; }
 .qr-upload-preview { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
 .qr-upload-preview img { width: 132px; height: 132px; object-fit: contain; border-radius: 10px; border: 1px solid #E4E2EE; background: #fff; }
@@ -2574,6 +2588,22 @@ body {
 .class-card-tag.is-soon { background: #FEF3DC; color: #92400E; }
 .class-card-tag.is-live { background: #EF4444; color: #fff; }
 .class-card-tag.is-cancelled { background: #FDE8EC; color: #BE123C; }
+/* Clase general (varios cursos): etiqueta junto al estado de la clase y en las filas. */
+.class-card-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.class-card-tags .class-card-tag { margin-bottom: 0; }
+.class-general-pill {
+  display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 99px; margin-bottom: 4px;
+  font-size: .66rem; font-weight: 700; letter-spacing: .03em; background: var(--accent-bg); color: var(--accent);
+}
+.class-general-pill.is-dark { margin-bottom: 0; background: rgba(183,148,255,.18); color: #D9C7FF; }
+/* Programar clase: "Solo mi aula / Varios cursos" y la lista de cursos. */
+.class-mode-tabs { display: flex; margin-bottom: 16px; }
+.class-mode-tabs .admin-tab { flex: 1; }
+.class-courses-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.class-courses-all { border: none; background: none; padding: 0; font: 600 .78rem var(--ff-body); color: var(--accent); cursor: pointer; }
+.class-courses-list { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid #ECEAF3; border-radius: 10px; max-height: 210px; overflow-y: auto; }
+.class-course-option { align-items: flex-start; cursor: pointer; }
+.class-course-option input { margin-top: 3px; }
 .class-card-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: class-dot 1.4s ease-in-out infinite; }
 @keyframes class-dot { 50% { opacity: .35; } }
 .class-card-course { font-size: .78rem; color: #B794FF; margin-bottom: 4px; }

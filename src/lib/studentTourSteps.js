@@ -136,7 +136,7 @@ const courseSteps = (course) => {
       secondary: 'nav-proyecto',
       icon: Target,
       title: 'Mi proyecto',
-      body: 'Durante todo el curso trabajas sobre una misma empresa, marca o idea. Defínela aquí una sola vez. Luego, por módulo, ves la entrega del módulo y las prácticas de clase, cada una con su botón "Entregar".',
+      body: 'Durante todo el curso trabajas sobre una misma empresa, marca o idea. Crea aquí tu proyecto subiendo la ficha de proyecto (la descargas en Materiales). Luego, por módulo, ves la entrega del módulo y las prácticas de clase, cada una con su botón "Entregar".',
     },
     {
       id: 'notas',

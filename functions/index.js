@@ -891,6 +891,18 @@ const createSpace = async (tag, id) => {
   return space;
 };
 
+// createClassMeet: enlace de Meet propio para una clase general (una clase
+// para varios cursos, ver src/lib/generalClasses.js) cuando el docente no pega
+// uno. No usa la sala del aula: cada clase general tiene la suya. Lo pide un
+// docente o el admin; la app guarda el enlace en las copias de la clase.
+export const createClassMeet = onCall({ ...ADMIN_CALL, timeoutSeconds: 60 }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
+  const role = (await db.collection('users').doc(request.auth.uid).get()).data()?.role;
+  if (role !== 'teacher' && role !== 'admin') throw new HttpsError('permission-denied', 'Solo un docente puede crear el enlace de una clase.');
+  const space = await createSpace('gen', `${Date.now().toString(36)}${request.auth.uid.slice(0, 4)}`);
+  return { link: space.meetingUri };
+});
+
 // Grupos de trabajo (E12/D7): cada grupo que crea un alumno recibe su propia
 // sala de Meet apenas se crea. Es una sola y nadie la cambia (las reglas no
 // dejan que el alumno toque meetLink). Si falla, queda `meetError` para que el

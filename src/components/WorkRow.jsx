@@ -18,7 +18,7 @@ const WorkRow = ({ item, sub, blocked = false, showCourse = false, onSubmit, onV
     ? `${hasDelivered(sub) ? 'Calificada' : 'Calificada sin entrega'} el ${shortDate(sub.updatedAt)}`
     : state === 'submitted'
       ? `Enviada el ${shortDate(sub.submittedAt || sub.updatedAt)} · por calificar`
-      : `${dueLabel(days)}${blocked ? ' · primero define tu empresa' : ''}`;
+      : `${dueLabel(days)}${blocked ? ' · primero crea tu proyecto' : ''}`;
 
   return (
     <div className="class-row">
@@ -36,7 +36,7 @@ const WorkRow = ({ item, sub, blocked = false, showCourse = false, onSubmit, onV
       </div>
       <div className="class-row-actions" style={{ alignItems: 'center' }}>
         {state === 'pending' && (blocked
-          ? <div className="work-locked"><button className="admin-btn-edit" disabled style={{ background: '#EFEEF5', color: '#A3A1B5', cursor: 'not-allowed' }}>Entregar</button><span>Primero define tu empresa</span></div>
+          ? <div className="work-locked"><button className="admin-btn-edit" disabled style={{ background: '#EFEEF5', color: '#A3A1B5', cursor: 'not-allowed' }}>Entregar</button><span>Primero crea tu proyecto con la ficha</span></div>
           : <button className="admin-btn-edit" onClick={() => onSubmit(item)}>Entregar</button>)}
         {state === 'submitted' && <button className="admin-btn-ghost" onClick={() => onView(item)}>Ver entrega</button>}
         {state === 'reviewed' && (

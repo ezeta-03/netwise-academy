@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Upload, FileText, Download, FolderOpen, Pencil } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
-import { saveProjectProfile } from '../../lib/db';
+import { saveProjectProfile, uploadSubmissionFile } from '../../lib/db';
+import { isPendingUrl } from '../../lib/placeholders';
 import { getGradingModel } from '../../lib/gradingScheme';
 import { submissionFor } from '../../lib/workItems';
 import { useStudentCourse } from '../../hooks/useStudentCourse';
@@ -12,25 +13,57 @@ import ModalPortal from '../../components/ModalPortal';
 import SubmitWorkModal from '../../components/SubmitWorkModal';
 import WorkRow from '../../components/WorkRow';
 
-const ProfileModal = ({ course, initial, onClose, onSaved }) => {
+// Mismos tipos y tope que las entregas (storage.rules, /submissions/{uid}).
+const FICHA_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.png,.jpg,.jpeg,.webp';
+const FICHA_TYPES = /^(application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\..+|application\/vnd\.ms-powerpoint|application\/vnd\.ms-excel|image\/(png|jpeg|webp))$/;
+const FICHA_MAX_MB = 50;
+const fmtSize = (bytes) => (bytes ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB` : '');
+const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' }).replace(/\./g, '') : '');
+
+// La ficha en blanco que el docente comparte en Materiales del curso: el
+// material cuyo nombre dice "ficha" (si hay varios, el primero).
+const findBlankFicha = (modules) => (modules || [])
+  .flatMap((m) => m.materials || [])
+  .find((mat) => /ficha/i.test(mat.title || '') && !isPendingUrl(mat.url)) || null;
+
+// Crear mi proyecto (E7): el proyecto se crea con la ficha de proyecto. El
+// alumno descarga la ficha en blanco de Materiales, la llena y la sube aquí
+// junto con el nombre de la empresa y una breve descripción.
+const ProfileModal = ({ course, initial, blankFicha, onClose, onSaved }) => {
   const { currentUser } = useAuth();
   const { addToast } = useUI();
+  const navigate = useNavigate();
   const [name, setName] = useState(initial?.name || '');
-  const [activity, setActivity] = useState(initial?.activity || '');
-  const [sector, setSector] = useState(initial?.sector || '');
-  const [audience, setAudience] = useState(initial?.audience || '');
   const [description, setDescription] = useState(initial?.description || '');
+  const [file, setFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
   const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+  const hasFicha = !!file || !!initial?.fichaUrl;
+
+  const pick = (list) => {
+    const f = list?.[0];
+    if (!f) return;
+    if (!FICHA_TYPES.test(f.type)) { addToast(`"${f.name}" no es un tipo aceptado. Sube la ficha en PDF, Word, Excel, PowerPoint o imagen.`, 'error'); return; }
+    if (f.size > FICHA_MAX_MB * 1024 * 1024) { addToast(`La ficha pesa más de ${FICHA_MAX_MB} MB.`, 'error'); return; }
+    setFile(f);
+  };
+
+  const missing = !hasFicha ? 'Sube tu ficha llena' : !name.trim() ? 'Escribe el nombre de tu empresa' : !description.trim() ? 'Escribe una breve descripción' : '';
 
   const handleSave = async () => {
-    if (!name.trim()) { addToast('Cuéntanos el nombre de tu empresa, marca o idea.', 'error'); return; }
+    if (missing) { addToast(missing, 'error'); return; }
     setSaving(true);
     try {
+      const ficha = file
+        ? { fichaUrl: await uploadSubmissionFile(currentUser.uid, course.id, 'ficha', file), fichaName: file.name, fichaSize: file.size, fichaUploadedAt: new Date().toISOString() }
+        : { fichaUrl: initial.fichaUrl, fichaName: initial.fichaName || 'Ficha de proyecto', fichaSize: initial.fichaSize || null, fichaUploadedAt: initial.fichaUploadedAt || null };
       await saveProjectProfile({
         uid: currentUser.uid, courseId: course.id, courseTitle: course.title,
-        name: name.trim(), activity: activity.trim(), sector: sector.trim(), audience: audience.trim(), description: description.trim(),
+        studentName: currentUser.displayName || '', studentEmail: currentUser.email || '',
+        name: name.trim(), description: description.trim(), ...ficha,
       });
-      addToast('Tu proyecto quedó definido.', 'success');
+      addToast(initial ? 'Tu proyecto quedó actualizado.' : 'Tu proyecto quedó creado con tu ficha.', 'success');
       onSaved();
       onClose();
     } catch {
@@ -44,21 +77,53 @@ const ProfileModal = ({ course, initial, onClose, onSaved }) => {
     <ModalPortal>
     <div className="admin-modal-overlay">
       <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="admin-modal-head"><div className="admin-modal-title">Define tu empresa</div><button className="admin-modal-close" onClick={onClose}><X size={18} /></button></div>
-        <div className="admin-banner" style={{ marginBottom: 16 }}>
-          <div>
-            <div className="admin-banner-title" style={{ fontSize: '.95rem' }}>Tu proyecto</div>
-            <p className="admin-banner-desc">Cada módulo del curso suma un avance sobre esta misma empresa o idea. Cuéntanos de qué se trata y arrancamos.</p>
-          </div>
+        <div className="admin-modal-head">
+          <div className="admin-modal-title">{initial ? 'Editar mi proyecto' : 'Crear mi proyecto'}</div>
+          <button className="admin-modal-close" onClick={onClose}><X size={18} /></button>
         </div>
-        <div className="admin-field"><label>Empresa, marca o idea</label><input value={name} onChange={(e) => setName(e.target.value)} /></div>
-        <div className="admin-field"><label>¿A qué se dedica la empresa?</label><input value={activity} onChange={(e) => setActivity(e.target.value)} /></div>
-        <div className="admin-field"><label>Sector o rubro</label><input value={sector} onChange={(e) => setSector(e.target.value)} /></div>
-        <div className="admin-field"><label>¿A quién te diriges? Público objetivo</label><textarea rows={2} value={audience} onChange={(e) => setAudience(e.target.value)} /></div>
-        <div className="admin-field"><label>Descripción de lo que hace el negocio</label><textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
+        <div className="dark-card ficha-steps">
+          <span className="dark-card-badge">Tu proyecto</span>
+          <p>Tu proyecto se crea con la ficha de proyecto: descárgala en Materiales del curso, llénala y súbela aquí.</p>
+          {blankFicha
+            ? <a className="admin-btn-ghost" href={blankFicha.url} target="_blank" rel="noreferrer"><Download size={13} /> Descargar ficha en blanco</a>
+            : <button type="button" className="admin-btn-ghost" onClick={() => { onClose(); navigate('../materiales'); }}><FolderOpen size={13} /> Ir a Materiales del curso</button>}
+        </div>
+
+        <div className="admin-field">
+          <label>Ficha de proyecto llena</label>
+          <input ref={inputRef} type="file" accept={FICHA_ACCEPT} hidden onChange={(e) => { pick(e.target.files); e.target.value = ''; }} />
+          {hasFicha ? (
+            <div className="ficha-file">
+              <FileText size={18} />
+              <div className="ficha-file-body">
+                <div className="dash-list-row-title">{file ? file.name : initial.fichaName || 'Ficha de proyecto'}</div>
+                <div className="admin-cell-sub">{file ? `${fmtSize(file.size)} · Lista para subir` : `Subida el ${fmtDay(initial.fichaUploadedAt)}`}</div>
+              </div>
+              <button type="button" className="admin-panel-link ficha-change" onClick={() => inputRef.current?.click()}>Cambiar</button>
+            </div>
+          ) : (
+            <div
+              role="button" tabIndex={0}
+              className={`qr-upload-drop ${dragOver ? 'over' : ''}`}
+              onClick={() => inputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inputRef.current?.click(); } }}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files); }}
+            >
+              <Upload size={18} />
+              <strong>Arrastra tu ficha o elige un archivo</strong>
+              <span>PDF, Word, Excel, PowerPoint o imagen · hasta {FICHA_MAX_MB} MB</span>
+            </div>
+          )}
+        </div>
+        <div className="admin-field"><label>Nombre de la empresa, marca o idea</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Café Altura" /></div>
+        <div className="admin-field"><label>Breve descripción</label><textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="¿A qué se dedica y a quién se dirige?" /></div>
         <div className="admin-modal-actions">
           <button className="admin-btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="admin-btn-edit" onClick={handleSave} disabled={saving}><Plus size={13} /> {saving ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear mi proyecto'}</button>
+          <button className="admin-btn-edit" onClick={handleSave} disabled={saving || !!missing} title={missing || undefined}>
+            {initial ? <Pencil size={13} /> : <Plus size={13} />} {saving ? 'Guardando...' : initial ? 'Guardar cambios' : 'Crear mi proyecto'}
+          </button>
         </div>
       </div>
     </div>
@@ -113,17 +178,36 @@ const StudentCourseProyecto = () => {
         <div className="admin-panel" style={{ marginBottom: 20 }}>
           <div className="admin-panel-head" style={{ marginBottom: 2 }}>
             <span className="admin-panel-title">Mi empresa</span>
-            <button className="admin-btn-ghost" onClick={() => setProfileModalOpen(true)}>Editar</button>
+            <button className="admin-btn-ghost" onClick={() => setProfileModalOpen(true)}><Pencil size={13} /> Editar</button>
           </div>
           <p className="admin-panel-caption" style={{ marginTop: 0 }}>Todas tus prácticas se trabajan sobre ella.</p>
           <div className="dash-list-row-title">{profile.name}</div>
-          <div className="admin-cell-sub">{[profile.description || profile.activity, profile.updatedAt ? `Definida el ${new Date(profile.updatedAt).toLocaleDateString('es-PE', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '')}` : ''].filter(Boolean).join(' · ')}</div>
+          {(profile.description || profile.activity) && <div className="admin-cell-sub">{profile.description || profile.activity}</div>}
+          {profile.fichaUrl ? (
+            <div className="ficha-file" style={{ marginTop: 12 }}>
+              <FileText size={18} />
+              <div className="ficha-file-body">
+                <div className="dash-list-row-title">{profile.fichaName || 'Ficha de proyecto'}</div>
+                <div className="admin-cell-sub">Ficha de proyecto{profile.fichaUploadedAt ? ` · subida el ${fmtDay(profile.fichaUploadedAt)}` : ''}</div>
+              </div>
+              <a className="admin-btn-ghost" href={profile.fichaUrl} target="_blank" rel="noreferrer"><Download size={13} /> Ver ficha</a>
+            </div>
+          ) : (
+            <div className="ficha-file is-missing" style={{ marginTop: 12 }}>
+              <FileText size={18} />
+              <div className="ficha-file-body">
+                <div className="dash-list-row-title">Falta tu ficha de proyecto</div>
+                <div className="admin-cell-sub">Descárgala en Materiales del curso, llénala y súbela.</div>
+              </div>
+              <button className="admin-btn-edit" onClick={() => setProfileModalOpen(true)}><Upload size={13} /> Subir ficha</button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="dark-card" style={{ margin: '14px 0 20px' }}>
           <span className="dark-card-badge">Primer paso</span>
-          <h3>Define tu marca/empresa</h3>
-          <p>Elige la empresa, marca o idea sobre la que vas a trabajar. Se define una sola vez y todos los avances del curso se construyen sobre ella.</p>
+          <h3>Crea tu proyecto con la ficha</h3>
+          <p>Descarga la ficha de proyecto en Materiales del curso, llénala con los datos de tu empresa, marca o idea y súbela. Todos los avances del curso se construyen sobre ella.</p>
           <button className="admin-btn-edit" style={{ marginTop: 14 }} onClick={() => setProfileModalOpen(true)}><Plus size={14} /> Crear mi proyecto</button>
         </div>
       )}
@@ -171,7 +255,7 @@ const StudentCourseProyecto = () => {
         </div>
       )}
 
-      {profileModalOpen && <ProfileModal course={course} initial={profile} onClose={() => setProfileModalOpen(false)} onSaved={reload} />}
+      {profileModalOpen && <ProfileModal course={course} initial={profile} blankFicha={findBlankFicha(modules)} onClose={() => setProfileModalOpen(false)} onSaved={reload} />}
       {submitItem && <SubmitWorkModal course={course} item={submitItem} existing={submissionFor(submitItem, submissions)} onClose={() => setSubmitItem(null)} onSaved={reload} />}
     </div>
   );

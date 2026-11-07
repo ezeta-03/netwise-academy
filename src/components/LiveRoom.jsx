@@ -26,7 +26,10 @@ const LiveRoom = ({ session, scheduleLine, lobbyHeadline, lobbyMeta, joinLabel, 
 
   useEffect(() => {
     let cancelled = false;
-    const resolve = session?.groupId
+    // Una clase general (varios cursos) trae su propio enlace.
+    const resolve = session?.general
+      ? Promise.resolve(session.meetLink || null)
+      : session?.groupId
       ? fetchGroupClassLink(session.groupId)
       : !session?.courseId ? Promise.resolve(null) : fetchGroups(session.courseId).then((list) => {
         const withLink = list.filter((g) => g.status !== 'closed' && isLink(g.classLink));
@@ -37,7 +40,7 @@ const LiveRoom = ({ session, scheduleLine, lobbyHeadline, lobbyMeta, joinLabel, 
       .catch(() => {})
       .finally(() => { if (!cancelled) setLinkLoaded(true); });
     return () => { cancelled = true; };
-  }, [session?.groupId, session?.courseId]);
+  }, [session?.groupId, session?.courseId, session?.general, session?.meetLink]);
 
   // Solo las clases programadas (con startsAt) tienen ventana de entrada. Se
   // refresca cada 15 s mientras se espera, para que el botón se habilite solo.

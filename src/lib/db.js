@@ -182,6 +182,92 @@ export const deleteLiveSession = async (sessionId) => {
   await deleteDoc(doc(db, 'liveSessions', sessionId));
 };
 
+// --- Clases generales (una clase para varios cursos, ver lib/generalClasses.js) ---
+// Una copia por curso en `liveSessions` con el mismo `generalId`: cada alumno
+// la lee con la consulta de su curso. Quien la programó (`instructorUid`) la
+// edita, cancela o borra en todas sus copias a la vez.
+
+const newGeneralId = () => `gen_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const generalCopy = ({ course, courses, generalId, title, startsAt, durationMin, instructor, instructorUid, meetLink }) => ({
+  courseId: course.id, courseTitle: course.title, title, startsAt, durationMin, instructor, instructorUid,
+  status: 'upcoming', general: true, generalId,
+  generalCourseIds: courses.map((c) => c.id), generalCourseTitles: courses.map((c) => c.title),
+  meetLink: meetLink || null,
+});
+
+const addLiveSessionDoc = async (payload) => {
+  if (!isConfigValid) {
+    const s = { id: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...payload };
+    LIVE_SESSIONS.push(s);
+    return s;
+  }
+  const ref = await addDoc(collection(db, 'liveSessions'), payload);
+  return { id: ref.id, ...payload };
+};
+
+// `courses`: [{ id, title }] -- los cursos elegidos.
+export const scheduleGeneralClass = async ({ courses, title, startsAt, durationMin, instructor, instructorUid, meetLink }) => {
+  const generalId = newGeneralId();
+  const sessions = [];
+  for (const course of courses) {
+    sessions.push(await addLiveSessionDoc(generalCopy({ course, courses, generalId, title, startsAt, durationMin, instructor, instructorUid, meetLink })));
+  }
+  return { generalId, sessions };
+};
+
+// Todas las copias de una clase general. Se filtra por quien la programó: las
+// reglas le dejan leer sus copias aunque sean de cursos que no dicta.
+export const fetchGeneralClassCopies = async (generalId, instructorUid) => {
+  if (!isConfigValid) return LIVE_SESSIONS.filter((s) => s.generalId === generalId);
+  const snap = await getDocs(query(collection(db, 'liveSessions'), where('generalId', '==', generalId), where('instructorUid', '==', instructorUid)));
+  return snap.docs.map((d) => withIsoStart({ id: d.id, ...d.data() }));
+};
+
+// Clases generales que programó un docente (también en cursos que no dicta).
+export const fetchMyGeneralClasses = async (instructorUid) => {
+  if (!instructorUid) return [];
+  if (!isConfigValid) return LIVE_SESSIONS.filter((s) => s.general && s.instructorUid === instructorUid);
+  const snap = await getDocs(query(collection(db, 'liveSessions'), where('general', '==', true), where('instructorUid', '==', instructorUid)));
+  return snap.docs.map((d) => withIsoStart({ id: d.id, ...d.data() }));
+};
+
+// Cambia la clase en todas sus copias. Si cambian los cursos, se borra la
+// copia de los que salen y se crea la de los que entran.
+export const updateGeneralClass = async (session, { courses, title, startsAt, durationMin, meetLink, rescheduledAt }) => {
+  const copies = await fetchGeneralClassCopies(session.generalId, session.instructorUid);
+  const wanted = new Set(courses.map((c) => String(c.id)));
+  const have = new Set(copies.map((c) => String(c.courseId)));
+  const patch = {
+    title, startsAt, durationMin, meetLink: meetLink || null,
+    generalCourseIds: courses.map((c) => c.id), generalCourseTitles: courses.map((c) => c.title),
+    ...(rescheduledAt ? { rescheduledAt } : {}),
+  };
+  for (const copy of copies) {
+    if (wanted.has(String(copy.courseId))) await updateLiveSession(copy.id, patch);
+    else await deleteLiveSession(copy.id);
+  }
+  for (const course of courses.filter((c) => !have.has(String(c.id)))) {
+    await addLiveSessionDoc(generalCopy({ course, courses, generalId: session.generalId, title, startsAt, durationMin, instructor: session.instructor, instructorUid: session.instructorUid, meetLink }));
+  }
+};
+
+export const cancelGeneralClass = async (session) => {
+  for (const copy of await fetchGeneralClassCopies(session.generalId, session.instructorUid)) await cancelLiveSession(copy.id);
+};
+
+export const deleteGeneralClass = async (session) => {
+  for (const copy of await fetchGeneralClassCopies(session.generalId, session.instructorUid)) await deleteLiveSession(copy.id);
+};
+
+// Enlace de Meet nuevo para una clase general (Cloud Function createClassMeet),
+// cuando el docente no pega uno propio. Devuelve el enlace.
+export const createClassMeet = async () => {
+  if (!isConfigValid) return `https://meet.google.com/demo-${Math.random().toString(36).slice(2, 6)}-gen`;
+  const { data } = await httpsCallable(functions, 'createClassMeet', { timeout: 60000 })({});
+  return data.link;
+};
+
 // --- Usuarios y roles (colección Firestore `users`, creada por AuthContext) ---
 
 export const fetchAllUsers = async () => {
@@ -1815,8 +1901,15 @@ export const fetchProjectProfile = async (uid, courseId) => {
   return docSnap.exists() ? docSnap.data() : null;
 };
 
-export const saveProjectProfile = async ({ uid, courseId, courseTitle, name, activity, sector, audience, description }) => {
-  const payload = { uid, courseId, courseTitle, name, activity, sector, audience, description, updatedAt: new Date().toISOString() };
+// El proyecto se crea con la ficha de proyecto que el alumno llena y sube
+// (`fichaUrl`, ver "Crear mi proyecto"): nombre de la empresa, breve
+// descripción y la ficha. El docente los ve en Proyectos.
+export const saveProjectProfile = async ({ uid, courseId, courseTitle, studentName, studentEmail, name, description, fichaUrl, fichaName, fichaSize, fichaUploadedAt }) => {
+  const payload = {
+    uid, courseId, courseTitle, studentName: studentName || '', studentEmail: studentEmail || '', name, description,
+    fichaUrl: fichaUrl || null, fichaName: fichaName || null, fichaSize: fichaSize || null, fichaUploadedAt: fichaUploadedAt || null,
+    updatedAt: new Date().toISOString(),
+  };
 
   if (!isConfigValid) {
     localStorage.setItem(`mock_project_profile_${uid}_${courseId}`, JSON.stringify(payload));
@@ -1825,6 +1918,20 @@ export const saveProjectProfile = async ({ uid, courseId, courseTitle, name, act
 
   await setDoc(doc(db, 'projectProfiles', `${uid}_${courseId}`), payload);
   return payload;
+};
+
+// Proyectos de los alumnos de un curso (Proyectos del docente). Las reglas
+// dejan leerlos al docente del curso y al admin.
+export const fetchCourseProjectProfiles = async (courseId) => {
+  if (!isConfigValid) {
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('mock_project_profile_') && key.endsWith(`_${courseId}`)) rows.push(JSON.parse(localStorage.getItem(key)));
+    }
+    return rows;
+  }
+  return fetchByCourses('projectProfiles', courseId);
 };
 
 // --- Avances de práctica del proyecto (colección `projectAdvances`) ---

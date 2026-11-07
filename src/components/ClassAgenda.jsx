@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getClassCardState } from '../lib/liveSessionStatus';
 import { meetLinkFor } from '../lib/classLinks';
+import { dedupeGeneralClasses, generalIncludesCourse } from '../lib/generalClasses';
 import { useNow } from '../hooks/useNow';
 import { ClassRow, MeetButton, RecordingButton } from './ClassCard';
 
@@ -22,9 +23,18 @@ const ClassAgenda = ({ sessions, courses, classLinks, role = 'student', subtitle
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(null);
 
-  const titleOf = (s) => courses.find((c) => c.id.toString() === s.courseId?.toString())?.title || s.courseTitle;
-  const filtered = sessions
-    .filter((s) => courseFilter === 'all' || s.courseId?.toString() === courseFilter)
+  // Una clase general sale una sola vez, en cualquiera de sus cursos.
+  const unique = dedupeGeneralClasses(sessions);
+  const titleOf = (s) => {
+    if (s.general && role === 'teacher') return (s.generalCourseTitles || []).join(' · ') || s.courseTitle;
+    if (s.general) {
+      const mine = courses.filter((c) => generalIncludesCourse(s, c.id) && sessions.some((x) => x.generalId === s.generalId && x.courseId?.toString() === c.id.toString()));
+      if (mine.length) return mine.map((c) => c.title).join(' · ');
+    }
+    return courses.find((c) => c.id.toString() === s.courseId?.toString())?.title || s.courseTitle;
+  };
+  const filtered = unique
+    .filter((s) => courseFilter === 'all' || s.courseId?.toString() === courseFilter || (s.general && generalIncludesCourse(s, courseFilter)))
     .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
 
   const monthDays = useMemo(() => {
@@ -114,7 +124,7 @@ const ClassAgenda = ({ sessions, courses, classLinks, role = 'student', subtitle
           {list.length === 0 ? (
             <p className="admin-panel-caption" style={{ marginTop: 0 }}>{selectedDay ? 'No tienes clases este día.' : `No tienes clases en los próximos ${UPCOMING_DAYS} días.`}</p>
           ) : list.map((s) => (
-            <ClassRow key={s.id} session={s} courseTitle={titleOf(s)}
+            <ClassRow key={s.id} session={s} courseTitle={titleOf(s)} role={role}
               actions={getClassCardState(s, now) === 'ended'
                 ? <RecordingButton session={s} />
                 : <MeetButton session={s} meetLink={meetLinkFor(s, classLinks)} role={role} size="sm" now={now} />} />
