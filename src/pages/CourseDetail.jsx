@@ -40,7 +40,8 @@ const CourseDetail = () => {
   const { isEnrolled } = useEnrollment(course);
 
   useEffect(() => {
-    if (!course) return;
+    // Los cursos del panel traen su temario en la propia oferta (`course.modules`).
+    if (!course || course.isCustom) return;
     // Resumen público (solo título/semanas, sin links de video) -- se lee sin
     // sesión para que un visitante vea el temario y pueda descargar el
     // programa por correo dejando su contacto (DownloadProgramModal). El contenido real
@@ -74,6 +75,11 @@ const CourseDetail = () => {
     ? course.sessionsPerWeek * course.sessionHours
     : course.scheduleSlots.reduce((sum, s) => sum + hoursOfRange(`${s.start}-${s.end}`), 0);
   const weeklySessions = usesFormLoad ? course.sessionsPerWeek : course.scheduleSlots.length;
+  // Temario a mostrar: en los cursos del panel viene de la oferta (con descripción y entregable);
+  // en los talleres de data.js, del resumen público.
+  const programModules = course.isCustom
+    ? (course.modules || []).map((m, i) => ({ key: i, title: m.title, weeksLabel: m.week || '', desc: m.desc || '', deliverable: m.deliverable || '' }))
+    : modules.map((m) => ({ key: m.id, title: m.title, weeksLabel: m.weeksLabel || '', desc: '', deliverable: '' }));
   const supportHours = (hoursOfRange(SUPPORT_HOURS.friday) + hoursOfRange(SUPPORT_HOURS.saturday));
   const originalPrice = course.price != null && course.promoPercent ? Math.round(course.price / (1 - course.promoPercent / 100)) : null;
 
@@ -158,16 +164,18 @@ const CourseDetail = () => {
               <h2 className="cd-section-h2" id="cd-modules">Lo que vas a <em>aprender.</em></h2>
               <p className="cd-section-sub">{course.isCustom ? '' : 'Cuatro módulos, '}{course.duration} y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
 
-              {modules.length === 0 ? (
+              {programModules.length === 0 ? (
                 <p className="cd-section-sub">El programa detallado de este taller se publica muy pronto.</p>
               ) : (
                 <div className="cd-modules">
-                  {modules.map((m, i) => (
-                    <div key={m.id} className="cd-module-row">
+                  {programModules.map((m, i) => (
+                    <div key={m.key} className="cd-module-row">
                       <div className="cd-module-num">{i + 1}</div>
                       <div>
                         <div className="cd-module-title">{m.title}</div>
                         {m.weeksLabel && <div className="cd-module-weeks">{m.weeksLabel}</div>}
+                        {m.desc && <p className="cd-module-desc">{m.desc}</p>}
+                        {m.deliverable && <span className="cd-module-deliverable">{m.deliverable}</span>}
                       </div>
                     </div>
                   ))}
