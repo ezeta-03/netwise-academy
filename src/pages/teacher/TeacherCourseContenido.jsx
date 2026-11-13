@@ -4,6 +4,9 @@ import { Plus, Pencil, Trash2, Video, Save, FileText, CheckCircle2, Check, Uploa
 import { useAuth } from '../../context/AuthContext';
 import { useUI } from '../../context/UIContext';
 import { fetchCourseContent, saveCourseContent, uploadCourseMaterial } from '../../lib/db';
+
+// Si el navegador no reporta el tipo (Windows sin Office), se valida por extensión.
+const MATERIAL_EXT_RE = /\.(pdf|docx?|pptx?|xlsx)$/i;
 import { can } from '../../lib/permissions';
 import ModuleSessionCard, { GradedBadge } from '../../components/ModuleSessionCard';
 import { isPendingUrl, isSafeLink } from '../../lib/placeholders';
@@ -15,8 +18,8 @@ const uid = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).sl
 const MAX_MATERIAL_MB = 20;
 const MAX_MATERIAL_SIZE = MAX_MATERIAL_MB * 1024 * 1024;
 const fmtMb = (bytes) => `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
-const MATERIAL_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx';
-const MATERIAL_TYPE_RE = /application\/(pdf|msword|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation))/;
+const MATERIAL_ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xlsx';
+const MATERIAL_TYPE_RE = /application\/(pdf|msword|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|presentationml\.presentation|spreadsheetml\.sheet))/;
 
 const emptyModule = (n) => ({
   id: uid('m'), title: `Módulo ${n}`, weeksLabel: '', objective: '', practiceIntro: '', practiceBullets: [],
@@ -106,7 +109,9 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
 
   const applyFile = (f) => {
     if (!f) return;
-    if (!MATERIAL_TYPE_RE.test(f.type)) { addToast('Solo se aceptan archivos PDF, DOCX o PPT.', 'error'); return; }
+    const genericType = !f.type || f.type === 'application/octet-stream';
+    const typeOk = MATERIAL_TYPE_RE.test(f.type) || (genericType && MATERIAL_EXT_RE.test(f.name));
+    if (!typeOk) { addToast('Solo se aceptan archivos PDF, DOCX, PPT o XLSX.', 'error'); return; }
     if (f.size > MAX_MATERIAL_SIZE) { addToast(`El archivo pesa más de ${MAX_MATERIAL_MB} MB. Súbelo a Drive y pega el enlace.`, 'error'); return; }
     setFile(f);
   };
@@ -162,7 +167,7 @@ const MaterialForm = ({ courseId, moduleId, onSave, onCancel }) => {
             <>
               <div className="dash-upload-zone-icon"><UploadCloud size={22} /></div>
               <div className="dash-upload-zone-text">Arrastra y suelta o <span className="dash-upload-zone-link">elige el archivo</span> a subir.</div>
-              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT. Máx {MAX_MATERIAL_MB} MB</div>
+              <div className="dash-upload-zone-hint">Formato de archivo: PDF, DOCX, PPT, XLSX. Máx {MAX_MATERIAL_MB} MB</div>
             </>
           )}
         </div>

@@ -89,7 +89,7 @@ const Home = ({ scrollTo = null }) => {
             {COURSES.filter((c) => c.visible !== false).map((c) => (
               <div className="home-course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
                 <div className="home-course-thumb">
-                  <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} />
+                  <img src={c.thumb || COURSE_THUMBNAILS[c.id]} alt={c.title} />
                 </div>
                 <div className="home-course-body">
                   <div className="home-course-meta-row">

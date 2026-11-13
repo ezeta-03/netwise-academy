@@ -591,6 +591,49 @@ export const materializeCoursePricing = (courseId, { price, promoPercent }) => p
   promoPercent: promoPercent ?? null,
 });
 
+// --- Cursos creados desde el panel (ver lib/customCourses.js) ---
+// Guarda el documento completo de un curso nuevo o de un borrador en
+// courseOfferings. `payload` ya viene armado por courseFormToOffering.
+export const saveCustomCourse = (courseId, payload, adminUid) => patchCourseOffering(courseId, {
+  ...payload,
+  updatedAt: new Date().toISOString(),
+  updatedBy: adminUid,
+});
+// Posición del curso en el catálogo (1 = primero). Lo escribe el admin al
+// reordenar la tabla de Cursos y precios.
+export const updateCourseOrder = (courseId, order) => patchCourseOffering(courseId, { order });
+
+// Alumnos con matrícula activa en un curso. Un curso con alumnos no se puede eliminar.
+export const countActiveCourseEnrollments = async (courseId) => {
+  if (!isConfigValid) return 0;
+  const snap = await getDocs(query(collection(db, 'enrollments'), where('courseId', '==', String(courseId))));
+  return snap.docs.filter((d) => isActiveEnrollment(d.data())).length;
+};
+
+// Elimina un curso creado desde el panel (su documento en courseOfferings).
+// Solo el admin puede hacerlo (reglas de courseOfferings).
+export const deleteCustomCourse = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_course_offerings');
+    const map = raw ? JSON.parse(raw) : {};
+    delete map[courseId];
+    localStorage.setItem('mock_course_offerings', JSON.stringify(map));
+    return;
+  }
+  await deleteDoc(doc(db, 'courseOfferings', String(courseId)));
+};
+
+// Portada del curso (imagen) -> Storage `courseCovers/{id}/...`. Devuelve la URL pública.
+export const uploadCourseCover = async (courseId, file) => {
+  if (!isConfigValid) {
+    return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve({ url: r.result, name: file.name }); r.readAsDataURL(file); });
+  }
+  const safeName = file.name.replace(/[^\w.-]+/g, '_');
+  const ref = storageRef(storage, `courseCovers/${courseId}/${Date.now()}_${safeName}`);
+  await uploadBytes(ref, file, { contentType: file.type });
+  return { url: await getDownloadURL(ref), name: file.name };
+};
+
 const patchCourseOffering = async (courseId, patch) => {
   if (!isConfigValid) {
     const raw = localStorage.getItem('mock_course_offerings');
@@ -1115,6 +1158,18 @@ export const uploadSubmissionFile = async (uid, courseId, moduleId, file) => {
 // se guarda como data URL en localStorage junto con el resto del contenido.
 // `onProgress(fracción 0..1)`: la subida va por partes, así el docente ve
 // cuánto falta con archivos grandes (hasta 20 MB, ver storage.rules).
+// Tipo MIME que Storage valida (storage.rules). Usa la extensión: algunos equipos
+// Windows dan `file.type` vacío para .xlsx/.docx y la regla lo rechazaría.
+const MATERIAL_MIME_BY_EXT = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+};
+export const materialContentType = (file) => MATERIAL_MIME_BY_EXT[file.name.split('.').pop().toLowerCase()] || file.type;
+
 export const uploadCourseMaterial = async (courseId, moduleId, file, onProgress) => {
   if (!isConfigValid) {
     return new Promise((resolve, reject) => {
@@ -1126,7 +1181,7 @@ export const uploadCourseMaterial = async (courseId, moduleId, file, onProgress)
   }
   const path = `courseMaterials/${courseId}/${moduleId}_${Date.now()}_${file.name}`;
   const ref = storageRef(storage, path);
-  const task = uploadBytesResumable(ref, file);
+  const task = uploadBytesResumable(ref, file, { contentType: materialContentType(file) });
   task.on('state_changed', (snap) => onProgress?.(snap.totalBytes ? snap.bytesTransferred / snap.totalBytes : 0));
   await task;
   return getDownloadURL(ref);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, X, BookOpen } from 'lucide-react';
+import { Search, Plus, X, BookOpen, Trash2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import SyllabusModal from '../../components/SyllabusModal';
 import { useAuth } from '../../context/AuthContext';
@@ -8,7 +8,8 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { CATEGORIES } from '../../lib/data';
-import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, fetchAllUsers, logChange } from '../../lib/db';
+import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, updateCourseOrder, countActiveCourseEnrollments, deleteCustomCourse, fetchAllUsers, logChange } from '../../lib/db';
+import NewCourseWizard from './NewCourseWizard';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
 const catLabel = (catId) => {
@@ -93,12 +94,14 @@ const EditCourseModal = ({ course, adminName, adminUid, onClose, onSaved }) => {
 const AdminCursos = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const { courses, refresh } = useCourseOfferings();
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
   const [editing, setEditing] = useState(null);
   const [syllabusFor, setSyllabusFor] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [editingCustom, setEditingCustom] = useState(null);
 
   const adminName = currentUser?.displayName || currentUser?.email || 'Admin';
 
@@ -112,6 +115,56 @@ const AdminCursos = () => {
   const getOriginalPrice = (c) => {
     if (c.price == null || !c.promoPercent) return null;
     return Math.round(c.price / (1 - c.promoPercent / 100));
+  };
+
+  // Puesto en el catálogo: 1 = primero. Un curso nuevo entra como 1 y los demás bajan.
+  const nextOrder = courses.length ? Math.min(...courses.map((c) => c.order)) - 1 : 0;
+
+  // Intercambia el curso con su vecino y renumera toda la lista (1, 2, 3…),
+  // así el orden queda limpio aunque haya cursos con el mismo número.
+  const moveCourse = async (c, dir) => {
+    const idx = courses.findIndex((x) => x.id === c.id);
+    const target = idx + dir;
+    if (idx < 0 || target < 0 || target >= courses.length) return;
+    const list = [...courses];
+    [list[idx], list[target]] = [list[target], list[idx]];
+    try {
+      await Promise.all(list.map((x, i) => updateCourseOrder(x.id, i + 1)));
+      await logChange(adminName, `Cambió el orden de "${c.title}" en el catálogo.`);
+      refresh();
+    } catch {
+      addToast('No se pudo cambiar el orden. Intenta de nuevo.', 'error');
+    }
+  };
+
+  // Solo se eliminan cursos creados desde el panel. Un curso con alumnos
+  // activos no se elimina: se oculta, para no dejar sin acceso a quien ya pagó.
+  const deleteCourse = async (c) => {
+    try {
+      const active = await countActiveCourseEnrollments(c.id);
+      if (active > 0) {
+        addToast(`No se puede eliminar: tiene ${active} alumno(s) matriculado(s). Ocúltalo en su lugar.`, 'error');
+        return;
+      }
+    } catch {
+      addToast('No se pudo revisar las matrículas. Intenta de nuevo.', 'error');
+      return;
+    }
+    const ok = await confirmDialog({
+      title: 'Eliminar curso',
+      message: `Se eliminará "${c.title}" del catálogo y del panel. No se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteCustomCourse(c.id);
+      await logChange(adminName, `Eliminó el curso "${c.title}".`);
+      addToast(`"${c.title}" eliminado.`, 'success');
+      refresh();
+    } catch {
+      addToast('No se pudo eliminar el curso. Intenta de nuevo.', 'error');
+    }
   };
 
   const toggleVisible = async (c) => {
@@ -149,7 +202,7 @@ const AdminCursos = () => {
           <h1 className="admin-page-title">Cursos y precios</h1>
           <p className="admin-page-sub">Controla qué se muestra, cuándo se inscriben y cuánto cuesta.</p>
         </div>
-        <button className="admin-btn-edit" onClick={() => addToast('Los talleres se arman en el contenido de la plataforma. Este panel controla su precio, visibilidad e inscripciones.', 'info')}>
+        <button className="admin-btn-edit" onClick={() => setCreating(true)}>
           <Plus size={15} /> Nuevo curso
         </button>
       </div>
@@ -169,7 +222,7 @@ const AdminCursos = () => {
         <><table ref={tableRef} className="admin-table table-cards">
           <thead>
             <tr>
-              <th>Curso</th><th>En la web</th><th>Inscripciones</th><th>Precio de venta</th><th>Promoción</th><th>Acciones</th>
+              <th>Curso</th><th>Orden</th><th>En la web</th><th>Inscripciones</th><th>Precio de venta</th><th>Promoción</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -179,11 +232,18 @@ const AdminCursos = () => {
                 <tr key={c.id}>
                   <td>
                     <div className="admin-table-course">
-                      <img src={COURSE_THUMBNAILS[c.id]} alt={c.title} />
+                      <img src={c.thumb || COURSE_THUMBNAILS[c.id]} alt={c.title} />
                       <div>
                         <div className="admin-table-course-title">{c.title}</div>
                         <div className="admin-table-course-meta">{catLabel(c.cat)}</div>
                       </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="admin-order">
+                      <button className="admin-btn-ghost" onClick={() => moveCourse(c, -1)} disabled={courses.indexOf(c) === 0} aria-label="Subir en el catálogo">▲</button>
+                      <span>{courses.indexOf(c) + 1}</span>
+                      <button className="admin-btn-ghost" onClick={() => moveCourse(c, 1)} disabled={courses.indexOf(c) === courses.length - 1} aria-label="Bajar en el catálogo">▼</button>
                     </div>
                   </td>
                   <td>
@@ -214,11 +274,12 @@ const AdminCursos = () => {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button className="admin-btn-edit" onClick={() => setEditing(c)}>Editar curso</button>
+                      <button className="admin-btn-edit" onClick={() => (c.isCustom ? setEditingCustom(c) : setEditing(c))}>Editar curso</button>
                       {/* Módulos, objetivos, contenidos, sesiones, materiales y entregables:
                           el admin usa el mismo editor del docente (TeacherCourseContenido). */}
                       <button className="admin-btn-ghost" onClick={() => navigate(`/admin/curso/${c.id}/contenido`)}><BookOpen size={14} /> Editar contenido</button>
                       {/* Sílabo (A8): el mismo PDF va a la web y al Asistente IA. */}
+                      {c.isCustom && <button className="admin-btn-ghost" style={{ color: '#B42318', borderColor: '#F5C2C0' }} onClick={() => deleteCourse(c)}><Trash2 size={14} /> Eliminar</button>}
                       {c.syllabus?.url
                         ? <button className="admin-btn-ghost" onClick={() => setSyllabusFor(c)}><span className="dot-ok" /> Sílabo</button>
                         : <button className="admin-btn-ghost" style={{ color: '#B45309', borderColor: '#FCD9A8' }} onClick={() => setSyllabusFor(c)}>+ Subir sílabo</button>}
@@ -235,6 +296,24 @@ const AdminCursos = () => {
         </div>
       </div>
 
+      {creating && (
+        <NewCourseWizard
+          adminUid={currentUser?.uid}
+          adminName={adminName}
+          nextOrder={nextOrder}
+          onClose={() => setCreating(false)}
+          onSaved={refresh}
+        />
+      )}
+      {editingCustom && (
+        <NewCourseWizard
+          adminUid={currentUser?.uid}
+          adminName={adminName}
+          editing={editingCustom}
+          onClose={() => setEditingCustom(null)}
+          onSaved={refresh}
+        />
+      )}
       {syllabusFor && <SyllabusModal course={syllabusFor} onClose={() => setSyllabusFor(null)} onSaved={refresh} />}
       {editing && (
         <EditCourseModal course={editing} adminName={adminName} adminUid={currentUser?.uid} onClose={() => setEditing(null)} onSaved={refresh} />

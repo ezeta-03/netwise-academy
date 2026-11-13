@@ -194,7 +194,7 @@ const TeacherInicio = () => {
       <div className="home-courses-grid">
         {courses.map((c) => (
           <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => enterCourse(c)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enterCourse(c); } }}>
-            <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
+            <div className="home-course-thumb"><img src={c.thumb || COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
             <div className="home-course-body">
               <div className="home-course-meta-row">
                 <span className="home-course-tag">{c.cardTag}</span>
