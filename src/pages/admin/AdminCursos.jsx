@@ -8,7 +8,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { CATEGORIES } from '../../lib/data';
-import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, updateCourseOrder, countActiveCourseEnrollments, deleteCustomCourse, fetchAllUsers, logChange } from '../../lib/db';
+import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, updateCourseOrder, countCourseCommitments, deleteCustomCourse, fetchAllUsers, logChange } from '../../lib/db';
 import NewCourseWizard from './NewCourseWizard';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
@@ -137,13 +137,14 @@ const AdminCursos = () => {
     }
   };
 
-  // Solo se eliminan cursos creados desde el panel. Un curso con alumnos
-  // activos no se elimina: se oculta, para no dejar sin acceso a quien ya pagó.
+  // Solo se eliminan cursos creados desde el panel. Si tiene matrículas o
+  // pedidos (en cualquier estado) no se elimina: se oculta.
   const deleteCourse = async (c) => {
     try {
-      const active = await countActiveCourseEnrollments(c.id);
-      if (active > 0) {
-        addToast(`No se puede eliminar: tiene ${active} alumno(s) matriculado(s). Ocúltalo en su lugar.`, 'error');
+      const { enrollments, orders } = await countCourseCommitments(c.id);
+      if (enrollments + orders > 0) {
+        const parts = [enrollments && `${enrollments} matrícula(s)`, orders && `${orders} pedido(s)`].filter(Boolean).join(' y ');
+        addToast(`No se puede eliminar: tiene ${parts}. Ocúltalo en su lugar.`, 'error');
         return;
       }
     } catch {
