@@ -134,7 +134,7 @@ const StudentCourseLayout = () => {
 
         <div data-tour="course-context">
         <div className="dash-course-context">
-          <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} />
+          <img src={course.thumb || COURSE_THUMBNAILS[course.id]} alt={course.title} />
           <div className="admin-nav-label">
             <div className="dash-course-context-title">{course.title}</div>
             <div className="dash-course-context-sub">{group?.name ? `Grupo ${group.name}` : 'Sin grupo'} · Estudiante</div>

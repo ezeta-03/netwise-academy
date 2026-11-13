@@ -1,0 +1,101 @@
+/* Formulario "Nuevo curso" (NewCourseWizard.jsx) */
+
+.nc-modal {
+  max-width: 1040px;
+  width: 100%;
+  padding: 26px 30px;
+}
+
+.nc-steps {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #E2E0EC;
+  padding-bottom: 14px;
+}
+.nc-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #F4F2F9;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 12px 6px 6px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: #6B6880;
+  cursor: pointer;
+  font-family: inherit;
+}
+.nc-step span {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #E2E0EC; color: #4A4860;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .72rem;
+}
+.nc-step.done span { background: #D9CCFB; color: #4A1FA8; }
+.nc-step.active { background: #F1EAFF; color: #4A1FA8; border-color: #C9B4FA; }
+.nc-step.active span { background: var(--accent, #7B3FF2); color: #fff; }
+
+.nc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 28px;
+  align-items: start;
+}
+.nc-form { min-width: 0; }
+.nc-form .admin-field-row { gap: 14px; }
+.nc-field { margin-bottom: 14px; }
+.nc-field textarea { resize: vertical; font-family: inherit; }
+.nc-req { color: #B42318; }
+.nc-hint { font-size: .72rem; color: #8B8A9B; font-weight: 400; }
+.nc-note { font-size: .8rem; color: #6B6880; background: #F7F5FC; border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.nc-toggle { margin-top: 6px; margin-bottom: 10px; display: inline-flex; }
+
+.nc-upload {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1.5px dashed #C9B4FA; border-radius: 14px; min-height: 180px; cursor: pointer;
+  background: #FBFAFE; overflow: hidden; position: relative;
+}
+.nc-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.nc-upload span { display: inline-flex; align-items: center; gap: 8px; color: #6B6880; font-size: .88rem; font-weight: 600; }
+.nc-upload img { width: 100%; max-height: 260px; object-fit: cover; display: block; }
+
+.nc-modules-head { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 10px; color: #14141F; }
+.nc-module { border: 1px solid #E2E0EC; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.nc-module-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.nc-module-num { font-size: .78rem; font-weight: 700; color: #4A1FA8; }
+
+.nc-side { position: sticky; top: 0; }
+.nc-side-label { font-size: .75rem; font-weight: 700; color: #6B6880; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.nc-preview { pointer-events: none; }
+.nc-preview .home-course-card { cursor: default; }
+.nc-preview .home-course-card:hover { transform: none; box-shadow: none; }
+
+.nc-checklist {
+  margin-top: 14px; border: 1px solid #E2E0EC; border-radius: 12px; padding: 12px 14px;
+  font-size: .8rem;
+}
+.nc-checklist-title { font-weight: 700; color: #14141F; margin-bottom: 6px; }
+.nc-checklist ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.nc-checklist li { display: flex; align-items: center; gap: 6px; color: #B45309; }
+.nc-ok { display: flex; align-items: center; gap: 6px; color: #067647; font-weight: 600; }
+
+.nc-actions { justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.nc-actions .admin-btn-ghost { margin-right: auto; }
+.nc-actions .admin-btn-ghost + .admin-btn-ghost { margin-right: 0; }
+
+@media (max-width: 860px) {
+  .nc-modal { padding: 20px 18px; }
+  .nc-body { grid-template-columns: 1fr; }
+  .nc-side { position: static; }
+}
+
+/* Columna "Orden" de Cursos y precios (AdminCursos.jsx) */
+.admin-order { display: inline-flex; align-items: center; gap: 4px; }
+.admin-order span { min-width: 22px; text-align: center; font-weight: 700; color: #14141F; font-size: .88rem; }
+.admin-order button { padding: 2px 6px; font-size: .7rem; }
+.admin-order button:disabled { opacity: .3; cursor: default; }
+
+.nc-note-warn { color: #B45309; background: #FFF6E8; }

@@ -9,6 +9,7 @@ import { StudentTourProvider } from './context/StudentTourContext';
 
 // Pages
 import Home from './pages/Home';
+import Catalog from './pages/Catalog';
 import Metodologia from './pages/Metodologia';
 import Masterclass from './pages/Masterclass';
 import CourseDetail from './pages/CourseDetail';
@@ -162,9 +163,10 @@ function App() {
           <Route path="/" element={<RoleHome />} />
           {/* El Inicio público también para quien ya inició sesión (el logo del panel lleva aquí). */}
           <Route path="/inicio" element={<Home />} />
-          {/* Los cursos son la sección #talleres del Inicio. /cursos la muestra también a quien
-              ya inició sesión ("/" lo manda a su panel); /catalog era la página antigua. */}
-          <Route path="/cursos" element={<Home scrollTo="talleres" />} />
+          {/* /cursos es la página "Cursos prácticos": las cards de los cursos visibles,
+              en el orden que fija el admin. Los cursos también siguen en la sección
+              #talleres del Inicio. "/" lo manda a su panel si ya inició sesión; /catalog era la página antigua. */}
+          <Route path="/cursos" element={<Catalog />} />
           <Route path="/catalog" element={<Navigate to="/cursos" replace />} />
           <Route path="/metodologia" element={<Metodologia />} />
           <Route path="/masterclass" element={<Masterclass />} />

@@ -194,7 +194,7 @@ const StudentInicio = () => {
             const att = st?.attendance;
             return (
               <div className="home-course-card" key={c.id} role="link" tabIndex={0} aria-label={`Abrir ${c.title}`} onClick={() => navigate(`/student/curso/${c.id}`)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/student/curso/${c.id}`); } }}>
-                <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
+                <div className="home-course-thumb"><img src={c.thumb || COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
                 <div className="home-course-body">
                   <div className="home-course-meta-row">
                     <span className="home-course-tag">{enrollments[c.id]?.groupName || c.cardTag}</span>

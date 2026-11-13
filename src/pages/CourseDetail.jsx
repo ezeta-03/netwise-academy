@@ -68,7 +68,12 @@ const CourseDetail = () => {
   const isStaff = currentUser?.role === 'teacher' || currentUser?.role === 'admin';
   const Icon = OUTCOME_ICONS[course.icon] || Sparkles;
   const levelShort = course.level.replace('Nivel ', '');
-  const weeklyHours = course.scheduleSlots.reduce((sum, s) => sum + hoursOfRange(`${s.start}-${s.end}`), 0);
+  // Cursos creados desde el panel no tienen horario de aula todavía: la carga sale de sesiones × duración.
+  const usesFormLoad = course.isCustom && course.scheduleSlots.length === 0;
+  const weeklyHours = usesFormLoad
+    ? course.sessionsPerWeek * course.sessionHours
+    : course.scheduleSlots.reduce((sum, s) => sum + hoursOfRange(`${s.start}-${s.end}`), 0);
+  const weeklySessions = usesFormLoad ? course.sessionsPerWeek : course.scheduleSlots.length;
   const supportHours = (hoursOfRange(SUPPORT_HOURS.friday) + hoursOfRange(SUPPORT_HOURS.saturday));
   const originalPrice = course.price != null && course.promoPercent ? Math.round(course.price / (1 - course.promoPercent / 100)) : null;
 
@@ -116,7 +121,9 @@ const CourseDetail = () => {
 
           <div className="cd-hero-media-row">
             <div className="cd-video-card">
-              <img src={COURSE_THUMBNAILS[course.id]} alt={course.title} />
+              {course.videoUrl
+                ? <iframe src={course.videoUrl} title={`Presentación de ${course.title}`} allow="accelerometer; encrypted-media; picture-in-picture" allowFullScreen loading="lazy" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0, borderRadius: 'var(--r-xl)', zIndex: 1 }} />
+                : <img src={course.thumb || COURSE_THUMBNAILS[course.id]} alt={course.title} />}
               <span className="cd-video-caption"><Video size={14} /> Presentación del curso</span>
             </div>
 
@@ -149,7 +156,7 @@ const CourseDetail = () => {
               </ul>
 
               <h2 className="cd-section-h2" id="cd-modules">Lo que vas a <em>aprender.</em></h2>
-              <p className="cd-section-sub">Cuatro módulos, {course.duration} y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
+              <p className="cd-section-sub">{course.isCustom ? '' : 'Cuatro módulos, '}{course.duration} y un entregable práctico en cada etapa. Lleva lo aprendido a tu propio proyecto.</p>
 
               {modules.length === 0 ? (
                 <p className="cd-section-sub">El programa detallado de este taller se publica muy pronto.</p>
@@ -220,7 +227,7 @@ const CourseDetail = () => {
                   {formatStartDate(course.startDate) && <div className="cd-detail-row"><span className="cd-detail-label">Inicio</span><span className="cd-detail-value">{formatStartDate(course.startDate)}</span></div>}
                   <div className="cd-detail-row"><span className="cd-detail-label">Duración</span><span className="cd-detail-value">{course.duration}</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Horario</span><span className="cd-detail-value">{course.scheduleLabel}</span></div>
-                  <div className="cd-detail-row"><span className="cd-detail-label">Carga semanal</span><span className="cd-detail-value">{weeklyHours} horas · {course.scheduleSlots.length} sesiones</span></div>
+                  <div className="cd-detail-row"><span className="cd-detail-label">Carga semanal</span><span className="cd-detail-value">{weeklyHours} horas · {weeklySessions} sesiones</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Horas extras</span><span className="cd-detail-value">{supportHours} horas · 2 sesiones</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Nivel</span><span className="cd-detail-value">{levelShort}</span></div>
                   <div className="cd-detail-row"><span className="cd-detail-label">Proyecto final</span><span className="cd-detail-value">{course.projectFinal}</span></div>
@@ -269,7 +276,7 @@ const CourseDetail = () => {
           <div className="home-courses-grid cols-3">
             {relatedCourses.map((c) => (
               <div className="home-course-card" key={c.id} onClick={() => navigate(`/course/${c.id}`)}>
-                <div className="home-course-thumb"><img src={COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
+                <div className="home-course-thumb"><img src={c.thumb || COURSE_THUMBNAILS[c.id]} alt={c.title} /></div>
                 <div className="home-course-body">
                   <div className="home-course-meta-row">
                     <span className="home-course-tag">{c.cardTag}</span>
