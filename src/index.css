@@ -1184,6 +1184,11 @@ body::before {
 }
 .cd-module-title { font-weight: 600; font-size: .95rem; color: #14141F; }
 .cd-module-weeks { font-size: .78rem; color: #8B8A9B; margin-top: 2px; }
+.cd-module-desc { font-size: .9rem; color: #5E5D6E; line-height: 1.55; margin: 10px 0 0; }
+.cd-module-deliverable {
+  display: inline-block; margin-top: 12px; padding: 6px 12px; border-radius: 8px;
+  background: var(--accent-bg); color: var(--accent); font-size: .8rem; font-weight: 500; line-height: 1.4;
+}
 
 .cd-download-wrap { text-align: center; margin: 40px 0 0; }
 .cd-download-btn {

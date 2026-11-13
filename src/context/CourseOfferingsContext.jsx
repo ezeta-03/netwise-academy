@@ -51,11 +51,13 @@ export const CourseOfferingsProvider = ({ children }) => {
     const thumb = c.imageUrl || COURSE_THUMBNAILS[c.isCustom ? DEFAULT_THUMB_ID : c.id];
     if (c.isCustom) {
       const has = (field) => Object.prototype.hasOwnProperty.call(offer, field);
+      // Horario del aula abierta (ver updateCourseSchedule), igual que en los talleres de data.js.
+      const slots = Array.isArray(offer.schedule) && offer.schedule.length ? offer.schedule : [];
       return {
         ...c,
         thumb,
-        scheduleSlots: [],
-        scheduleLabel: 'Horario por confirmar',
+        scheduleSlots: slots,
+        scheduleLabel: slots.length ? buildScheduleLabel(slots) : 'Horario por confirmar',
         price: has('price') ? offer.price : null,
         startDate: null,
         visible: offer.visible ?? false,
