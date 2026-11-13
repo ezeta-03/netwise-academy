@@ -603,11 +603,17 @@ export const saveCustomCourse = (courseId, payload, adminUid) => patchCourseOffe
 // reordenar la tabla de Cursos y precios.
 export const updateCourseOrder = (courseId, order) => patchCourseOffering(courseId, { order });
 
-// Alumnos con matrícula activa en un curso. Un curso con alumnos no se puede eliminar.
-export const countActiveCourseEnrollments = async (courseId) => {
-  if (!isConfigValid) return 0;
-  const snap = await getDocs(query(collection(db, 'enrollments'), where('courseId', '==', String(courseId))));
-  return snap.docs.filter((d) => isActiveEnrollment(d.data())).length;
+// Matrículas y pedidos de un curso, en CUALQUIER estado (activa, pendiente,
+// cancelada, pagada...). Si hay alguno, el curso no se puede eliminar: un
+// pedido pendiente o una matrícula inactiva igual apunta a ese curso.
+export const countCourseCommitments = async (courseId) => {
+  if (!isConfigValid) return { enrollments: 0, orders: 0 };
+  const id = String(courseId);
+  const [enrollments, orders] = await Promise.all([
+    getDocs(query(collection(db, 'enrollments'), where('courseId', '==', id))),
+    getDocs(query(collection(db, 'orders'), where('courseId', '==', id))),
+  ]);
+  return { enrollments: enrollments.size, orders: orders.size };
 };
 
 // Elimina un curso creado desde el panel (su documento en courseOfferings).
