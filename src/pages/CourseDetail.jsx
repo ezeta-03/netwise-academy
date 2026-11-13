@@ -34,7 +34,7 @@ const CourseDetail = () => {
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
 
   const course = COURSES.find(c => c.id.toString() === id);
-  const relatedCourses = course ? COURSES.filter(c => c.id !== course.id).slice(0, 3) : [];
+  const relatedCourses = course ? COURSES.filter(c => c.id !== course.id && c.visible !== false && !c.draft).slice(0, 3) : [];
 
   const { isPreregistered, saving, preregister } = usePreregistration(course);
   const { isEnrolled } = useEnrollment(course);

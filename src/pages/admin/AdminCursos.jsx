@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, X, BookOpen } from 'lucide-react';
+import { Search, Plus, X, BookOpen, Trash2 } from 'lucide-react';
 import ModalPortal from '../../components/ModalPortal';
 import SyllabusModal from '../../components/SyllabusModal';
 import { useAuth } from '../../context/AuthContext';
@@ -8,7 +8,7 @@ import { useUI } from '../../context/UIContext';
 import { useCourseOfferings } from '../../context/CourseOfferingsContext';
 import { COURSE_THUMBNAILS } from '../../lib/courseThumbnails';
 import { CATEGORIES } from '../../lib/data';
-import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, updateCourseOrder, fetchAllUsers, logChange } from '../../lib/db';
+import { updateCourseOffering, updateCourseVisibility, updateCourseEnrollmentsOpen, updateCoursePromo, updateCourseTeacher, updateCourseOrder, countActiveCourseEnrollments, deleteCustomCourse, fetchAllUsers, logChange } from '../../lib/db';
 import NewCourseWizard from './NewCourseWizard';
 import { usePagedTable } from '../../hooks/usePagedTable';
 
@@ -94,7 +94,7 @@ const EditCourseModal = ({ course, adminName, adminUid, onClose, onSaved }) => {
 const AdminCursos = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const { addToast } = useUI();
+  const { addToast, confirmDialog } = useUI();
   const { courses, refresh } = useCourseOfferings();
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('all');
@@ -134,6 +134,36 @@ const AdminCursos = () => {
       refresh();
     } catch {
       addToast('No se pudo cambiar el orden. Intenta de nuevo.', 'error');
+    }
+  };
+
+  // Solo se eliminan cursos creados desde el panel. Un curso con alumnos
+  // activos no se elimina: se oculta, para no dejar sin acceso a quien ya pagó.
+  const deleteCourse = async (c) => {
+    try {
+      const active = await countActiveCourseEnrollments(c.id);
+      if (active > 0) {
+        addToast(`No se puede eliminar: tiene ${active} alumno(s) matriculado(s). Ocúltalo en su lugar.`, 'error');
+        return;
+      }
+    } catch {
+      addToast('No se pudo revisar las matrículas. Intenta de nuevo.', 'error');
+      return;
+    }
+    const ok = await confirmDialog({
+      title: 'Eliminar curso',
+      message: `Se eliminará "${c.title}" del catálogo y del panel. No se puede deshacer.`,
+      confirmLabel: 'Eliminar',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await deleteCustomCourse(c.id);
+      await logChange(adminName, `Eliminó el curso "${c.title}".`);
+      addToast(`"${c.title}" eliminado.`, 'success');
+      refresh();
+    } catch {
+      addToast('No se pudo eliminar el curso. Intenta de nuevo.', 'error');
     }
   };
 
@@ -249,6 +279,7 @@ const AdminCursos = () => {
                           el admin usa el mismo editor del docente (TeacherCourseContenido). */}
                       <button className="admin-btn-ghost" onClick={() => navigate(`/admin/curso/${c.id}/contenido`)}><BookOpen size={14} /> Editar contenido</button>
                       {/* Sílabo (A8): el mismo PDF va a la web y al Asistente IA. */}
+                      {c.isCustom && <button className="admin-btn-ghost" style={{ color: '#B42318', borderColor: '#F5C2C0' }} onClick={() => deleteCourse(c)}><Trash2 size={14} /> Eliminar</button>}
                       {c.syllabus?.url
                         ? <button className="admin-btn-ghost" onClick={() => setSyllabusFor(c)}><span className="dot-ok" /> Sílabo</button>
                         : <button className="admin-btn-ghost" style={{ color: '#B45309', borderColor: '#FCD9A8' }} onClick={() => setSyllabusFor(c)}>+ Subir sílabo</button>}

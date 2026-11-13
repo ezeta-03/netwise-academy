@@ -603,6 +603,26 @@ export const saveCustomCourse = (courseId, payload, adminUid) => patchCourseOffe
 // reordenar la tabla de Cursos y precios.
 export const updateCourseOrder = (courseId, order) => patchCourseOffering(courseId, { order });
 
+// Alumnos con matrícula activa en un curso. Un curso con alumnos no se puede eliminar.
+export const countActiveCourseEnrollments = async (courseId) => {
+  if (!isConfigValid) return 0;
+  const snap = await getDocs(query(collection(db, 'enrollments'), where('courseId', '==', String(courseId))));
+  return snap.docs.filter((d) => isActiveEnrollment(d.data())).length;
+};
+
+// Elimina un curso creado desde el panel (su documento en courseOfferings).
+// Solo el admin puede hacerlo (reglas de courseOfferings).
+export const deleteCustomCourse = async (courseId) => {
+  if (!isConfigValid) {
+    const raw = localStorage.getItem('mock_course_offerings');
+    const map = raw ? JSON.parse(raw) : {};
+    delete map[courseId];
+    localStorage.setItem('mock_course_offerings', JSON.stringify(map));
+    return;
+  }
+  await deleteDoc(doc(db, 'courseOfferings', String(courseId)));
+};
+
 // Portada del curso (imagen) -> Storage `courseCovers/{id}/...`. Devuelve la URL pública.
 export const uploadCourseCover = async (courseId, file) => {
   if (!isConfigValid) {
