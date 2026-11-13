@@ -66,7 +66,7 @@ const Navbar = () => {
         ...(currentUser.role === 'student' ? [{ to: '/student', label: 'Mi Campus' }] : []),
       ]
     : [
-        { action: goToCourses, label: 'Cursos' },
+        { to: '/cursos', label: 'Cursos' },
         { to: '/metodologia', label: 'Nuestra Metodología' },
       ];
 
